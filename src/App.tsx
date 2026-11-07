@@ -3,12 +3,14 @@ import type { FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './components/Dashboard'
+import { FleetModule } from './components/FleetModule'
 import './App.css'
 
 const assetBase = import.meta.env.BASE_URL
 
 function App() {
   const [signedIn, setSignedIn] = useState(false)
+  const [activeArea, setActiveArea] = useState<'dashboard' | 'fleet'>('dashboard')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -47,7 +49,11 @@ function App() {
       : { type: 'success', text: 'Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.' })
   }
 
-  if (signedIn) return <Dashboard userEmail={email} onLogout={() => { setSignedIn(false); setPassword(''); setMessage(null) }} />
+  if (signedIn) {
+    const logout = () => { setSignedIn(false); setActiveArea('dashboard'); setPassword(''); setMessage(null) }
+    if (activeArea === 'fleet') return <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={logout} />
+    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onLogout={logout} />
+  }
 
   return (
     <main className="login-shell">
