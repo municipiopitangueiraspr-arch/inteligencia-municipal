@@ -4,7 +4,7 @@ import { Building2, ChevronRight, Edit3, Plus, Save, Store, UserCheck, UserPlus,
 import { supabase } from '../lib/supabase'
 
 type StationStatus = 'PENDENTE' | 'ATIVO' | 'SUSPENSO' | 'INATIVO'
-type Station = { id: string; razao_social_snapshot: string; nome_fantasia_snapshot: string | null; cnpj_snapshot: string; endereco: string | null; cidade: string | null; uf: string | null; representante_nome: string; representante_documento: string | null; representante_email: string | null; representante_telefone: string | null; status: StationStatus; credenciamento_started_at: string | null; credenciamento_ends_at: string | null; notes: string | null }
+export type Station = { id: string; razao_social_snapshot: string; nome_fantasia_snapshot: string | null; cnpj_snapshot: string; endereco: string | null; cidade: string | null; uf: string | null; representante_nome: string; representante_documento: string | null; representante_email: string | null; representante_telefone: string | null; status: StationStatus; credenciamento_started_at: string | null; credenciamento_ends_at: string | null; notes: string | null }
 type Driver = { id: string; nome: string; matricula: string | null; cpf: string | null; cnh_number: string | null; cnh_valid_until: string | null; unidade_id: string | null; ativo: boolean }
 type ResourceProps = { onSaved: () => Promise<void> }
 type StationFormState = { razao_social_snapshot: string; nome_fantasia_snapshot: string; cnpj_snapshot: string; endereco: string; cidade: string; uf: string; representante_nome: string; representante_documento: string; representante_email: string; representante_telefone: string; status: StationStatus; credenciamento_started_at: string; credenciamento_ends_at: string; notes: string }
@@ -61,7 +61,7 @@ export function StationsView({ onSaved }: ResourceProps) {
 }
 
 
-function StationMembersPanel({ station, onClose, onSaved }: { station: Station; onClose: () => void; onSaved: () => Promise<void> }) {
+export function StationMembersPanel({ station, onClose, onSaved }: { station: Station; onClose: () => void; onSaved: () => Promise<void> }) {
   const [members, setMembers] = useState<StationMember[]>([])
   const [users, setUsers] = useState<UserCandidate[]>([])
   const [loading, setLoading] = useState(true)

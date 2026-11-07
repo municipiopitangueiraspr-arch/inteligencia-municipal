@@ -9,9 +9,10 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
 import { DriversView, StationsView } from './FleetResources'
+import { StationAccessRequests } from './StationAccessRequests'
 import './FleetModule.css'
 
-type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'settings'
+type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'accessRequests' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
 type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
@@ -27,6 +28,7 @@ const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'reports', label: 'Relatórios', icon: BarChart3 },
   { id: 'stations', label: 'Postos credenciados', icon: Store },
   { id: 'drivers', label: 'Motoristas', icon: UserRound },
+  { id: 'accessRequests', label: 'Primeiro acesso', icon: ShieldCheck },
   { id: 'settings', label: 'Configurações', icon: Settings2 },
 ]
 
@@ -136,6 +138,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'reports' && <FuelCostReports />}
         {view === 'stations' && <StationsView onSaved={loadData} />}
         {view === 'drivers' && <DriversView onSaved={loadData} />}
+        {view === 'accessRequests' && <StationAccessRequests />}
         {view === 'settings' && <SettingsPanel />}
       </div>
     </main>
