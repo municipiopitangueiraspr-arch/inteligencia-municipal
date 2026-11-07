@@ -2,9 +2,11 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { Dashboard } from './components/Dashboard'
 import './App.css'
 
 function App() {
+  const [signedIn, setSignedIn] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -24,6 +26,7 @@ function App() {
     setMessage(error
       ? { type: 'error', text: 'Não foi possível entrar. Verifique o e-mail e a senha ou procure o administrador do sistema.' }
       : { type: 'success', text: 'Acesso confirmado. Carregando seu ambiente municipal…' })
+    if (!error) setSignedIn(true)
   }
 
   async function handleForgotPassword() {
@@ -41,6 +44,8 @@ function App() {
       ? { type: 'error', text: 'Não foi possível solicitar a recuperação agora.' }
       : { type: 'success', text: 'Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.' })
   }
+
+  if (signedIn) return <Dashboard userEmail={email} onLogout={() => { setSignedIn(false); setPassword(''); setMessage(null) }} />
 
   return (
     <main className="login-shell">
