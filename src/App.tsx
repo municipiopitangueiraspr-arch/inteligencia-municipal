@@ -5,6 +5,8 @@ import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './components/Dashboard'
 import './App.css'
 
+const assetBase = import.meta.env.BASE_URL
+
 function App() {
   const [signedIn, setSignedIn] = useState(false)
   const [email, setEmail] = useState('')
@@ -52,7 +54,7 @@ function App() {
       <section className="institutional-panel" aria-label="Identidade institucional">
         <div className="panel-glow panel-glow-top" /><div className="panel-glow panel-glow-bottom" />
         <div className="institutional-content">
-          <div className="brand-mark"><img src="/assets/brasao-pref.png" alt="Brasão da Prefeitura Municipal de Pitangueiras" /></div>
+          <div className="brand-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão da Prefeitura Municipal de Pitangueiras" /></div>
           <p className="eyebrow">PREFEITURA MUNICIPAL</p><h1>Pitangueiras<span>–PR</span></h1><div className="brand-divider" />
           <p className="platform-name">Inteligência<br /><strong>Municipal</strong></p>
           <p className="platform-description">Gestão integrada para transformar dados públicos em decisões melhores.</p>
@@ -60,7 +62,7 @@ function App() {
         </div>
       </section>
       <section className="access-panel" aria-label="Formulário de acesso"><div className="access-inner">
-        <div className="mobile-brand"><img src="/assets/brasao-pref.png" alt="Brasão municipal" /><span>Inteligência Municipal</span></div>
+        <div className="mobile-brand"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão municipal" /><span>Inteligência Municipal</span></div>
         <div className="welcome-copy"><span className="section-kicker">PORTAL DE GESTÃO</span><h2>Bem-vindo de volta</h2><p>Entre com suas credenciais para acessar os módulos da Prefeitura.</p></div>
         <form onSubmit={handleSubmit} className="login-form">
           <label htmlFor="email">E-mail institucional</label><div className="input-wrap"><Mail size={18} /><input id="email" type="email" autoComplete="email" placeholder="seu.nome@pitangueiras.pr.gov.br" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
