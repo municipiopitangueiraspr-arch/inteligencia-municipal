@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, BadgeCheck, Bell, ChevronRight, CircleAlert,
   ClipboardCheck, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Plus, RefreshCw,
-  Settings2, ShieldCheck, Store, Truck, UserRound, Users, X,
+  Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { DriversView, StationsView } from './FleetResources'
 import './FleetModule.css'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'stations' | 'drivers' | 'settings'
@@ -40,8 +41,6 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const [view, setView] = useState<FleetView>('overview')
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [fuelings, setFuelings] = useState<Fueling[]>([])
-  const [stationCount, setStationCount] = useState(0)
-  const [driverCount, setDriverCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -53,19 +52,15 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
     if (!supabase) return
     setError('')
     setRefreshing(true)
-    const [vehicleResult, fuelingResult, stationResult, driverResult] = await Promise.all([
+    const [vehicleResult, fuelingResult] = await Promise.all([
       supabase.from('fleet_vehicles').select('id,placa,marca,modelo,tank_capacity_l,operational_status,current_odometer_km').order('placa').limit(100),
       supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot),fuel_type:fleet_fuel_types(nome)').order('performed_at', { ascending: false }).limit(100),
-      supabase.from('fleet_fuel_stations').select('id', { count: 'exact', head: true }),
-      supabase.from('fleet_drivers').select('id', { count: 'exact', head: true }),
     ])
-    const firstError = vehicleResult.error || fuelingResult.error || stationResult.error || driverResult.error
+    const firstError = vehicleResult.error || fuelingResult.error
     if (firstError) setError('Não foi possível carregar os dados permitidos para este usuário. Verifique o perfil de Frotas.')
     else {
       setVehicles((vehicleResult.data || []) as Vehicle[])
       setFuelings((fuelingResult.data || []) as unknown as Fueling[])
-      setStationCount(stationResult.count || 0)
-      setDriverCount(driverResult.count || 0)
     }
     setLoading(false)
     setRefreshing(false)
@@ -112,8 +107,8 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
         {view === 'vehicles' && <Vehicles vehicles={vehicles} loading={loading} onAdd={() => setShowVehicleForm(true)} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
-        {view === 'stations' && <SimpleResource title="Postos credenciados" subtitle="Estabelecimentos autorizados a submeter abastecimentos." icon={Store} count={stationCount} label="postos encontrados" action="Novo posto" />}
-        {view === 'drivers' && <SimpleResource title="Motoristas" subtitle="Condutores autorizados para operações da frota." icon={Users} count={driverCount} label="motoristas encontrados" action="Novo motorista" />}
+        {view === 'stations' && <StationsView onSaved={loadData} />}
+        {view === 'drivers' && <DriversView onSaved={loadData} />}
         {view === 'settings' && <SettingsPanel />}
       </div>
     </main>
@@ -131,8 +126,6 @@ function Vehicles({ vehicles, loading, onAdd }: { vehicles: Vehicle[]; loading: 
 function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
 
 function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; compact?: boolean }) { return <table className={`fleet-table ${compact ? 'fleet-table-compact' : ''}`}><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Quantidade</th><th>Total</th><th>Situação</th></tr></thead><tbody>{fuelings.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td></tr>)}</tbody></table> }
-
-function SimpleResource({ title, subtitle, icon: Icon, count, label, action }: { title: string; subtitle: string; icon: typeof Store; count: number; label: string; action: string }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTROS DE APOIO</span><h2>{title}</h2><p>{subtitle}</p></div><button className="fleet-primary-button"><Plus size={16} /> {action}</button></div><div className="fleet-resource-placeholder"><span className="fleet-resource-icon"><Icon size={25} /></span><strong>{count}</strong><span>{label}</span><small>A tela de cadastro detalhada será conectada na próxima entrega do módulo.</small></div></section> }
 
 function SettingsPanel() { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Regras que orientam a operação de abastecimentos e conferência.</p></div></div><div className="fleet-settings-grid"><article><span><Gauge size={18} /></span><div><strong>Capacidade do tanque</strong><p>O abastecimento acima da capacidade cadastrada gera inconsistência para análise.</p></div></article><article><span><ClipboardCheck size={18} /></span><div><strong>Comprovantes</strong><p>O prazo operacional para envio do comprovante é de 24 horas após o abastecimento.</p></div></article><article><span><MapPin size={18} /></span><div><strong>Cessão temporária</strong><p>A secretaria responsável e a secretaria beneficiária são mantidas separadamente.</p></div></article><article><span><ShieldCheck size={18} /></span><div><strong>Perfis autorizados</strong><p>Gestor de Frotas e Administrador validam cadastros oficiais e fechamentos.</p></div></article></div></section> }
 
