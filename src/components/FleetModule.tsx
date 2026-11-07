@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, BadgeCheck, Bell, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
-  ClipboardCheck, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Plus, RefreshCw,
+  ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
+  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Plus, RefreshCw,
   Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
 import { DriversView, StationsView } from './FleetResources'
 import './FleetModule.css'
 
-type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'stations' | 'drivers' | 'settings'
+type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'reports' | 'stations' | 'drivers' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; tank_capacity_l: number; operational_status: string; current_odometer_km: number | null }
 type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null; fuel_type?: { nome?: string } | null }
@@ -18,6 +21,7 @@ const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'vehicles', label: 'Veículos', icon: Truck },
   { id: 'fuelings', label: 'Abastecimentos', icon: Fuel },
   { id: 'closure', label: 'Fechamento mensal', icon: CalendarCheck },
+  { id: 'reports', label: 'Relatórios', icon: BarChart3 },
   { id: 'stations', label: 'Postos credenciados', icon: Store },
   { id: 'drivers', label: 'Motoristas', icon: UserRound },
   { id: 'settings', label: 'Configurações', icon: Settings2 },
@@ -109,6 +113,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'vehicles' && <Vehicles vehicles={vehicles} loading={loading} onAdd={() => setShowVehicleForm(true)} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
         {view === 'closure' && <MonthlyClosure />}
+        {view === 'reports' && <FuelCostReports />}
         {view === 'stations' && <StationsView onSaved={loadData} />}
         {view === 'drivers' && <DriversView onSaved={loadData} />}
         {view === 'settings' && <SettingsPanel />}
@@ -128,6 +133,62 @@ function Vehicles({ vehicles, loading, onAdd }: { vehicles: Vehicle[]; loading: 
 function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
 
 function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; compact?: boolean }) { return <table className={`fleet-table ${compact ? 'fleet-table-compact' : ''}`}><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Quantidade</th><th>Total</th><th>Situação</th></tr></thead><tbody>{fuelings.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td></tr>)}</tbody></table> }
+
+type ReportFueling = { liters: number; total_amount: number; status: string; performed_at: string; responsible_unit_id: string; units?: { nome?: string; sigla?: string } | null }
+type ReportRow = { id: string; secretaria: string; sigla: string; abastecimentos: number; litros: number; custo: number; media: number }
+
+function FuelCostReports() {
+  const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
+  const [period, setPeriod] = useState(initialPeriod)
+  const [fuelings, setFuelings] = useState<ReportFueling[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [secretaria, setSecretaria] = useState('TODAS')
+
+  function bounds(value: string) {
+    const [year, month] = value.split('-').map(Number)
+    return { year, month, start: new Date(Date.UTC(year, month - 1, 1)).toISOString(), end: new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1)).toISOString() }
+  }
+  async function loadReport() {
+    if (!supabase) return
+    setLoading(true); setError('')
+    const range = bounds(period)
+    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,performed_at,responsible_unit_id,units:unidades_organizacionais(nome,sigla)').gte('performed_at', range.start).lt('performed_at', range.end).order('performed_at', { ascending: true }).limit(5000)
+    if (result.error) setError('Não foi possível carregar o relatório de custos. Verifique as permissões do perfil de Frotas.')
+    else setFuelings((result.data || []) as unknown as ReportFueling[])
+    setLoading(false)
+  }
+  useEffect(() => { void loadReport() }, [period])
+
+  const validFuelings = fuelings.filter((fueling) => fueling.status !== 'CANCELADO')
+  const rows = Array.from(validFuelings.reduce((map, fueling) => {
+    const key = fueling.responsible_unit_id
+    const current = map.get(key) || { id: key, secretaria: fueling.units?.nome || 'Secretaria não identificada', sigla: fueling.units?.sigla || '—', abastecimentos: 0, litros: 0, custo: 0, media: 0 }
+    current.abastecimentos += 1; current.litros += Number(fueling.liters || 0); current.custo += Number(fueling.total_amount || 0); current.media = current.custo / current.abastecimentos
+    map.set(key, current); return map
+  }, new Map<string, ReportRow>()).values()).sort((a, b) => b.custo - a.custo)
+  const secretarias = rows.map((row) => ({ id: row.id, nome: row.secretaria })).sort((a, b) => a.nome.localeCompare(b.nome))
+  const filteredRows = secretaria === 'TODAS' ? rows : rows.filter((row) => row.id === secretaria)
+  const totalLiters = filteredRows.reduce((sum, row) => sum + row.litros, 0)
+  const totalCost = filteredRows.reduce((sum, row) => sum + row.custo, 0)
+  const totalFuelings = filteredRows.reduce((sum, row) => sum + row.abastecimentos, 0)
+  const periodLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period}-01T00:00:00Z`))
+
+  function exportExcel() {
+    const sheetData = filteredRows.map((row) => ({ Secretaria: row.secretaria, Sigla: row.sigla, Abastecimentos: row.abastecimentos, 'Litros registrados': Number(row.litros.toFixed(2)), 'Custo total (R$)': Number(row.custo.toFixed(2)), 'Custo médio (R$)': Number(row.media.toFixed(2)) }))
+    const summary = [{ Relatório: 'Custos de combustíveis por secretaria', Competência: periodLabel, Secretaria: secretaria === 'TODAS' ? 'Todas' : filteredRows[0]?.secretaria || '—', Abastecimentos: totalFuelings, 'Litros registrados': Number(totalLiters.toFixed(2)), 'Custo total (R$)': Number(totalCost.toFixed(2)) }]
+    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Resumo'); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sheetData), 'Por secretaria'); XLSX.writeFile(workbook, `relatorio-combustiveis-${period}.xlsx`)
+  }
+
+  function exportPdf() {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    doc.setTextColor(11, 41, 64); doc.setFontSize(17); doc.text('Custos de combustíveis por secretaria', 14, 17); doc.setFontSize(9); doc.setTextColor(91, 112, 123); doc.text(`Competência: ${periodLabel}  •  Filtro: ${secretaria === 'TODAS' ? 'Todas as secretarias' : filteredRows[0]?.secretaria || '—'}`, 14, 24); doc.text(`Total: ${totalFuelings} abastecimentos  •  ${totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L  •  ${formatMoney(totalCost)}`, 14, 30)
+    autoTable(doc, { startY: 37, head: [['Secretaria', 'Sigla', 'Abastecimentos', 'Litros', 'Custo total', 'Custo médio']], body: filteredRows.map((row) => [row.secretaria, row.sigla, row.abastecimentos.toLocaleString('pt-BR'), `${row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L`, formatMoney(row.custo), formatMoney(row.media)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] } })
+    doc.save(`relatorio-combustiveis-${period}.pdf`)
+  }
+
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ANÁLISE GERENCIAL</span><h2>Relatórios de combustíveis</h2><p>Compare litros e custos consolidados por secretaria.</p></div><div className="fleet-report-period"><FileText size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-report-toolbar"><label><span>Secretaria</span><select value={secretaria} onChange={(event) => setSecretaria(event.target.value)}><option value="TODAS">Todas as secretarias</option>{secretarias.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label><div className="fleet-report-actions"><button className="fleet-secondary-button" onClick={exportExcel} disabled={loading || !filteredRows.length}><FileSpreadsheet size={15} /> Exportar Excel</button><button className="fleet-primary-button" onClick={exportPdf} disabled={loading || !filteredRows.length}><Download size={15} /> Exportar PDF</button></div></div><div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings}</strong><small>{periodLabel}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>sem cancelados</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><BarChart3 size={19} /></span><div><span>Custo consolidado</span><strong>{formatMoney(totalCost)}</strong><small>{filteredRows.length} secretaria(s)</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><FileText size={19} /></span><div><span>Custo médio</span><strong>{formatMoney(totalFuelings ? totalCost / totalFuelings : 0)}</strong><small>por abastecimento</small></div></article></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : filteredRows.length ? <table className="fleet-table fleet-report-table"><thead><tr><th>Secretaria</th><th>Sigla</th><th>Abastecimentos</th><th>Litros</th><th>Custo total</th><th>Custo médio</th></tr></thead><tbody>{filteredRows.map((row) => <tr key={row.id}><td><strong>{row.secretaria}</strong><small>Centro de custo operacional</small></td><td className="fleet-plate">{row.sigla}</td><td>{row.abastecimentos}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table> : <EmptyState icon={BarChart3} title="Nenhum custo encontrado" text="Não há abastecimentos para a competência e secretaria selecionadas." />}</div></section>
+}
 
 type Closure = { id: string; reference_year: number; reference_month: number; status: string; started_at: string | null; checked_at: string | null; closed_at: string | null }
 type ClosureFueling = Fueling & { station_id?: string }
