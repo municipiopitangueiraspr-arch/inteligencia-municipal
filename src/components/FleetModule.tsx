@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
-  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Plus, RefreshCw,
+  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
   Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -13,7 +13,8 @@ import './FleetModule.css'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
-type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; tank_capacity_l: number; operational_status: string; current_odometer_km: number | null }
+type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
+type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
 type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null; fuel_type?: { nome?: string } | null }
 
 const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
@@ -50,27 +51,34 @@ async function withTimeout<T>(promise: PromiseLike<T>, milliseconds = 15000): Pr
 export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const [view, setView] = useState<FleetView>('overview')
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
+  const [units, setUnits] = useState<FleetOption[]>([])
+  const [fuelTypes, setFuelTypes] = useState<FleetOption[]>([])
   const [fuelings, setFuelings] = useState<Fueling[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [showVehicleForm, setShowVehicleForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [vehicleForm, setVehicleForm] = useState({ placa: '', marca: '', modelo: '', tank_capacity_l: '60' })
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
+  const [vehicleForm, setVehicleForm] = useState({ placa: '', marca: '', modelo: '', ano_fabricacao: '', ano_modelo: '', chassi: '', renavam: '', fuel_type_id: '', tank_capacity_l: '60', responsible_unit_id: '', operational_status: 'ATIVO', current_odometer_km: '', notes: '' })
 
   async function loadData() {
     if (!supabase) return
     setError('')
     setRefreshing(true)
-    const [vehicleResult, fuelingResult] = await Promise.all([
-      supabase.from('fleet_vehicles').select('id,placa,marca,modelo,tank_capacity_l,operational_status,current_odometer_km').order('placa').limit(100),
+    const [vehicleResult, fuelingResult, unitResult, fuelTypeResult] = await Promise.all([
+      supabase.from('fleet_vehicles').select('id,placa,marca,modelo,ano_fabricacao,ano_modelo,chassi,renavam,fuel_type_id,tank_capacity_l,responsible_unit_id,operational_status,current_odometer_km,notes').order('placa').limit(100),
       supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot),fuel_type:fleet_fuel_types(nome)').order('performed_at', { ascending: false }).limit(100),
+      supabase.from('unidades_organizacionais').select('id,nome,sigla,ativo').order('nome').limit(200),
+      supabase.from('fleet_fuel_types').select('id,nome,sigla,unidade_medida,ativo').order('nome').limit(100),
     ])
     const firstError = vehicleResult.error || fuelingResult.error
     if (firstError) setError('Não foi possível carregar os dados permitidos para este usuário. Verifique o perfil de Frotas.')
     else {
       setVehicles((vehicleResult.data || []) as Vehicle[])
       setFuelings((fuelingResult.data || []) as unknown as Fueling[])
+      setUnits((unitResult.data || []) as FleetOption[])
+      setFuelTypes((fuelTypeResult.data || []) as FleetOption[])
     }
     setLoading(false)
     setRefreshing(false)
@@ -87,21 +95,25 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
     event.preventDefault()
     if (!supabase) return
     setSaving(true); setError('')
+    const payload = { placa: vehicleForm.placa.trim().toUpperCase(), marca: vehicleForm.marca.trim() || null, modelo: vehicleForm.modelo.trim() || null, ano_fabricacao: vehicleForm.ano_fabricacao ? Number(vehicleForm.ano_fabricacao) : null, ano_modelo: vehicleForm.ano_modelo ? Number(vehicleForm.ano_modelo) : null, chassi: vehicleForm.chassi.trim() || null, renavam: vehicleForm.renavam.trim() || null, fuel_type_id: vehicleForm.fuel_type_id || null, tank_capacity_l: Number(vehicleForm.tank_capacity_l), responsible_unit_id: vehicleForm.responsible_unit_id || null, operational_status: vehicleForm.operational_status, current_odometer_km: vehicleForm.current_odometer_km ? Number(vehicleForm.current_odometer_km) : null, notes: vehicleForm.notes.trim() || null, updated_at: new Date().toISOString() }
     const { data: municipality } = await supabase.rpc('fleet_current_municipio_id')
     const { data: currentUser } = await supabase.rpc('fleet_current_usuario_id')
-    const { error: insertError } = await supabase.from('fleet_vehicles').insert({
-      municipio_id: municipality,
-      created_by: currentUser,
-      placa: vehicleForm.placa.trim().toUpperCase(),
-      marca: vehicleForm.marca.trim() || null,
-      modelo: vehicleForm.modelo.trim() || null,
-      tank_capacity_l: Number(vehicleForm.tank_capacity_l),
-      operational_status: 'ATIVO',
-    })
+    const result = editingVehicle ? await supabase.from('fleet_vehicles').update(payload).eq('id', editingVehicle.id) : await supabase.from('fleet_vehicles').insert({ ...payload, municipio_id: municipality, created_by: currentUser })
+    const insertError = result.error
     setSaving(false)
     if (insertError) { setError(insertError.code === '23505' ? 'Já existe um veículo com esta placa.' : 'Não foi possível cadastrar o veículo.'); return }
-    setShowVehicleForm(false); setVehicleForm({ placa: '', marca: '', modelo: '', tank_capacity_l: '60' }); await loadData()
+    let historyWarning = ''
+    if (editingVehicle) {
+      const eventType = editingVehicle.operational_status !== payload.operational_status ? 'SITUACAO' : editingVehicle.responsible_unit_id !== payload.responsible_unit_id ? 'TRANSFERENCIA' : 'ALTERACAO'
+      const historyResult = await supabase.from('fleet_vehicle_history').insert({ municipio_id: municipality, vehicle_id: editingVehicle.id, event_type: eventType, previous_data: editingVehicle, new_data: payload, reason: 'Edição realizada no cadastro oficial de veículos.', changed_by: currentUser })
+      if (historyResult.error) historyWarning = 'Veículo atualizado, mas o histórico da alteração não pôde ser registrado.'
+    }
+    setShowVehicleForm(false); setEditingVehicle(null); resetVehicleForm(); await loadData(); if (historyWarning) setError(historyWarning)
   }
+
+  function resetVehicleForm() { setVehicleForm({ placa: '', marca: '', modelo: '', ano_fabricacao: '', ano_modelo: '', chassi: '', renavam: '', fuel_type_id: '', tank_capacity_l: '60', responsible_unit_id: '', operational_status: 'ATIVO', current_odometer_km: '', notes: '' }) }
+  function openNewVehicle() { setEditingVehicle(null); resetVehicleForm(); setShowVehicleForm(true) }
+  function openEditVehicle(vehicle: Vehicle) { setEditingVehicle(vehicle); setVehicleForm({ placa: vehicle.placa || '', marca: vehicle.marca || '', modelo: vehicle.modelo || '', ano_fabricacao: vehicle.ano_fabricacao?.toString() || '', ano_modelo: vehicle.ano_modelo?.toString() || '', chassi: vehicle.chassi || '', renavam: vehicle.renavam || '', fuel_type_id: vehicle.fuel_type_id || '', tank_capacity_l: String(vehicle.tank_capacity_l || 60), responsible_unit_id: vehicle.responsible_unit_id || '', operational_status: vehicle.operational_status || 'ATIVO', current_odometer_km: vehicle.current_odometer_km?.toString() || '', notes: vehicle.notes || '' }); setShowVehicleForm(true) }
 
   return <div className="fleet-shell">
     <aside className="fleet-sidebar">
@@ -115,7 +127,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
       <div className="fleet-content">
         {error && <div className="fleet-error" role="alert"><CircleAlert size={17} /> {error}</div>}
         {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
-        {view === 'vehicles' && <Vehicles vehicles={vehicles} loading={loading} onAdd={() => setShowVehicleForm(true)} />}
+        {view === 'vehicles' && <Vehicles vehicles={vehicles} units={units} fuelTypes={fuelTypes} loading={loading} onAdd={openNewVehicle} onEdit={openEditVehicle} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
         {view === 'closure' && <MonthlyClosure />}
         {view === 'analytics' && <FuelConsumptionDashboard />}
@@ -125,7 +137,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'settings' && <SettingsPanel />}
       </div>
     </main>
-    {showVehicleForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowVehicleForm(false)}><form className="fleet-modal" onSubmit={createVehicle}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CADASTRO OFICIAL</span><h2>Novo veículo</h2></div><button type="button" className="fleet-close" onClick={() => setShowVehicleForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Esta ação exige perfil de Gestor de Frotas ou Administrador.</p><label>Placa<input required maxLength={10} value={vehicleForm.placa} onChange={(event) => setVehicleForm({ ...vehicleForm, placa: event.target.value })} placeholder="ABC-1D23" /></label><div className="fleet-form-grid"><label>Marca<input value={vehicleForm.marca} onChange={(event) => setVehicleForm({ ...vehicleForm, marca: event.target.value })} placeholder="Ex.: Renault" /></label><label>Modelo<input value={vehicleForm.modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, modelo: event.target.value })} placeholder="Ex.: Kangoo" /></label></div><label>Capacidade do tanque (litros)<input required type="number" min="1" step="0.01" value={vehicleForm.tank_capacity_l} onChange={(event) => setVehicleForm({ ...vehicleForm, tank_capacity_l: event.target.value })} /></label><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowVehicleForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : 'Cadastrar veículo'}</button></div></form></div>}
+    {showVehicleForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowVehicleForm(false)}><form className="fleet-modal fleet-vehicle-modal" onSubmit={createVehicle}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CADASTRO OFICIAL</span><h2>{editingVehicle ? 'Editar veículo' : 'Novo veículo'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowVehicleForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Somente Gestor de Frotas ou Administrador pode alterar dados oficiais. Inativar preserva o histórico.</p><div className="fleet-form-section-title"><Truck size={15} /> Identificação do veículo</div><div className="fleet-form-grid"><label>Placa<input required maxLength={10} value={vehicleForm.placa} onChange={(event) => setVehicleForm({ ...vehicleForm, placa: event.target.value })} placeholder="ABC-1D23" /></label><label>Marca<input value={vehicleForm.marca} onChange={(event) => setVehicleForm({ ...vehicleForm, marca: event.target.value })} placeholder="Ex.: Renault" /></label><label>Modelo<input value={vehicleForm.modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, modelo: event.target.value })} placeholder="Ex.: Kangoo" /></label><label>Ano de fabricação<input type="number" min="1900" max="2200" value={vehicleForm.ano_fabricacao} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_fabricacao: event.target.value })} /></label><label>Ano do modelo<input type="number" min="1900" max="2200" value={vehicleForm.ano_modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_modelo: event.target.value })} /></label><label>Chassi<input maxLength={30} value={vehicleForm.chassi} onChange={(event) => setVehicleForm({ ...vehicleForm, chassi: event.target.value })} /></label><label>Renavam<input maxLength={20} value={vehicleForm.renavam} onChange={(event) => setVehicleForm({ ...vehicleForm, renavam: event.target.value })} /></label></div><div className="fleet-form-section-title"><Fuel size={15} /> Operação e responsabilidade</div><div className="fleet-form-grid"><label>Tipo de combustível<select value={vehicleForm.fuel_type_id} onChange={(event) => setVehicleForm({ ...vehicleForm, fuel_type_id: event.target.value })}><option value="">Não informado</option>{fuelTypes.filter((fuel) => fuel.ativo !== false).map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ''}</option>)}</select></label><label>Secretaria responsável<select value={vehicleForm.responsible_unit_id} onChange={(event) => setVehicleForm({ ...vehicleForm, responsible_unit_id: event.target.value })}><option value="">Não informada</option>{units.filter((unit) => unit.ativo !== false).map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label><label>Capacidade do tanque (litros)<input required type="number" min="1" step="0.01" value={vehicleForm.tank_capacity_l} onChange={(event) => setVehicleForm({ ...vehicleForm, tank_capacity_l: event.target.value })} /></label><label>Odômetro de referência (km)<input type="number" min="0" step="0.01" value={vehicleForm.current_odometer_km} onChange={(event) => setVehicleForm({ ...vehicleForm, current_odometer_km: event.target.value })} /></label><label>Situação operacional<select value={vehicleForm.operational_status} onChange={(event) => setVehicleForm({ ...vehicleForm, operational_status: event.target.value })}><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option><option value="EM_MANUTENCAO">Em manutenção</option><option value="BAIXADO">Baixado</option><option value="CEDIDO">Cedido</option></select></label><label className="fleet-form-wide">Observações<textarea value={vehicleForm.notes} onChange={(event) => setVehicleForm({ ...vehicleForm, notes: event.target.value })} placeholder="Informações complementares, características ou justificativa da situação..." /></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowVehicleForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editingVehicle ? 'Salvar alterações' : 'Cadastrar veículo'}</button></div></form></div>}
   </div>
 }
 
@@ -134,7 +146,7 @@ function Overview({ activeVehicles, pendingFuelings, monthFuelings, monthTotal, 
   return <><section className="fleet-hero"><div><span className="fleet-hero-kicker">CONTROLE OPERACIONAL</span><h2>Frota em movimento, dados sob controle.</h2><p>Acompanhe abastecimentos, veículos e pendências em um único espaço de trabalho.</p></div><div className="fleet-hero-mark"><Gauge size={38} /></div></section><section className="fleet-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">ACOMPANHAMENTO</span><h2>Indicadores do módulo</h2></div><span className="fleet-period">Atualizado agora</span></div><div className="fleet-metric-grid">{metrics.map(({ label, value, helper, icon: Icon, tone }) => <article className="fleet-metric" key={label}><span className={`fleet-metric-icon ${tone}`}><Icon size={19} /></span><div><span>{label}</span><strong>{value}</strong><small>{helper}</small></div></article>)}</div></section><section className="fleet-section fleet-two-columns"><div className="fleet-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">FILA DE TRABALHO</span><h2>Abastecimentos recentes</h2></div><button className="fleet-link-button" onClick={() => onNavigate('fuelings')}>Ver fila <ChevronRight size={14} /></button></div><FuelingTable fuelings={fuelings.slice(0, 5)} compact /></div><div className="fleet-panel fleet-attention-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">ATENÇÃO</span><h2>Próximas ações</h2></div></div><div className="fleet-attention-item"><span className="fleet-attention-icon"><ClipboardCheck size={18} /></span><div><strong>{pendingFuelings ? `${pendingFuelings} abastecimento(s) aguardam conferência` : 'Nenhuma pendência registrada'}</strong><p>{pendingFuelings ? 'Revise os comprovantes e valide os registros enviados.' : 'Quando houver ações, elas aparecerão nesta área.'}</p></div></div></div></section></>
 }
 
-function Vehicles({ vehicles, loading, onAdd }: { vehicles: Vehicle[]; loading: boolean; onAdd: () => void }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DA FROTA</span><h2>Veículos</h2><p>Controle a identificação, capacidade do tanque e situação operacional.</p></div><button className="fleet-primary-button" onClick={onAdd}><Plus size={16} /> Novo veículo</button></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : vehicles.length ? <table className="fleet-table"><thead><tr><th>Veículo</th><th>Placa</th><th>Tanque</th><th>Hodômetro</th><th>Situação</th><th /></tr></thead><tbody>{vehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.marca || 'Marca não informada'} {vehicle.modelo || 'Modelo não informado'}</strong><small>ID {vehicle.id.slice(0, 8)}</small></td><td className="fleet-plate">{vehicle.placa}</td><td>{vehicle.tank_capacity_l} L</td><td>{vehicle.current_odometer_km ? `${vehicle.current_odometer_km.toLocaleString('pt-BR')} km` : '—'}</td><td><StatusChip value={vehicle.operational_status} /></td><td><button className="fleet-row-action" aria-label={`Abrir veículo ${vehicle.placa}`}><ChevronRight size={17} /></button></td></tr>)}</tbody></table> : <EmptyState icon={Truck} title="Nenhum veículo disponível" text="Cadastre o primeiro veículo para iniciar o controle da frota." action="Novo veículo" onAction={onAdd} />}</div></section> }
+function Vehicles({ vehicles, units, fuelTypes, loading, onAdd, onEdit }: { vehicles: Vehicle[]; units: FleetOption[]; fuelTypes: FleetOption[]; loading: boolean; onAdd: () => void; onEdit: (vehicle: Vehicle) => void }) { const unitName = (id: string | null) => units.find((unit) => unit.id === id)?.nome || 'Unidade não informada'; const fuelName = (id: string | null) => fuelTypes.find((fuel) => fuel.id === id)?.nome || 'Combustível não informado'; return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DA FROTA</span><h2>Veículos</h2><p>Cadastre, edite, inative e consulte a identificação completa da frota.</p></div><button className="fleet-primary-button" onClick={onAdd}><Plus size={16} /> Novo veículo</button></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : vehicles.length ? <table className="fleet-table fleet-vehicle-table"><thead><tr><th>Veículo</th><th>Placa</th><th>Secretaria</th><th>Combustível</th><th>Tanque</th><th>Hodômetro</th><th>Situação</th><th /></tr></thead><tbody>{vehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.marca || 'Marca não informada'} {vehicle.modelo || 'Modelo não informado'}</strong><small>{vehicle.ano_modelo || vehicle.ano_fabricacao || 'Ano não informado'} · ID {vehicle.id.slice(0, 8)}</small></td><td className="fleet-plate">{vehicle.placa}</td><td>{unitName(vehicle.responsible_unit_id)}</td><td>{fuelName(vehicle.fuel_type_id)}</td><td>{vehicle.tank_capacity_l} L</td><td>{vehicle.current_odometer_km ? `${vehicle.current_odometer_km.toLocaleString('pt-BR')} km` : '—'}</td><td><StatusChip value={vehicle.operational_status} /></td><td><button className="fleet-row-action" aria-label={`Editar veículo ${vehicle.placa}`} onClick={() => onEdit(vehicle)}><Pencil size={15} /></button></td></tr>)}</tbody></table> : <EmptyState icon={Truck} title="Nenhum veículo disponível" text="Cadastre o primeiro veículo para iniciar o controle da frota." action="Novo veículo" onAction={onAdd} />}</div></section> }
 
 function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
 
