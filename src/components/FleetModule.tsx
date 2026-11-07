@@ -153,7 +153,7 @@ function FuelCostReports() {
     if (!supabase) return
     setLoading(true); setError('')
     const range = bounds(period)
-    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,performed_at,responsible_unit_id,units:unidades_organizacionais(nome,sigla)').gte('performed_at', range.start).lt('performed_at', range.end).order('performed_at', { ascending: true }).limit(5000)
+    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,performed_at,responsible_unit_id,units:unidades_organizacionais!fleet_fuelings_responsible_unit_id_fkey(nome,sigla)').gte('performed_at', range.start).lt('performed_at', range.end).order('performed_at', { ascending: true }).limit(5000)
     if (result.error) setError('Não foi possível carregar o relatório de custos. Verifique as permissões do perfil de Frotas.')
     else setFuelings((result.data || []) as unknown as ReportFueling[])
     setLoading(false)
