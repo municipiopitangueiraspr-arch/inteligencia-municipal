@@ -27,13 +27,11 @@ function App() {
   useEffect(() => { if (!supplierMode) setShowFirstAccess(false) }, [supplierMode])
   async function resolveSupplierAccess() {
     if (!supabase) return null
-    const { data: userId } = await supabase.rpc('fleet_current_usuario_id')
-    if (!userId) return null
-    const memberResult = await supabase.from('fleet_station_members').select('station_id,role').eq('usuario_id', userId).eq('ativo', true).limit(1).maybeSingle()
-    if (memberResult.error || !memberResult.data) return null
-    const stationResult = await supabase.from('fleet_fuel_stations').select('id,razao_social_snapshot,nome_fantasia_snapshot,cnpj_snapshot,endereco,cidade,uf,representante_nome,representante_documento,representante_email,representante_telefone,status,credenciamento_started_at,credenciamento_ends_at,notes').eq('id', memberResult.data.station_id).maybeSingle()
-    if (stationResult.error || !stationResult.data) return null
-    return { station: stationResult.data as Station, role: memberResult.data.role } satisfies SupplierContext
+    const contextResult = await supabase.rpc('fleet_supplier_access_context')
+    if (contextResult.error || !contextResult.data) return null
+    const context = contextResult.data as { station?: Station; role?: string }
+    if (!context.station || !context.role) return null
+    return { station: context.station, role: context.role } satisfies SupplierContext
   }
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setMessage(null)
