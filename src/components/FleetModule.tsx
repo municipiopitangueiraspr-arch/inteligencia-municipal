@@ -8,8 +8,8 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
-import { DriversView, StationsView } from './FleetResources'
-import { StationAccessRequests } from './StationAccessRequests'
+import { DriversView } from './FleetResources'
+import { StationManagementView } from './StationManagementView'
 import './FleetModule.css'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'accessRequests' | 'settings'
@@ -136,9 +136,9 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'closure' && <MonthlyClosure />}
         {view === 'analytics' && <FuelConsumptionDashboard />}
         {view === 'reports' && <FuelCostReports />}
-        {view === 'stations' && <StationsView onSaved={loadData} />}
+        {view === 'stations' && <StationManagementView onSaved={loadData} />}
         {view === 'drivers' && <DriversView onSaved={loadData} />}
-        {view === 'accessRequests' && <StationAccessRequests />}
+        {view === 'accessRequests' && <StationManagementView onSaved={loadData} />}
         {view === 'settings' && <SettingsPanel />}
       </div>
     </main>
