@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
+  AlertTriangle, ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
   ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Plus, RefreshCw,
   Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase'
 import { DriversView, StationsView } from './FleetResources'
 import './FleetModule.css'
 
-type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'reports' | 'stations' | 'drivers' | 'settings'
+type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; tank_capacity_l: number; operational_status: string; current_odometer_km: number | null }
 type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null; fuel_type?: { nome?: string } | null }
@@ -21,6 +21,7 @@ const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'vehicles', label: 'Veículos', icon: Truck },
   { id: 'fuelings', label: 'Abastecimentos', icon: Fuel },
   { id: 'closure', label: 'Fechamento mensal', icon: CalendarCheck },
+  { id: 'analytics', label: 'Dashboard gerencial', icon: BarChart3 },
   { id: 'reports', label: 'Relatórios', icon: BarChart3 },
   { id: 'stations', label: 'Postos credenciados', icon: Store },
   { id: 'drivers', label: 'Motoristas', icon: UserRound },
@@ -40,6 +41,10 @@ function formatDate(value?: string) {
 
 function formatMoney(value?: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
+}
+
+async function withTimeout<T>(promise: PromiseLike<T>, milliseconds = 15000): Promise<T> {
+  return Promise.race([Promise.resolve(promise), new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), milliseconds))])
 }
 
 export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
@@ -113,6 +118,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'vehicles' && <Vehicles vehicles={vehicles} loading={loading} onAdd={() => setShowVehicleForm(true)} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
         {view === 'closure' && <MonthlyClosure />}
+        {view === 'analytics' && <FuelConsumptionDashboard />}
         {view === 'reports' && <FuelCostReports />}
         {view === 'stations' && <StationsView onSaved={loadData} />}
         {view === 'drivers' && <DriversView onSaved={loadData} />}
@@ -136,6 +142,45 @@ function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; comp
 
 type ReportFueling = { liters: number; total_amount: number; status: string; performed_at: string; responsible_unit_id: string; units?: { nome?: string; sigla?: string } | null }
 type ReportRow = { id: string; secretaria: string; sigla: string; abastecimentos: number; litros: number; custo: number; media: number }
+
+type AnalyticsFueling = { liters: number; total_amount: number; status: string; vehicles?: { placa?: string; marca?: string; modelo?: string; notes?: string | null } | null }
+type AnalyticsRow = { tipo: string; abastecimentos: number; litros: number; custo: number; media: number }
+
+function vehicleType(vehicle?: AnalyticsFueling['vehicles']) {
+  const noteType = vehicle?.notes?.split('|')[1]
+  if (noteType) return noteType.replaceAll('_', ' ')
+  const text = `${vehicle?.marca || ''} ${vehicle?.modelo || ''}`.toLowerCase()
+  if (text.includes('ônibus') || text.includes('onibus')) return 'Ônibus'
+  if (text.includes('micro')) return 'Micro-ônibus'
+  if (text.includes('van')) return 'Van'
+  if (text.includes('caminh') || text.includes('pipa')) return 'Caminhão'
+  if (text.includes('retro') || text.includes('escav')) return 'Pá retroescavadeira'
+  if (text.includes('rolo') || text.includes('motonivel')) return 'Máquina pesada'
+  if (text.includes('utilit') || text.includes('fiorino')) return 'Carro utilitário'
+  return vehicle?.modelo || 'Não classificado'
+}
+
+function FuelConsumptionDashboard() {
+  const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
+  const [period, setPeriod] = useState(initialPeriod)
+  const [fuelings, setFuelings] = useState<AnalyticsFueling[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  function range(value: string) { const [year, month] = value.split('-').map(Number); return { start: new Date(Date.UTC(year, month - 1, 1)).toISOString(), end: new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1)).toISOString() } }
+  async function loadAnalytics() {
+    if (!supabase) return
+    setLoading(true); setError('')
+    const dates = range(period)
+    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,vehicle_id,vehicles:fleet_vehicles(placa,marca,modelo,notes)').gte('performed_at', dates.start).lt('performed_at', dates.end).limit(5000)
+    if (result.error) setError('Não foi possível carregar o dashboard de consumo. Verifique as permissões do perfil de Frotas.')
+    else setFuelings((result.data || []) as unknown as AnalyticsFueling[])
+    setLoading(false)
+  }
+  useEffect(() => { void loadAnalytics() }, [period])
+  const rows = Array.from(fuelings.filter((fueling) => fueling.status !== 'CANCELADO').reduce((map, fueling) => { const tipo = vehicleType(fueling.vehicles); const current = map.get(tipo) || { tipo, abastecimentos: 0, litros: 0, custo: 0, media: 0 }; current.abastecimentos += 1; current.litros += Number(fueling.liters || 0); current.custo += Number(fueling.total_amount || 0); current.media = current.custo / current.abastecimentos; map.set(tipo, current); return map }, new Map<string, AnalyticsRow>()).values()).sort((a, b) => b.litros - a.litros)
+  const maxLiters = Math.max(...rows.map((row) => row.litros), 1); const maxCost = Math.max(...rows.map((row) => row.custo), 1); const totalLiters = rows.reduce((sum, row) => sum + row.litros, 0); const totalCost = rows.reduce((sum, row) => sum + row.custo, 0); const totalFuelings = rows.reduce((sum, row) => sum + row.abastecimentos, 0); const periodLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period}-01T00:00:00Z`))
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">INTELIGÊNCIA OPERACIONAL</span><h2>Dashboard de consumo</h2><p>Visão gerencial do consumo de combustível por tipo de veículo.</p></div><div className="fleet-report-period"><BarChart3 size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Consumo total</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>{periodLabel}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><BarChart3 size={19} /></span><div><span>Custo total</span><strong>{formatMoney(totalCost)}</strong><small>sem cancelados</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><Truck size={19} /></span><div><span>Tipos monitorados</span><strong>{rows.length}</strong><small>categorias da frota</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><ClipboardCheck size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings}</strong><small>registros analisados</small></div></article></div>{loading ? <LoadingRows /> : rows.length ? <><div className="fleet-chart-grid"><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VOLUME</span><h2>Litros por tipo de veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`litros-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}</span><strong>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill blue" style={{ width: `${(row.litros / maxLiters) * 100}%` }} /></div></div>)}</div></article><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">CUSTO</span><h2>Valor por tipo de veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`custo-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}</span><strong>{formatMoney(row.custo)}</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill gold" style={{ width: `${(row.custo / maxCost) * 100}%` }} /></div></div>)}</div></article></div><div className="fleet-table-panel"><table className="fleet-table fleet-report-table"><thead><tr><th>Tipo de veículo</th><th>Abastecimentos</th><th>Litros</th><th>Custo total</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.tipo}><td><strong>{row.tipo}</strong><small>Classificação derivada do cadastro do veículo</small></td><td>{row.abastecimentos}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table></div></> : <EmptyState icon={BarChart3} title="Nenhum consumo encontrado" text="Não há abastecimentos para a competência selecionada." />}</section>
+}
 
 function FuelCostReports() {
   const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
@@ -191,7 +236,14 @@ function FuelCostReports() {
 }
 
 type Closure = { id: string; reference_year: number; reference_month: number; status: string; started_at: string | null; checked_at: string | null; closed_at: string | null }
-type ClosureFueling = Fueling & { station_id?: string }
+type ClosureFueling = Fueling & { station_id?: string; inconsistency_code?: string | null; inconsistency_notes?: string | null }
+
+function fuelingIssue(fueling: ClosureFueling) {
+  const code = fueling.inconsistency_code || ''
+  const reason = fueling.inconsistency_notes || ({ TANQUE_EXCEDIDO: 'Quantidade acima da capacidade do tanque.', HODOMETRO_INVALIDO: 'Hodômetro incompatível com o histórico do veículo.', DUPLICIDADE: 'Possível abastecimento duplicado para o mesmo posto e recibo.', DOCUMENTO_AUSENTE: 'Comprovante obrigatório não foi localizado.' } as Record<string, string>)[code] || ({ PENDENTE_DE_COMPROVANTE: 'Comprovante ainda não enviado pelo posto.', COM_INCONSISTENCIA: 'Registro marcado com inconsistência pelo módulo.', SOLICITADA_CORRECAO: 'Correção solicitada ao posto.', ENVIADO_PELO_POSTO: 'Registro enviado pelo posto e aguardando análise.', PENDENTE_DE_CONFERENCIA: 'Registro aguardando conferência do gestor.', EM_ANALISE: 'Registro em análise pelo gestor.' } as Record<string, string>)[fueling.status] || 'Registro ainda não validado.'
+  const resolution = fueling.status === 'PENDENTE_DE_COMPROVANTE' ? 'Solicite ao posto o envio do comprovante em até 24 horas.' : fueling.status === 'COM_INCONSISTENCIA' || fueling.status === 'SOLICITADA_CORRECAO' ? 'Abra o abastecimento, corrija os campos destacados ou solicite novo comprovante ao posto.' : 'Confira litros, valor, odômetro e comprovante. Depois marque o registro como conferido.'
+  return { reason, resolution }
+}
 
 function MonthlyClosure() {
   const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
@@ -217,7 +269,7 @@ function MonthlyClosure() {
     const bounds = periodBounds(period)
     const [closureResult, fuelingResult] = await Promise.all([
       supabase.from('fleet_monthly_closures').select('id,reference_year,reference_month,status,started_at,checked_at,closed_at').eq('reference_year', bounds.year).eq('reference_month', bounds.month).maybeSingle(),
-      supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,station_id,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot),fuel_type:fleet_fuel_types(nome)').gte('performed_at', bounds.start).lt('performed_at', bounds.end).order('performed_at', { ascending: false }).limit(1000),
+      supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,station_id,inconsistency_code,inconsistency_notes,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot),fuel_type:fleet_fuel_types(nome)').gte('performed_at', bounds.start).lt('performed_at', bounds.end).order('performed_at', { ascending: false }).limit(1000),
     ])
     const firstError = closureResult.error || fuelingResult.error
     if (firstError) setError('Não foi possível carregar a conferência deste período. Verifique se o perfil é Gestor de Frotas ou Administrador.')
@@ -258,19 +310,21 @@ function MonthlyClosure() {
 
   async function closeMonth() {
     if (!supabase || !closure) return
-    if (pending.length) { setError('O mês não pode ser fechado enquanto existirem abastecimentos pendentes ou com inconsistência.'); return }
+    if (pending.length) { setError(`O mês não pode ser fechado: ${pending.length} registro(s) ainda precisam de conferência ou correção. Consulte o painel de ação necessária abaixo.`); return }
     setWorking(true); setError(''); setNotice('')
-    const bounds = periodBounds(period)
-    const { data: currentUser } = await supabase.rpc('fleet_current_usuario_id')
-    const fuelingResult = await supabase.from('fleet_fuelings').update({ status: 'INCLUIDO_NO_FECHAMENTO' }).gte('performed_at', bounds.start).lt('performed_at', bounds.end).eq('status', 'CONFERIDO')
-    if (fuelingResult.error) { setWorking(false); setError('Não foi possível incluir os abastecimentos no fechamento.'); return }
-    const closureResult = await supabase.from('fleet_monthly_closures').update({ status: 'FECHADO', checked_by: currentUser, checked_at: new Date().toISOString(), closed_by: currentUser, closed_at: new Date().toISOString() }).eq('id', closure.id)
-    setWorking(false)
-    if (closureResult.error) setError('Os abastecimentos foram conferidos, mas o fechamento não pôde ser concluído.')
-    else { setNotice('Mês fechado com sucesso. Os registros foram incluídos no fechamento.'); await loadClosure() }
+    try {
+      const bounds = periodBounds(period)
+      const { data: currentUser } = await withTimeout(supabase.rpc('fleet_current_usuario_id'))
+      const fuelingResult = await withTimeout(supabase.from('fleet_fuelings').update({ status: 'INCLUIDO_NO_FECHAMENTO' }).gte('performed_at', bounds.start).lt('performed_at', bounds.end).eq('status', 'CONFERIDO'))
+      if (fuelingResult.error) { setError('Não foi possível incluir os abastecimentos no fechamento. Verifique o registro retornado na fila.'); return }
+      const closureResult = await withTimeout(supabase.from('fleet_monthly_closures').update({ status: 'FECHADO', checked_by: currentUser, checked_at: new Date().toISOString(), closed_by: currentUser, closed_at: new Date().toISOString() }).eq('id', closure.id))
+      if (closureResult.error) setError('Os abastecimentos foram conferidos, mas o fechamento não pôde ser concluído.')
+      else { setNotice('Mês fechado com sucesso. Os registros foram incluídos no fechamento.'); await loadClosure() }
+    } catch { setError('A operação demorou mais de 15 segundos e foi interrompida. Atualize a fila e tente novamente; nenhum fechamento parcial foi confirmado.') }
+    finally { setWorking(false) }
   }
 
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONTROLE MENSAL</span><h2>Fechamento e conferência</h2><p>Revise os abastecimentos do período antes de consolidar a competência.</p></div><div className="fleet-closure-period"><CalendarCheck size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}{notice && <div className="fleet-inline-success" role="status"><CheckCircle2 size={15} /> {notice}</div>}<div className="fleet-closure-banner"><div><span className="fleet-kicker">COMPETÊNCIA</span><strong>{periodLabel}</strong><p>{closure ? `Status atual: ${closure.status.replaceAll('_', ' ').toLowerCase()}.` : 'Nenhum fechamento iniciado para este período.'}</p></div><div className="fleet-closure-actions">{!closure && <button className="fleet-primary-button" onClick={() => void openClosure()} disabled={working}><CalendarCheck size={15} /> Iniciar conferência</button>}{closure && closure.status !== 'FECHADO' && <button className="fleet-primary-button" onClick={() => void closeMonth()} disabled={working || loading || pending.length > 0}><CheckCircle2 size={15} /> {working ? 'Fechando…' : 'Fechar mês'}</button>}{closure?.status === 'FECHADO' && <span className="fleet-status success"><CheckCircle2 size={13} /> Mês fechado</span>}</div></div><div className="fleet-metric-grid fleet-closure-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos</span><strong>{fuelings.length}</strong><small>{reviewed} conferidos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Volume registrado</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>competência selecionada</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><CircleAlert size={19} /></span><div><span>Pendências</span><strong>{pending.length}</strong><small>{pending.length ? 'exigem ação' : 'pronto para fechamento'}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><ClipboardCheck size={19} /></span><div><span>Valor consolidado</span><strong>{formatMoney(totalAmount)}</strong><small>registros do período</small></div></article></div><div className="fleet-closure-toolbar"><div><span className="fleet-kicker">FILA DE CONFERÊNCIA</span><h3>Abastecimentos da competência</h3></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="TODOS">Todos os status</option><option value="ENVIADO_PELO_POSTO">Enviado pelo posto</option><option value="PENDENTE_DE_CONFERENCIA">Pendente de conferência</option><option value="COM_INCONSISTENCIA">Com inconsistência</option><option value="CONFERIDO">Conferido</option><option value="INCLUIDO_NO_FECHAMENTO">No fechamento</option></select></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : filtered.length ? <table className="fleet-table fleet-closure-table"><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Volume</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Recibo {fueling.station_receipt_number || 'não informado'}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td><td>{['CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO'].includes(fueling.status) ? <span className="fleet-row-confirmed"><CheckCircle2 size={15} /> Conferido</span> : <button className="fleet-secondary-button fleet-confirm-button" onClick={() => void confirmFueling(fueling.id)} disabled={working}><CheckCircle2 size={14} /> Conferir</button>}</td></tr>)}</tbody></table> : <EmptyState icon={ClipboardCheck} title="Nenhum registro neste filtro" text="Altere o período ou o filtro para consultar os abastecimentos." />}</div></section>
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONTROLE MENSAL</span><h2>Fechamento e conferência</h2><p>Revise os abastecimentos do período antes de consolidar a competência.</p></div><div className="fleet-closure-period"><CalendarCheck size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}{notice && <div className="fleet-inline-success" role="status"><CheckCircle2 size={15} /> {notice}</div>}<div className="fleet-closure-banner"><div><span className="fleet-kicker">COMPETÊNCIA</span><strong>{periodLabel}</strong><p>{closure ? `Status atual: ${closure.status.replaceAll('_', ' ').toLowerCase()}.` : 'Nenhum fechamento iniciado para este período.'}</p></div><div className="fleet-closure-actions">{!closure && <button className="fleet-primary-button" onClick={() => void openClosure()} disabled={working}><CalendarCheck size={15} /> Iniciar conferência</button>}{closure && closure.status !== 'FECHADO' && <button className="fleet-primary-button" onClick={() => void closeMonth()} disabled={working || loading || pending.length > 0}><CheckCircle2 size={15} /> {working ? 'Fechando…' : pending.length ? 'Corrija as pendências' : 'Fechar mês'}</button>}{closure?.status === 'FECHADO' && <span className="fleet-status success"><CheckCircle2 size={13} /> Mês fechado</span>}</div></div><div className="fleet-metric-grid fleet-closure-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos</span><strong>{fuelings.length}</strong><small>{reviewed} conferidos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Volume registrado</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>competência selecionada</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><CircleAlert size={19} /></span><div><span>Pendências</span><strong>{pending.length}</strong><small>{pending.length ? 'exigem ação' : 'pronto para fechamento'}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><ClipboardCheck size={19} /></span><div><span>Valor consolidado</span><strong>{formatMoney(totalAmount)}</strong><small>registros do período</small></div></article></div>{pending.length > 0 && <div className="fleet-divergence-panel"><div className="fleet-divergence-heading"><div><span className="fleet-kicker">AÇÃO NECESSÁRIA</span><h3>O mês não pode ser fechado ainda</h3><p>{pending.length} registro(s) precisam de conferência ou correção.</p></div><AlertTriangle size={22} /></div><div className="fleet-divergence-list">{pending.map((fueling) => { const issue = fuelingIssue(fueling); return <article className="fleet-divergence-item" key={fueling.id}><div className="fleet-divergence-item-top"><strong>{fueling.vehicles?.placa || 'Placa não informada'} · {formatDate(fueling.performed_at)}</strong><StatusChip value={fueling.status} /></div><p><b>Onde:</b> {fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'} · recibo {fueling.station_receipt_number || 'não informado'}</p><p><b>Motivo:</b> {issue.reason}</p><p><b>Como resolver:</b> {issue.resolution}</p><button className="fleet-secondary-button fleet-confirm-button" onClick={() => void confirmFueling(fueling.id)} disabled={working}><CheckCircle2 size={14} /> Conferir este registro</button></article> })}</div></div>}<div className="fleet-closure-toolbar"><div><span className="fleet-kicker">FILA DE CONFERÊNCIA</span><h3>Abastecimentos da competência</h3></div><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="TODOS">Todos os status</option><option value="ENVIADO_PELO_POSTO">Enviado pelo posto</option><option value="PENDENTE_DE_CONFERENCIA">Pendente de conferência</option><option value="COM_INCONSISTENCIA">Com inconsistência</option><option value="CONFERIDO">Conferido</option><option value="INCLUIDO_NO_FECHAMENTO">No fechamento</option></select></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : filtered.length ? <table className="fleet-table fleet-closure-table"><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Volume</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Recibo {fueling.station_receipt_number || 'não informado'}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td><td>{['CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO'].includes(fueling.status) ? <span className="fleet-row-confirmed"><CheckCircle2 size={15} /> Conferido</span> : <button className="fleet-secondary-button fleet-confirm-button" onClick={() => void confirmFueling(fueling.id)} disabled={working}><CheckCircle2 size={14} /> Conferir</button>}</td></tr>)}</tbody></table> : <EmptyState icon={ClipboardCheck} title="Nenhum registro neste filtro" text="Altere o período ou o filtro para consultar os abastecimentos." />}</div></section>
 }
 
 function SettingsPanel() { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Regras que orientam a operação de abastecimentos e conferência.</p></div></div><div className="fleet-settings-grid"><article><span><Gauge size={18} /></span><div><strong>Capacidade do tanque</strong><p>O abastecimento acima da capacidade cadastrada gera inconsistência para análise.</p></div></article><article><span><ClipboardCheck size={18} /></span><div><strong>Comprovantes</strong><p>O prazo operacional para envio do comprovante é de 24 horas após o abastecimento.</p></div></article><article><span><MapPin size={18} /></span><div><strong>Cessão temporária</strong><p>A secretaria responsável e a secretaria beneficiária são mantidas separadamente.</p></div></article><article><span><ShieldCheck size={18} /></span><div><strong>Perfis autorizados</strong><p>Gestor de Frotas e Administrador validam cadastros oficiais e fechamentos.</p></div></article></div></section> }
