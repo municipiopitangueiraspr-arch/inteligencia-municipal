@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
-  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
+  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
   Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase'
 import { DriversView, StationsView } from './FleetResources'
 import './FleetModule.css'
 
-type FleetView = 'overview' | 'vehicles' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'settings'
+type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
 type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
@@ -20,6 +20,7 @@ type Fueling = { id: string; status: string; performed_at: string; submitted_at:
 const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'vehicles', label: 'Veículos', icon: Truck },
+  { id: 'fuelTypes', label: 'Combustíveis', icon: Fuel },
   { id: 'fuelings', label: 'Abastecimentos', icon: Fuel },
   { id: 'closure', label: 'Fechamento mensal', icon: CalendarCheck },
   { id: 'analytics', label: 'Dashboard gerencial', icon: BarChart3 },
@@ -128,6 +129,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {error && <div className="fleet-error" role="alert"><CircleAlert size={17} /> {error}</div>}
         {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
         {view === 'vehicles' && <Vehicles vehicles={vehicles} units={units} fuelTypes={fuelTypes} loading={loading} onAdd={openNewVehicle} onEdit={openEditVehicle} />}
+        {view === 'fuelTypes' && <FuelTypesView onChanged={loadData} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
         {view === 'closure' && <MonthlyClosure />}
         {view === 'analytics' && <FuelConsumptionDashboard />}
@@ -147,6 +149,44 @@ function Overview({ activeVehicles, pendingFuelings, monthFuelings, monthTotal, 
 }
 
 function Vehicles({ vehicles, units, fuelTypes, loading, onAdd, onEdit }: { vehicles: Vehicle[]; units: FleetOption[]; fuelTypes: FleetOption[]; loading: boolean; onAdd: () => void; onEdit: (vehicle: Vehicle) => void }) { const unitName = (id: string | null) => units.find((unit) => unit.id === id)?.nome || 'Unidade não informada'; const fuelName = (id: string | null) => fuelTypes.find((fuel) => fuel.id === id)?.nome || 'Combustível não informado'; return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DA FROTA</span><h2>Veículos</h2><p>Cadastre, edite, inative e consulte a identificação completa da frota.</p></div><button className="fleet-primary-button" onClick={onAdd}><Plus size={16} /> Novo veículo</button></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : vehicles.length ? <table className="fleet-table fleet-vehicle-table"><thead><tr><th>Veículo</th><th>Placa</th><th>Secretaria</th><th>Combustível</th><th>Tanque</th><th>Hodômetro</th><th>Situação</th><th /></tr></thead><tbody>{vehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.marca || 'Marca não informada'} {vehicle.modelo || 'Modelo não informado'}</strong><small>{vehicle.ano_modelo || vehicle.ano_fabricacao || 'Ano não informado'} · ID {vehicle.id.slice(0, 8)}</small></td><td className="fleet-plate">{vehicle.placa}</td><td>{unitName(vehicle.responsible_unit_id)}</td><td>{fuelName(vehicle.fuel_type_id)}</td><td>{vehicle.tank_capacity_l} L</td><td>{vehicle.current_odometer_km ? `${vehicle.current_odometer_km.toLocaleString('pt-BR')} km` : '—'}</td><td><StatusChip value={vehicle.operational_status} /></td><td><button className="fleet-row-action" aria-label={`Editar veículo ${vehicle.placa}`} onClick={() => onEdit(vehicle)}><Pencil size={15} /></button></td></tr>)}</tbody></table> : <EmptyState icon={Truck} title="Nenhum veículo disponível" text="Cadastre o primeiro veículo para iniciar o controle da frota." action="Novo veículo" onAction={onAdd} />}</div></section> }
+
+type FuelTypeRecord = { id: string; nome: string; sigla: string | null; unidade_medida: string; ativo: boolean; created_at?: string; updated_at?: string }
+type FuelTypeUse = { id: string; fuel_type_id: string; performed_at: string; liters: number; status: string; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null }
+
+function FuelTypesView({ onChanged }: { onChanged: () => Promise<void> }) {
+  const [fuelTypes, setFuelTypes] = useState<FuelTypeRecord[]>([])
+  const [uses, setUses] = useState<FuelTypeUse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<FuelTypeRecord | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [form, setForm] = useState({ nome: '', sigla: '', unidade_medida: 'L', ativo: 'true' })
+
+  async function loadFuelTypes() {
+    if (!supabase) return
+    setLoading(true); setError('')
+    const [typesResult, usesResult] = await Promise.all([
+      supabase.from('fleet_fuel_types').select('id,nome,sigla,unidade_medida,ativo,created_at,updated_at').order('nome').limit(100),
+      supabase.from('fleet_fuelings').select('id,fuel_type_id,performed_at,liters,status,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot)').order('performed_at', { ascending: false }).limit(5000),
+    ])
+    if (typesResult.error || usesResult.error) setError('Não foi possível carregar os tipos de combustível e seu histórico de utilização.')
+    else { setFuelTypes((typesResult.data || []) as FuelTypeRecord[]); setUses((usesResult.data || []) as unknown as FuelTypeUse[]) }
+    setLoading(false)
+  }
+  useEffect(() => { void loadFuelTypes() }, [])
+  const usageCount = (id: string) => uses.filter((use) => use.fuel_type_id === id && use.status !== 'CANCELADO').length
+  const lastUse = (id: string) => uses.find((use) => use.fuel_type_id === id)?.performed_at
+  const selectedType = fuelTypes.find((fuel) => fuel.id === selected) || null
+  const selectedUses = selected ? uses.filter((use) => use.fuel_type_id === selected) : []
+  function resetForm() { setForm({ nome: '', sigla: '', unidade_medida: 'L', ativo: 'true' }) }
+  function openNew() { setEditing(null); resetForm(); setShowForm(true) }
+  function openEdit(fuel: FuelTypeRecord) { setEditing(fuel); setForm({ nome: fuel.nome, sigla: fuel.sigla || '', unidade_medida: fuel.unidade_medida || 'L', ativo: String(fuel.ativo) }); setShowForm(true) }
+  async function save(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); if (!supabase) return; setSaving(true); setError(''); const payload = { nome: form.nome.trim(), sigla: form.sigla.trim().toUpperCase() || null, unidade_medida: form.unidade_medida.trim() || 'L', ativo: form.ativo === 'true', updated_at: new Date().toISOString() }; const result = editing ? await supabase.from('fleet_fuel_types').update(payload).eq('id', editing.id) : await supabase.from('fleet_fuel_types').insert({ ...payload, municipio_id: (await supabase.rpc('fleet_current_municipio_id')).data, created_by: (await supabase.rpc('fleet_current_usuario_id')).data }); setSaving(false); if (result.error) { setError(result.error.code === '23505' ? 'Já existe um tipo de combustível com este nome.' : 'Não foi possível salvar o tipo de combustível.'); return } setShowForm(false); setEditing(null); resetForm(); await loadFuelTypes(); await onChanged() }
+  async function toggleActive(fuel: FuelTypeRecord) { if (!supabase) return; setSaving(true); setError(''); const result = await supabase.from('fleet_fuel_types').update({ ativo: !fuel.ativo, updated_at: new Date().toISOString() }).eq('id', fuel.id); setSaving(false); if (result.error) setError('Não foi possível alterar a situação deste combustível.'); else { await loadFuelTypes(); await onChanged() } }
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">TABELA DE REFERÊNCIA</span><h2>Tipos de combustível</h2><p>Cadastre os combustíveis oficiais sem perder o histórico dos abastecimentos.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo combustível</button></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-fueltype-note"><History size={16} /><span>Inativar impede novos usos no cadastro, mas mantém os abastecimentos históricos vinculados ao tipo.</span></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelTypes.length ? <table className="fleet-table fleet-fueltype-table"><thead><tr><th>Combustível</th><th>Sigla</th><th>Unidade</th><th>Situação</th><th>Uso histórico</th><th>Último uso</th><th /></tr></thead><tbody>{fuelTypes.map((fuel) => <tr key={fuel.id}><td><strong>{fuel.nome}</strong><small>Cadastrado em {fuel.created_at ? formatDate(fuel.created_at) : '—'}</small></td><td className="fleet-plate">{fuel.sigla || '—'}</td><td>{fuel.unidade_medida}</td><td><StatusChip value={fuel.ativo ? 'ATIVO' : 'INATIVO'} /></td><td>{usageCount(fuel.id).toLocaleString('pt-BR')} abastecimento(s)</td><td>{lastUse(fuel.id) ? formatDate(lastUse(fuel.id)) : 'Nunca utilizado'}</td><td><div className="fleet-row-actions"><button className="fleet-row-action" aria-label={`Ver histórico de ${fuel.nome}`} onClick={() => setSelected(selected === fuel.id ? null : fuel.id)}><History size={15} /></button><button className="fleet-row-action" aria-label={`Editar ${fuel.nome}`} onClick={() => openEdit(fuel)}><Pencil size={15} /></button><button className="fleet-row-action" aria-label={`${fuel.ativo ? 'Inativar' : 'Ativar'} ${fuel.nome}`} onClick={() => void toggleActive(fuel)} disabled={saving}>{fuel.ativo ? <span className="fleet-action-label danger">Inativar</span> : <span className="fleet-action-label success">Ativar</span>}</button></div></td></tr>)}{selectedType && <tr className="fleet-history-row"><td colSpan={7}><div className="fleet-history-heading"><div><span className="fleet-kicker">HISTÓRICO DE UTILIZAÇÃO</span><strong>{selectedType.nome}</strong></div><button className="fleet-close" onClick={() => setSelected(null)}><X size={16} /></button></div>{selectedUses.length ? <div className="fleet-history-list">{selectedUses.slice(0, 20).map((use) => <div className="fleet-history-item" key={use.id}><span>{formatDate(use.performed_at)}</span><strong>{use.vehicles?.placa || 'Veículo não informado'}</strong><span>{use.stations?.nome_fantasia_snapshot || 'Posto não informado'}</span><span>{Number(use.liters).toLocaleString('pt-BR')} {selectedType.unidade_medida}</span><StatusChip value={use.status} /></div>)}</div> : <p className="fleet-history-empty">Nenhum abastecimento foi registrado com este combustível.</p>}</td></tr>}</tbody></table> : <EmptyState icon={Fuel} title="Nenhum combustível cadastrado" text="Cadastre o primeiro tipo para liberar a seleção nos veículos e abastecimentos." action="Novo combustível" onAction={openNew} />}</div>{showForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowForm(false)}><form className="fleet-modal fleet-fueltype-modal" onSubmit={save}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO OPERACIONAL</span><h2>{editing ? 'Editar combustível' : 'Novo combustível'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Gestor de Frotas ou Administrador pode cadastrar e alterar esta referência.</p><div className="fleet-form-grid"><label>Nome do combustível<input required maxLength={80} value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} placeholder="Ex.: Diesel S-10" /></label><label>Sigla<input maxLength={12} value={form.sigla} onChange={(event) => setForm({ ...form, sigla: event.target.value })} placeholder="Ex.: S10" /></label><label>Unidade de medida<input required maxLength={10} value={form.unidade_medida} onChange={(event) => setForm({ ...form, unidade_medida: event.target.value })} placeholder="L" /></label><label>Situação<select value={form.ativo} onChange={(event) => setForm({ ...form, ativo: event.target.value })}><option value="true">Ativo</option><option value="false">Inativo</option></select></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar combustível'}</button></div></form></div>}</section>
+}
 
 function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
 
