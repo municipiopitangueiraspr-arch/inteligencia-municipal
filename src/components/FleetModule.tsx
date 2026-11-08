@@ -5,6 +5,7 @@ import {
   RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X, Eye,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import type { FormEvent } from 'react'
 import { DriversView } from './DriverManagementView'
 import { StationManagementView } from './StationManagementView'
 import { FleetOverviewDashboard } from './FleetOverviewDashboard'
@@ -22,6 +23,8 @@ type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean;
 type FuelingDocument = { id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null; reviewed_by?: number | null; reviewed_at?: string | null }
 type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicle_id?: string; station_id?: string; fuel_type_id?: string; registered_officially_by?: number | null; registered_officially_at?: string | null; inconsistency_code?: string | null; inconsistency_notes?: string | null; vehicles?: { id?: string; placa?: string; modelo?: string } | null; stations?: { id?: string; nome_fantasia_snapshot?: string } | null; fuel_type?: { id?: string; nome?: string } | null; documents?: FuelingDocument[] | null }
 type ConfirmationRequest = { eyebrow: string; title: string; message: string; details: string[]; confirmLabel: string; tone?: 'danger'; onConfirm: () => Promise<string | null> }
+type FuelingPolicy = { municipio_id: string; normal_entry_window_minutes: number; max_posterior_days: number; future_tolerance_minutes: number; require_late_reason: boolean; short_interval_minutes: number; odometer_tolerance_km: number; price_deviation_percent: number; usual_start_hour: number; usual_end_hour: number; price_reference_per_liter: number | null; updated_at: string }
+type FuelingPolicyForm = { normal_entry_window_minutes: string; max_posterior_days: string; future_tolerance_minutes: string; require_late_reason: boolean; short_interval_minutes: string; odometer_tolerance_km: string; price_deviation_percent: string; usual_start_hour: string; usual_end_hour: string; price_reference_per_liter: string }
 
 const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
@@ -890,7 +893,85 @@ function FuelConsumptionDashboard() {
 
 function MonthlyClosure() { return <FleetMonthlyClosure /> }
 
-function SettingsPanel() { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Regras que orientam a operação de abastecimentos e conferência.</p></div></div><div className="fleet-settings-grid"><article><span><Gauge size={18} /></span><div><strong>Capacidade do tanque</strong><p>O abastecimento acima da capacidade cadastrada gera inconsistência para análise.</p></div></article><article><span><ClipboardCheck size={18} /></span><div><strong>Comprovantes</strong><p>O prazo operacional para envio do comprovante é de 24 horas após o abastecimento.</p></div></article><article><span><MapPin size={18} /></span><div><strong>Cessão temporária</strong><p>A secretaria responsável e a secretaria beneficiária são mantidas separadamente.</p></div></article><article><span><ShieldCheck size={18} /></span><div><strong>Perfis autorizados</strong><p>Gestor de Frotas e Administrador validam cadastros oficiais e fechamentos.</p></div></article></div></section> }
+function SettingsPanel() {
+  const [policy, setPolicy] = useState<FuelingPolicy | null>(null)
+  const [form, setForm] = useState<FuelingPolicyForm>({ normal_entry_window_minutes: '', max_posterior_days: '', future_tolerance_minutes: '', require_late_reason: true, short_interval_minutes: '', odometer_tolerance_km: '', price_deviation_percent: '', usual_start_hour: '', usual_end_hour: '', price_reference_per_liter: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const loadPolicy = useCallback(async () => {
+    if (!supabase) { setError('O serviço de dados está indisponível.'); setLoading(false); return }
+    setLoading(true); setError(''); setNotice('')
+    const { data, error: loadError } = await supabase.from('fleet_fueling_policies').select('municipio_id,normal_entry_window_minutes,max_posterior_days,future_tolerance_minutes,require_late_reason,short_interval_minutes,odometer_tolerance_km,price_deviation_percent,usual_start_hour,usual_end_hour,price_reference_per_liter,updated_at').maybeSingle()
+    if (loadError) { setError('Não foi possível carregar os parâmetros. Confirme o acesso de Gestor de Frotas ou Administrador e tente novamente.'); setPolicy(null); setLoading(false); return }
+    if (!data) { setError('Não há uma política de abastecimento cadastrada para este município. Nenhuma configuração foi criada automaticamente.'); setPolicy(null); setLoading(false); return }
+    const row = data as unknown as FuelingPolicy
+    setPolicy(row)
+    setForm({ normal_entry_window_minutes: String(row.normal_entry_window_minutes), max_posterior_days: String(row.max_posterior_days), future_tolerance_minutes: String(row.future_tolerance_minutes), require_late_reason: row.require_late_reason, short_interval_minutes: String(row.short_interval_minutes), odometer_tolerance_km: String(row.odometer_tolerance_km), price_deviation_percent: String(row.price_deviation_percent), usual_start_hour: String(row.usual_start_hour), usual_end_hour: String(row.usual_end_hour), price_reference_per_liter: row.price_reference_per_liter == null ? '' : String(row.price_reference_per_liter) })
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { void loadPolicy() }, [loadPolicy])
+
+  function update<K extends keyof FuelingPolicyForm>(key: K, value: FuelingPolicyForm[K]) { setForm((current) => ({ ...current, [key]: value })) }
+
+  async function savePolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!supabase || !policy) return
+    setSaving(true); setError(''); setNotice('')
+    const payload = {
+      normal_entry_window_minutes: Number(form.normal_entry_window_minutes),
+      max_posterior_days: Number(form.max_posterior_days),
+      future_tolerance_minutes: Number(form.future_tolerance_minutes),
+      require_late_reason: form.require_late_reason,
+      short_interval_minutes: Number(form.short_interval_minutes),
+      odometer_tolerance_km: Number(form.odometer_tolerance_km),
+      price_deviation_percent: Number(form.price_deviation_percent),
+      usual_start_hour: Number(form.usual_start_hour),
+      usual_end_hour: Number(form.usual_end_hour),
+      price_reference_per_liter: form.price_reference_per_liter.trim() ? Number(form.price_reference_per_liter) : null,
+    }
+    const { data, error: saveError } = await supabase.from('fleet_fueling_policies').update(payload).eq('municipio_id', policy.municipio_id).select('municipio_id,normal_entry_window_minutes,max_posterior_days,future_tolerance_minutes,require_late_reason,short_interval_minutes,odometer_tolerance_km,price_deviation_percent,usual_start_hour,usual_end_hour,price_reference_per_liter,updated_at').maybeSingle()
+    if (saveError || !data) { setError('Não foi possível salvar. O RLS autoriza somente gestores ou administradores do município ativo; revise o perfil e os valores informados.'); setSaving(false); return }
+    const row = data as unknown as FuelingPolicy
+    setPolicy(row)
+    setForm({ normal_entry_window_minutes: String(row.normal_entry_window_minutes), max_posterior_days: String(row.max_posterior_days), future_tolerance_minutes: String(row.future_tolerance_minutes), require_late_reason: row.require_late_reason, short_interval_minutes: String(row.short_interval_minutes), odometer_tolerance_km: String(row.odometer_tolerance_km), price_deviation_percent: String(row.price_deviation_percent), usual_start_hour: String(row.usual_start_hour), usual_end_hour: String(row.usual_end_hour), price_reference_per_liter: row.price_reference_per_liter == null ? '' : String(row.price_reference_per_liter) })
+    setNotice('Parâmetros salvos no Supabase para o município ativo.')
+    setSaving(false)
+  }
+
+  const updatedLabel = policy?.updated_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(policy.updated_at)) : ''
+  return <section className="fleet-section fleet-page-section">
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Valores persistidos no Supabase e aplicados às regras de abastecimento e conferência.</p></div><button className="fleet-secondary-button" type="button" onClick={() => void loadPolicy()} disabled={loading}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Atualizar</button></div>
+    <div className="fleet-settings-grid">
+      <article><span><Gauge size={18} /></span><div><strong>Capacidade do tanque</strong><p>Volume acima da capacidade cadastrada gera inconsistência para análise; não há limite financeiro por veículo.</p></div></article>
+      <article><span><ClipboardCheck size={18} /></span><div><strong>Comprovantes</strong><p>Prazo fixo da v2.0: anexar em até 24 horas, com registro de atraso e justificativa.</p></div></article>
+      <article><span><MapPin size={18} /></span><div><strong>Cessão temporária</strong><p>Unidade responsável e unidade beneficiária permanecem separadas; o uso cedido depende de autorização vigente.</p></div></article>
+      <article><span><ShieldCheck size={18} /></span><div><strong>Perfis e fechamento</strong><p>Gestor de Frotas ou Administrador cadastra oficialmente, confere e fecha o mês. O Prefeito tem consulta por padrão.</p></div></article>
+    </div>
+    {error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}
+    {notice && <div className="fleet-settings-success" role="status"><CheckCircle2 size={15} /> {notice}</div>}
+    {loading ? <div className="fleet-loading"><RefreshCw className="spin" size={18} /> Carregando parâmetros do município…</div> : policy && <form className="fleet-settings-form" onSubmit={(event) => void savePolicy(event)}>
+      <div className="fleet-settings-form-heading"><div><span className="fleet-kicker">POLÍTICA DE ABASTECIMENTO</span><h3>Regras configuráveis</h3><p>Alterações afetam a geração de alertas e a análise de novos lançamentos. A autorização de escrita é conferida novamente pelo RLS.</p></div>{updatedLabel && <small>Atualizado em {updatedLabel}</small>}</div>
+      <div className="fleet-settings-fields">
+        <label>Janela para lançamento imediato <span>Minutos desde o abastecimento</span><input type="number" min="0" max="1440" step="1" required value={form.normal_entry_window_minutes} onChange={(e) => update('normal_entry_window_minutes', e.target.value)} /></label>
+        <label>Prazo máximo para lançamento posterior <span>Dias após o abastecimento</span><input type="number" min="1" max="365" step="1" required value={form.max_posterior_days} onChange={(e) => update('max_posterior_days', e.target.value)} /></label>
+        <label>Tolerância para horário futuro <span>Minutos além do horário atual</span><input type="number" min="0" max="60" step="1" required value={form.future_tolerance_minutes} onChange={(e) => update('future_tolerance_minutes', e.target.value)} /></label>
+        <label>Intervalo mínimo sinalizado <span>Minutos entre abastecimentos do veículo</span><input type="number" min="1" max="1440" step="1" required value={form.short_interval_minutes} onChange={(e) => update('short_interval_minutes', e.target.value)} /></label>
+        <label>Tolerância de variação do hodômetro <span>Quilômetros; acima disso pode gerar alerta</span><input type="number" min="0" step="0.01" required value={form.odometer_tolerance_km} onChange={(e) => update('odometer_tolerance_km', e.target.value)} /></label>
+        <label>Desvio de preço para alerta <span>Percentual em relação à referência configurada</span><input type="number" min="0" max="500" step="0.01" required value={form.price_deviation_percent} onChange={(e) => update('price_deviation_percent', e.target.value)} /></label>
+        <label>Início da janela operacional <span>Hora local (0–23)</span><input type="number" min="0" max="23" step="1" required value={form.usual_start_hour} onChange={(e) => update('usual_start_hour', e.target.value)} /></label>
+        <label>Fim da janela operacional <span>Hora local (0–23)</span><input type="number" min="0" max="23" step="1" required value={form.usual_end_hour} onChange={(e) => update('usual_end_hour', e.target.value)} /></label>
+        <label>Preço de referência <span>R$/litro; opcional, usado para alerta e não para bloquear valor</span><input type="number" min="0" step="0.0001" value={form.price_reference_per_liter} onChange={(e) => update('price_reference_per_liter', e.target.value)} placeholder="Sem referência definida" /></label>
+      </div>
+      <label className="fleet-settings-checkbox"><input type="checkbox" checked={form.require_late_reason} onChange={(e) => update('require_late_reason', e.target.checked)} /><span><strong>Exigir justificativa para lançamento posterior</strong><small>A justificativa e as datas real do abastecimento e do lançamento ficam registradas separadamente.</small></span></label>
+      <div className="fleet-settings-note"><ShieldCheck size={16} /><p>Não há teto monetário por veículo. Os parâmetros de intervalo, hodômetro e preço sinalizam situações para análise; a regra de tanque usa a capacidade cadastrada. Comprovantes permanecem sujeitos ao prazo fixo de 24 horas da v2.0.</p></div>
+      <div className="fleet-settings-actions"><button className="fleet-primary-button" type="submit" disabled={saving}>{saving ? <><RefreshCw size={14} className="spin" /> Salvando…</> : 'Salvar parâmetros'}</button></div>
+    </form>}
+  </section>
+}
 
 function StatusChip({ value }: { value: string }) { const tone = value.includes('INCONSISTENCIA') || value === 'SOLICITADA_CORRECAO' || value === 'REJEITADO' ? 'danger' : value.includes('PENDENTE') || value.includes('ENVIADO') || value === 'EM_ANALISE' ? 'warning' : value === 'ATIVO' || value === 'CONFERIDO' || value === 'ACEITO' ? 'success' : 'neutral'; return <span className={`fleet-status ${tone}`}>{statusLabel[value] || value.replaceAll('_', ' ')}</span> }
 function EmptyState({ icon: Icon, title, text, action, onAction }: { icon: typeof Truck; title: string; text: string; action?: string; onAction?: () => void }) { return <div className="fleet-empty"><span><Icon size={24} /></span><strong>{title}</strong><p>{text}</p>{action && <button className="fleet-primary-button" onClick={onAction}><Plus size={15} /> {action}</button>}</div> }
