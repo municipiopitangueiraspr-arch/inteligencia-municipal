@@ -16,6 +16,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { StationMembersPanel } from "./FleetResources";
 import type { Station } from "./FleetResources";
+import { SupplierFuelingRecords } from "./SupplierFuelingRecords";
 import "./SupplierPortal.css";
 
 type SupplierPortalProps = {
@@ -35,6 +36,8 @@ type FuelOption = { id: string; nome: string; sigla: string | null };
 type UnitOption = { id: string; nome: string; sigla: string | null };
 type Fueling = {
   id: string;
+  vehicle_id: string;
+  fuel_type_id: string;
   performed_at: string;
   submitted_at: string;
   liters: number;
@@ -107,6 +110,8 @@ export function SupplierPortal({
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreFuelings, setLoadingMoreFuelings] = useState(false);
+  const [hasMoreFuelings, setHasMoreFuelings] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -116,17 +121,20 @@ export function SupplierPortal({
     if (!supabase) return;
     setLoading(true);
     setError("");
+    setFuelings([]);
+    setDocuments([]);
+    setHasMoreFuelings(true);
     const { data: municipalityId } = await supabase.rpc("fleet_current_municipio_id");
-    const [fuelingsResult, vehiclesResult, fuelTypesResult, unitsResult, documentsResult] =
-      await Promise.all([
+    const [fuelingsResult, vehiclesResult, fuelTypesResult, unitsResult] = await Promise.all([
         supabase
           .from("fleet_fuelings")
           .select(
-            "id,performed_at,submitted_at,liters,total_amount,status,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),fuel_type:fleet_fuel_types(nome)",
+            "id,vehicle_id,fuel_type_id,performed_at,submitted_at,liters,total_amount,status,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),fuel_type:fleet_fuel_types(nome)",
           )
           .eq("station_id", station.id)
           .order("performed_at", { ascending: false })
-          .limit(100),
+          .order("id", { ascending: true })
+          .range(0, 99),
         supabase
           .from("fleet_vehicles")
           .select("id,placa,marca,modelo")
@@ -144,13 +152,21 @@ export function SupplierPortal({
           .eq("ativo", true)
           .order("nome")
           .limit(200),
-        supabase
+      ]);
+    const stationFuelings = (fuelingsResult.data || []) as unknown as Fueling[];
+    const documentFuelingIds = stationFuelings
+      .filter((item) => ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO", "ENVIADO_PELO_POSTO"].includes(item.status))
+      .slice(0, 100)
+      .map((item) => item.id);
+    const documentsResult = documentFuelingIds.length
+      ? await supabase
           .from("fleet_fueling_documents")
           .select("id,fueling_id,file_name,document_status,uploaded_at")
           .eq("municipio_id", municipalityId)
+          .in("fueling_id", documentFuelingIds)
           .order("uploaded_at", { ascending: false })
-          .limit(200),
-      ]);
+          .limit(200)
+      : { data: [], error: null };
     if (
       fuelingsResult.error ||
       vehiclesResult.error ||
@@ -160,7 +176,8 @@ export function SupplierPortal({
     )
       setError("Não foi possível carregar os dados operacionais deste posto.");
     else {
-      setFuelings((fuelingsResult.data || []) as unknown as Fueling[]);
+      setFuelings(stationFuelings);
+      setHasMoreFuelings(stationFuelings.length === 100);
       setVehicles((vehiclesResult.data || []) as VehicleOption[]);
       setFuelTypes((fuelTypesResult.data || []) as FuelOption[]);
       setUnits((unitsResult.data || []) as UnitOption[]);
@@ -171,6 +188,47 @@ export function SupplierPortal({
   useEffect(() => {
     void loadPortal();
   }, [station.id]);
+  async function loadMoreFuelings() {
+    if (!supabase || loadingMoreFuelings || !hasMoreFuelings) return;
+    setLoadingMoreFuelings(true);
+    const offset = fuelings.length;
+    const { data, error: pageError } = await supabase
+      .from("fleet_fuelings")
+      .select(
+        "id,vehicle_id,fuel_type_id,performed_at,submitted_at,liters,total_amount,status,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),fuel_type:fleet_fuel_types(nome)",
+      )
+      .eq("station_id", station.id)
+      .order("performed_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + 99);
+    if (pageError) {
+      setError("Não foi possível carregar mais abastecimentos deste posto.");
+      setLoadingMoreFuelings(false);
+      return;
+    }
+    const page = (data || []) as unknown as Fueling[];
+    setFuelings((current) => [...current, ...page]);
+    setHasMoreFuelings(page.length === 100);
+    const documentFuelingIds = page
+      .filter((item) => ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO", "ENVIADO_PELO_POSTO"].includes(item.status))
+      .map((item) => item.id);
+    if (documentFuelingIds.length) {
+      const { data: addedDocuments, error: documentError } = await supabase
+        .from("fleet_fueling_documents")
+        .select("id,fueling_id,file_name,document_status,uploaded_at")
+        .eq("municipio_id", (await supabase.rpc("fleet_current_municipio_id")).data)
+        .in("fueling_id", documentFuelingIds)
+        .order("uploaded_at", { ascending: false })
+        .limit(200);
+      if (!documentError && addedDocuments?.length) {
+        setDocuments((current) => {
+          const existingIds = new Set(current.map((item) => item.id));
+          return [...current, ...(addedDocuments as DocumentRecord[]).filter((item) => !existingIds.has(item.id))];
+        });
+      }
+    }
+    setLoadingMoreFuelings(false);
+  }
   const pending = useMemo(
     () =>
       fuelings.filter((item) =>
@@ -398,24 +456,17 @@ export function SupplierPortal({
             />
           )}
           {view === "records" && (
-            <section>
-              <div className="supplier-page-heading">
-                <div>
-                  <span>CONSULTA RESTRITA</span>
-                  <h2>Meus abastecimentos</h2>
-                  <p>Somente registros enviados por este estabelecimento.</p>
-                </div>
-                <button
-                  className="supplier-primary"
-                  onClick={() => setView("fueling")}
-                >
-                  <Plus size={15} /> Novo abastecimento
-                </button>
-              </div>
-              <div className="supplier-panel">
-                <PortalTable fuelings={fuelings} loading={loading} />
-              </div>
-            </section>
+            <SupplierFuelingRecords
+              station={station}
+              fuelings={fuelings}
+              vehicles={vehicles}
+              fuelTypes={fuelTypes}
+              loading={loading}
+              loadingMore={loadingMoreFuelings}
+              hasMore={hasMoreFuelings}
+              onLoadMore={loadMoreFuelings}
+              onNew={() => setView("fueling")}
+            />
           )}
           {view === "documents" && (
             <DocumentsView fuelings={fuelings} documents={documents} onUpload={uploadDocument} onRefresh={loadPortal} />
