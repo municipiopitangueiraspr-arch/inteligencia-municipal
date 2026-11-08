@@ -8,14 +8,14 @@ import { FleetVehicleUseAuthorizations } from './FleetVehicleUseAuthorizations'
 type Option = { id:string; nome:string; sigla?:string|null; ativo?:boolean }
 export type Vehicle = { id:string; municipio_id:string; placa:string; marca:string|null; modelo:string|null; ano_fabricacao:number|null; ano_modelo:number|null; chassi:string|null; renavam:string|null; category_id:string|null; fuel_type_id:string|null; tank_capacity_l:number; responsible_unit_id:string|null; operational_status:string; current_odometer_km:number|null; acquisition_date:string|null; acquisition_value:number|null; ownership_type:string|null; notes:string|null; created_at:string; updated_at?:string }
 type Restriction = { id:string; reason:string; starts_at:string; ends_at:string|null; active:boolean; released_at:string|null; release_reason:string|null }
-type Authorization = { id:string; driver_id:string; valid_from:string; valid_until:string|null; status:string; reason:string|null; created_at:string; driver?:{id:string;nome:string;matricula:string|null;cnh_valid_until:string|null;ativo:boolean}|null }
+type Authorization = { id:string; driver_id:string; valid_from:string; valid_until:string|null; status:string; reason:string|null; created_at:string; ended_at?:string|null; ended_by?:number|null; ended_reason?:string|null; driver?:{id:string;nome:string;matricula:string|null;cnh_valid_until:string|null;cnh_category?:string|null;ativo:boolean}|null }
 type Document = { id:string; file_name:string; storage_path:string; mime_type:string; file_size_bytes:number; document_type:string; description:string|null; uploaded_at:string }
 type History = { id:string; event_type:string; previous_data:Record<string,unknown>|null; new_data:Record<string,unknown>|null; reason:string|null; changed_at:string }
 type Department = { id:string; from_unit_id:string|null; to_unit_id:string|null; started_at:string; ended_at:string|null; reason:string|null }
 type Fueling = { id:string; performed_at:string; liters:number; total_amount:number; odometer_km:number; status:string; station_receipt_number:string|null; fuel_type_id:string; stations?:{nome_fantasia_snapshot?:string|null}|null }
-type Driver = { id:string; nome:string; matricula:string|null; cnh_valid_until:string|null; ativo:boolean }
+type Driver = { id:string; nome:string; matricula:string|null; cnh_valid_until:string|null; cnh_category:string|null; ativo:boolean }
 type Props = { vehicle:Vehicle; units:Option[]; fuels:Option[]; categories:Option[]; canManage:boolean; blocked:boolean; onClose:()=>void; onChanged:()=>Promise<void> }
-const today = () => new Date().toISOString().slice(0,10)
+const today = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo'}).format(new Date())
 const when = (value?:string|null) => value ? new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date(value)) : '—'
 const dateOnly = (value?:string|null) => value ? new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeZone:'UTC'}).format(/^\d{4}-\d{2}-\d{2}$/.test(value)?new Date(`${value}T12:00:00Z`):new Date(value)) : '—'
 
@@ -27,6 +27,7 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
   const [authorizations,setAuthorizations] = useState<Authorization[]>([])
   const [documents,setDocuments] = useState<Document[]>([])
   const [drivers,setDrivers] = useState<Driver[]>([])
+  const [driversLoading,setDriversLoading] = useState(false)
   const [loading,setLoading] = useState(true)
   const [saving,setSaving] = useState(false)
   const [error,setError] = useState('')
@@ -54,7 +55,7 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
       supabase.from('fleet_vehicle_department_history').select('id,from_unit_id,to_unit_id,started_at,ended_at,reason').eq('vehicle_id',vehicle.id).order('started_at',{ascending:false}).limit(100),
       supabase.from('fleet_fuelings').select('id,performed_at,liters,total_amount,odometer_km,status,station_receipt_number,fuel_type_id,stations:fleet_fuel_stations(nome_fantasia_snapshot)').eq('vehicle_id',vehicle.id).order('performed_at',{ascending:false}).limit(50),
       supabase.from('fleet_vehicle_restrictions').select('id,reason,starts_at,ends_at,active,released_at,release_reason').eq('vehicle_id',vehicle.id).order('created_at',{ascending:false}).limit(50),
-      supabase.from('fleet_vehicle_driver_authorizations').select('id,driver_id,valid_from,valid_until,status,reason,created_at,driver:fleet_drivers(id,nome,matricula,cnh_valid_until,ativo)').eq('vehicle_id',vehicle.id).order('created_at',{ascending:false}).limit(100),
+      supabase.from('fleet_vehicle_driver_authorizations').select('id,driver_id,valid_from,valid_until,status,reason,created_at,ended_at,ended_by,ended_reason,driver:fleet_drivers(id,nome,matricula,cnh_valid_until,cnh_category,ativo)').eq('vehicle_id',vehicle.id).order('created_at',{ascending:false}).limit(100),
       supabase.from('fleet_vehicle_documents').select('id,file_name,storage_path,mime_type,file_size_bytes,document_type,description,uploaded_at').eq('vehicle_id',vehicle.id).order('uploaded_at',{ascending:false}).limit(100),
     ])
     const failure = historyResult.error||departmentResult.error||fuelingResult.error||restrictionResult.error||authorizationResult.error||documentResult.error
@@ -63,6 +64,19 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
     setLoading(false)
   },[vehicle.id])
   useEffect(()=>{void load()},[load])
+  useEffect(()=>{
+    if(!showDriver||!supabase)return
+    let cancelled=false
+    const instant=new Date(`${validFrom}T12:00:00-03:00`)
+    if(!Number.isFinite(instant.getTime()))return
+    setDriversLoading(true)
+    void supabase.rpc('fleet_manager_vehicle_driver_options',{p_vehicle_id:vehicle.id,p_performed_at:instant.toISOString(),p_require_authorization:false}).then(({data,error:resultError})=>{
+      if(cancelled)return
+      if(resultError){setDrivers([]);setError('Não foi possível carregar motoristas ativos com CNH compatível na data escolhida.')}else setDrivers((data||[]) as Driver[])
+      setDriversLoading(false)
+    })
+    return()=>{cancelled=true}
+  },[showDriver,vehicle.id,validFrom])
   useEffect(()=>{
     const url = new URL(import.meta.env.BASE_URL,window.location.origin)
     url.searchParams.set('portal','fornecedor');url.searchParams.set('vehicle',vehicle.id)
@@ -91,14 +105,11 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
   }
   async function openDriverForm() {
     if(!supabase)return
-    const {data,error:driverError}=await supabase.from('fleet_drivers').select('id,nome,matricula,cnh_valid_until,ativo').eq('ativo',true).order('nome').limit(1000)
-    if(driverError){setError('Não foi possível carregar os motoristas ativos.');return}
-    setDrivers((data||[]) as Driver[]);setShowDriver(true)
+    setError('');setDriverId('');setShowDriver(true)
   }
   async function createDriverAuthorization(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();if(!supabase||!canManage||!driverId||authorizationReason.trim().length<5)return;setSaving(true)
-    const [{data:municipio},{data:usuario}]=await Promise.all([supabase.rpc('fleet_current_municipio_id'),supabase.rpc('fleet_current_usuario_id')])
-    const {error:saveError}=await supabase.from('fleet_vehicle_driver_authorizations').insert({municipio_id:municipio,vehicle_id:vehicle.id,driver_id:driverId,valid_from:validFrom,valid_until:validUntil||null,status:'ATIVA',reason:authorizationReason.trim(),created_by:usuario})
+    const {error:saveError}=await supabase.rpc('fleet_create_vehicle_driver_authorization',{p_vehicle_id:vehicle.id,p_driver_id:driverId,p_valid_from:validFrom,p_valid_until:validUntil||null,p_reason:authorizationReason.trim()})
     setSaving(false)
     if(saveError){setError(saveError.code==='23505'?'Já existe uma autorização ativa para esse motorista e veículo.':'Não foi possível autorizar o motorista.');return}
     setShowDriver(false);setDriverId('');setAuthorizationReason('');setNotice('Autorização de condução registrada.');await load()
@@ -107,7 +118,7 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
     if(!supabase||!canManage)return
     const reason=window.prompt('Informe o motivo do encerramento da autorização:')?.trim()
     if(!reason||reason.length<5)return
-    const {error:saveError}=await supabase.from('fleet_vehicle_driver_authorizations').update({status:'ENCERRADA',valid_until:today(),reason:`${item.reason||''} | Encerramento: ${reason}`}).eq('id',item.id)
+    const {error:saveError}=await supabase.rpc('fleet_end_vehicle_driver_authorization',{p_authorization_id:item.id,p_end_date:today(),p_reason:reason})
     if(saveError){setError('Não foi possível encerrar a autorização.');return}setNotice('Autorização encerrada.');await load()
   }
   async function uploadDocument(event:FormEvent<HTMLFormElement>) {
@@ -146,6 +157,6 @@ export function FleetVehicleDetails({vehicle,units,fuels,categories,canManage,bl
     <section className="fv-detail-card"><h3><CalendarClock size={15}/> Histórico de lotação</h3>{departments.length?<div className="fv-record-list">{departments.map(d=><article key={d.id}><div><strong>{unitName(d.from_unit_id)} → {unitName(d.to_unit_id)}</strong><small>{dateOnly(d.started_at)} até {d.ended_at?dateOnly(d.ended_at):'atual'}</small>{d.reason&&<small>{d.reason}</small>}</div></article>)}</div>:<p>Nenhuma transferência registrada.</p>}</section>
     <section className="fv-detail-card"><h3><History size={15}/> Histórico de alterações</h3>{history.length?<div className="fv-record-list">{history.map(h=><article key={h.id}><div><strong>{h.event_type.replaceAll('_',' ')}</strong><small>{when(h.changed_at)}{h.reason?` · ${h.reason}`:''}</small><details><summary>Dados alterados</summary><pre>{JSON.stringify({anterior:h.previous_data,novo:h.new_data},null,2)}</pre></details></div></article>)}</div>:<p>Nenhum evento histórico disponível.</p>}</section>
     <section className="fv-detail-card"><h3><BadgeCheck size={15}/> Abastecimentos recentes</h3>{fuelings.length?<div className="fv-record-list">{fuelings.map(f=><article key={f.id}><div><strong>{when(f.performed_at)} · {Number(f.liters).toLocaleString('pt-BR')} L · {fuelName(f.fuel_type_id)}</strong><small>{f.stations?.nome_fantasia_snapshot||'Posto não informado'} · {f.status} · Hodômetro {f.odometer_km} km</small><small>{f.station_receipt_number||''}</small></div></article>)}</div>:<p>Nenhum abastecimento registrado.</p>}</section></div>
-    {showDriver&&<div className="fleet-modal-backdrop fv-nested-backdrop"><form className="fleet-modal fv-small-modal" onSubmit={createDriverAuthorization}><div className="fleet-modal-heading"><h2>Autorizar motorista</h2><button type="button" className="fleet-close" onClick={()=>setShowDriver(false)}><X size={17}/></button></div><label>Motorista ativo *<select required value={driverId} onChange={e=>setDriverId(e.target.value)}><option value="">Selecione</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.nome}{d.matricula?` — ${d.matricula}`:''}{d.cnh_valid_until&&` · CNH até ${dateOnly(d.cnh_valid_until)}`}</option>)}</select></label><div className="fv-form-grid"><label>Válida desde *<input type="date" required value={validFrom} onChange={e=>setValidFrom(e.target.value)}/></label><label>Válida até<input type="date" value={validUntil} onChange={e=>setValidUntil(e.target.value)}/></label></div><label>Motivo *<textarea required minLength={5} value={authorizationReason} onChange={e=>setAuthorizationReason(e.target.value)}/></label><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={()=>setShowDriver(false)}>Cancelar</button><button className="fleet-primary-button" disabled={saving}>Autorizar</button></div></form></div>}
+    {showDriver&&<div className="fleet-modal-backdrop fv-nested-backdrop"><form className="fleet-modal fv-small-modal" onSubmit={createDriverAuthorization}><div className="fleet-modal-heading"><h2>Autorizar motorista</h2><button type="button" className="fleet-close" onClick={()=>setShowDriver(false)}><X size={17}/></button></div><label>Motorista ativo *<select required value={driverId} onChange={e=>setDriverId(e.target.value)} disabled={driversLoading}><option value="">{driversLoading?'Carregando…':'Selecione'}</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.nome}{d.matricula?` — ${d.matricula}`:''}{d.cnh_category?` · Cat. ${d.cnh_category}`:''}{d.cnh_valid_until&&` · CNH até ${dateOnly(d.cnh_valid_until)}`}</option>)}</select></label><div className="fv-form-grid"><label>Válida desde *<input type="date" required value={validFrom} onChange={e=>setValidFrom(e.target.value)}/></label><label>Válida até<input type="date" value={validUntil} onChange={e=>setValidUntil(e.target.value)}/></label></div><label>Motivo *<textarea required minLength={5} value={authorizationReason} onChange={e=>setAuthorizationReason(e.target.value)}/></label><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={()=>setShowDriver(false)}>Cancelar</button><button className="fleet-primary-button" disabled={saving}>Autorizar</button></div></form></div>}
     </section></div>
 }

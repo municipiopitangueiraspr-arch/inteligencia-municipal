@@ -603,7 +603,7 @@ function FuelingForm({
   const [loadingUseAuthorizations, setLoadingUseAuthorizations] = useState(false);
   const [authorizationError, setAuthorizationError] = useState("");
   const [performedAt, setPerformedAt] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
-  const [authorizedDrivers, setAuthorizedDrivers] = useState<Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null }>>([]);
+  const [authorizedDrivers, setAuthorizedDrivers] = useState<Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [driverId, setDriverId] = useState("");
   const [odometer, setOdometer] = useState("");
@@ -646,7 +646,7 @@ function FuelingForm({
     setLoadingDrivers(true);
     void supabase.rpc("fleet_supplier_driver_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: driverError }) => {
       if (cancelled) return;
-      setAuthorizedDrivers(driverError ? [] : (data || []) as Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null }>);
+      setAuthorizedDrivers(driverError ? [] : (data || []) as Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>);
       setLoadingDrivers(false);
     });
     return () => { cancelled = true; };

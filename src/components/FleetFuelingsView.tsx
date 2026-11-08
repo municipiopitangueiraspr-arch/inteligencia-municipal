@@ -8,7 +8,7 @@ type Station = { id: string; nome_fantasia_snapshot: string | null; razao_social
 type FuelType = { id: string; nome: string; sigla: string | null; unidade_medida: string }
 type Unit = { id: string; nome: string; sigla: string | null }
 type Vehicle = { id: string; placa: string; modelo: string | null; fuel_type_id: string | null; responsible_unit_id: string | null; operational_status: string; tank_capacity_l: number | null; current_odometer_km: number | null }
-type Driver = { id: string; nome: string; matricula: string | null; cnh_valid_until: string | null }
+type Driver = { id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }
 type Document = { id: string; file_name: string; storage_path: string; mime_type: string; file_size_bytes: number; document_type: string; notes: string | null; document_status: string; uploaded_at: string; due_at: string | null; is_current: boolean; rejection_reason: string | null; reviewed_by: number | null; reviewed_at: string | null }
 type Alert = { id: string; code: string; severity: string; title: string; description: string; status: string; created_at: string; resolution_notes: string | null }
 type Fueling = {
@@ -93,22 +93,23 @@ export function FleetFuelingsView() {
 
   const loadOptions = useCallback(async () => {
     if (!supabase) return
-    const [stationResult, vehicleResult, fuelResult, unitResult, policyResult, driverResult] = await Promise.all([
+    const [stationResult, vehicleResult, fuelResult, unitResult, policyResult] = await Promise.all([
       supabase.from('fleet_fuel_stations').select('id,nome_fantasia_snapshot,razao_social_snapshot').eq('status', 'ATIVO').order('nome_fantasia_snapshot').limit(500),
       supabase.from('fleet_vehicles').select('id,placa,modelo,fuel_type_id,responsible_unit_id,operational_status,tank_capacity_l,current_odometer_km').order('placa').limit(1000),
       supabase.from('fleet_fuel_types').select('id,nome,sigla,unidade_medida').eq('ativo', true).order('nome').limit(500),
       supabase.from('unidades_organizacionais').select('id,nome,sigla').eq('ativo', true).order('nome').limit(500),
       supabase.from('fleet_fueling_policies').select('*').limit(1).maybeSingle(),
-      supabase.from('fleet_drivers').select('id,nome,matricula,cnh_valid_until').eq('ativo', true).order('nome').limit(1000),
     ])
-    const failure = stationResult.error || vehicleResult.error || fuelResult.error || unitResult.error || policyResult.error || driverResult.error
+    const failure = stationResult.error || vehicleResult.error || fuelResult.error || unitResult.error || policyResult.error
     if (failure) setError('Algumas opções operacionais não puderam ser carregadas. Atualize a tela ou valide as permissões municipais.')
     setStations((stationResult.data || []) as Station[])
     setVehicles((vehicleResult.data || []) as Vehicle[])
     setFuels((fuelResult.data || []) as FuelType[])
     setUnits((unitResult.data || []) as Unit[])
-    setFilterDrivers((driverResult.data || []) as Driver[])
     if (policyResult.data) setPolicies(policyResult.data as Policy)
+    const { data: driverRows, error: driverError } = await supabase.rpc('fleet_search_drivers', { p_search: null, p_status: 'ATIVO', p_cnh_status: null, p_page: 0, p_page_size: 100 })
+    if (driverError) setError('Os filtros de motorista não puderam ser carregados.')
+    else setFilterDrivers((driverRows || []) as Driver[])
   }, [])
 
   const loadRows = useCallback(async (quiet = false) => {
@@ -142,19 +143,10 @@ export function FleetFuelingsView() {
   async function loadDrivers(vehicleId: string, dateValue: string) {
     if (!supabase || !vehicleId) { setDrivers([]); return }
     setDriversLoading(true)
-    const day = dateValue ? dateValue.slice(0, 10) : new Date().toISOString().slice(0, 10)
-    const [current, legacy] = await Promise.all([
-      supabase.from('fleet_vehicle_driver_authorizations').select('driver_id,valid_from,valid_until').eq('vehicle_id', vehicleId).eq('status', 'ATIVA').limit(500),
-      supabase.from('fleet_vehicle_authorized_drivers').select('driver_id,valid_from,valid_until').eq('vehicle_id', vehicleId).eq('ativo', true).limit(500),
-    ])
-    if (current.error || legacy.error) { setDrivers([]); setFormError('Não foi possível carregar autorizações de motoristas para o veículo e data.'); setDriversLoading(false); return }
-    const ids = new Set<string>()
-    for (const row of [...(current.data || []), ...(legacy.data || [])] as { driver_id: string; valid_from: string; valid_until: string | null }[]) {
-      if ((!row.valid_from || row.valid_from.slice(0, 10) <= day) && (!row.valid_until || row.valid_until.slice(0, 10) >= day)) ids.add(row.driver_id)
-    }
-    if (!ids.size) { setDrivers([]); setDriversLoading(false); return }
-    const { data, error: driverError } = await supabase.from('fleet_drivers').select('id,nome,matricula,cnh_valid_until').eq('ativo', true).in('id', [...ids]).gte('cnh_valid_until', day).order('nome').limit(500)
-    if (driverError) { setDrivers([]); setFormError('Não foi possível verificar motoristas ativos e CNH vigente.'); }
+    const instant = dateValue ? new Date(dateValue) : new Date()
+    if (!Number.isFinite(instant.getTime())) { setDrivers([]); setDriversLoading(false); return }
+    const { data, error: driverError } = await supabase.rpc('fleet_manager_vehicle_driver_options', { p_vehicle_id: vehicleId, p_performed_at: instant.toISOString(), p_require_authorization: true })
+    if (driverError) { setDrivers([]); setFormError('Não foi possível verificar autorização, CNH e categoria do motorista para a data escolhida.'); }
     else setDrivers((data || []) as Driver[])
     setDriversLoading(false)
   }
@@ -382,7 +374,7 @@ export function FleetFuelingsView() {
         <label><span>Posto credenciado *</span><select required value={form.stationId} onChange={(e) => { const stationId = e.target.value; setForm((current) => ({ ...current, stationId, fuelTypeId: '' })); setFormError(''); if (stationId) void loadAuthorizedFuels(stationId, form.vehicleId, form.performedAt); else setAuthorizedFuelIds([]) }}><option value="">Selecione</option>{stations.map((item) => <option key={item.id} value={item.id}>{item.nome_fantasia_snapshot || item.razao_social_snapshot}</option>)}</select></label>
         <label><span>Veículo *</span><select required value={form.vehicleId} onChange={(e) => { const id = e.target.value; const vehicle = vehicles.find((item) => item.id === id); setForm((current) => ({ ...current, vehicleId: id, fuelTypeId: '', driverId: '', responsibleUnitId: vehicle?.responsible_unit_id || '', beneficiaryId: vehicle?.responsible_unit_id || '', authorizationId: '', odometerKm: vehicle?.current_odometer_km == null ? '' : String(vehicle.current_odometer_km) })); setFormError(''); if (id) { void loadDrivers(id, form.performedAt); void loadAuthorizations(id, form.performedAt); void resolveVehicleUnit(id, form.performedAt); if (form.stationId) void loadAuthorizedFuels(form.stationId, id, form.performedAt) } else { setDrivers([]); setAuthorizations([]); setAuthorizedFuelIds([]) } }}><option value="">Selecione</option>{vehicles.map((item) => <option key={item.id} value={item.id}>{item.placa} · {item.modelo || 'Veículo'}{item.operational_status === 'CEDIDO' ? ' · CEDIDO' : ''}</option>)}</select>{selectedVehicle && <small>Lotação na data: {units.find((u) => u.id === form.responsibleUnitId)?.nome || 'consultando…'} · Capacidade: {quantity(selectedVehicle.tank_capacity_l)} L</small>}</label>
         <label><span>Combustível autorizado no posto *</span><select required value={form.fuelTypeId} onChange={(e) => updateForm('fuelTypeId', e.target.value)} disabled={fuelOptionsLoading || !form.stationId || !form.vehicleId}><option value="">{fuelOptionsLoading ? 'Validando autorização…' : 'Selecione'}</option>{fuels.filter((fuel) => authorizedFuelIds.includes(fuel.id) && (!selectedVehicle?.fuel_type_id || fuel.id === selectedVehicle.fuel_type_id)).map((item) => <option key={item.id} value={item.id}>{item.nome}{item.sigla ? ` (${item.sigla})` : ''}</option>)}</select><small>O servidor verifica autorização do posto e compatibilidade do veículo.</small></label>
-        <label><span>Motorista autorizado *</span><select required value={form.driverId} onChange={(e) => updateForm('driverId', e.target.value)} disabled={!form.vehicleId || driversLoading}><option value="">{driversLoading ? 'Validando…' : form.vehicleId ? 'Selecione motorista' : 'Selecione o veículo primeiro'}</option>{drivers.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.matricula ? ` · ${item.matricula}` : ''}</option>)}</select>{form.vehicleId && !driversLoading && !drivers.length && <small className="fueling-danger-text">Não há autorização vigente com CNH válida para a data.</small>}</label>
+        <label><span>Motorista autorizado *</span><select required value={form.driverId} onChange={(e) => updateForm('driverId', e.target.value)} disabled={!form.vehicleId || driversLoading}><option value="">{driversLoading ? 'Validando…' : form.vehicleId ? 'Selecione motorista' : 'Selecione o veículo primeiro'}</option>{drivers.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.matricula ? ` · ${item.matricula}` : ''}{item.cnh_category ? ` · Cat. ${item.cnh_category}` : ''}</option>)}</select>{form.vehicleId && !driversLoading && !drivers.length && <small className="fueling-danger-text">Não há autorização vigente com CNH válida para a data.</small>}</label>
         <label><span>Data e hora efetivas *</span><input type="datetime-local" required value={form.performedAt} onChange={(e) => { const value = e.target.value; updateForm('performedAt', value); if (form.vehicleId) { void loadDrivers(form.vehicleId, value); void loadAuthorizations(form.vehicleId, value); void resolveVehicleUnit(form.vehicleId, value); if (form.stationId) void loadAuthorizedFuels(form.stationId, form.vehicleId, value) } }} /></label>
         <label><span>Hodômetro (km) *</span><input type="number" required min="0" step="0.1" value={form.odometerKm} onChange={(e) => updateForm('odometerKm', e.target.value)} /></label>
         <label><span>Quantidade (L) *</span><input type="number" required min="0.01" step="0.001" value={form.liters} onChange={(e) => updateForm('liters', e.target.value)} /></label>

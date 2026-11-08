@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
-import { DriversView } from './FleetResources'
+import { DriversView } from './DriverManagementView'
 import { StationManagementView } from './StationManagementView'
 import { FleetOverviewDashboard } from './FleetOverviewDashboard'
 import './FleetModule.css'
@@ -285,7 +285,7 @@ type FuelingCreateForm = { vehicle_id: string; station_id: string; fuel_type_id:
 type FuelingVehicleOption = Pick<Vehicle, 'id' | 'placa' | 'marca' | 'modelo' | 'fuel_type_id' | 'responsible_unit_id' | 'operational_status' | 'tank_capacity_l' | 'current_odometer_km'>
 type FuelingStationOption = { id: string; nome_fantasia_snapshot: string | null; razao_social_snapshot: string; cnpj_snapshot: string }
 type FuelingUnitOption = { id: string; nome: string; sigla: string | null }
-type FuelingDriverOption = { id: string; nome: string; matricula: string | null; cnh_valid_until: string | null }
+type FuelingDriverOption = { id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }
 type FuelingAuthorizationOption = { id: string; responsible_unit_id: string; beneficiary_unit_id: string; purpose: string; valid_from: string; valid_until: string }
 
 function localDateTimeInput(now = new Date()) {
@@ -390,26 +390,17 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
     }
     const performedAt = new Date(createForm.performed_at)
     if (!Number.isFinite(performedAt.getTime())) { setCreateDrivers([]); return }
-    const eventDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(performedAt)
     let cancelled = false
     setCreateDriversLoading(true)
-    void supabase.from('fleet_vehicle_driver_authorizations')
-      .select('driver_id,valid_from,valid_until,status,driver:fleet_drivers(id,nome,matricula,cnh_valid_until,ativo)')
-      .eq('vehicle_id', createForm.vehicle_id)
-      .eq('status', 'ATIVA')
-      .lte('valid_from', eventDate)
-      .or(`valid_until.is.null,valid_until.gte.${eventDate}`)
-      .order('valid_from', { ascending: false })
-      .limit(500)
+    void supabase.rpc('fleet_manager_vehicle_driver_options', { p_vehicle_id: createForm.vehicle_id, p_performed_at: performedAt.toISOString(), p_require_authorization: true })
       .then(({ data, error: authorizationError }) => {
         if (cancelled) return
         if (authorizationError) {
           setCreateDrivers([])
-          setCreateFormError('Não foi possível verificar motoristas autorizados para este veículo.')
+          setCreateFormError('Não foi possível verificar autorização, CNH e categoria do motorista para este veículo.')
         } else {
-          const options = (data || []).map((row) => (row as unknown as { driver?: FuelingDriverOption & { ativo?: boolean } | null }).driver)
-            .filter((driver): driver is FuelingDriverOption & { ativo?: boolean } => Boolean(driver?.id && driver.ativo && driver.cnh_valid_until && driver.cnh_valid_until >= eventDate))
-          setCreateDrivers(Array.from(new Map(options.map((driver) => [driver.id, driver])).values()))
+          const options = (data || []) as FuelingDriverOption[]
+          setCreateDrivers(options)
           setCreateForm((current) => current.driver_id && !options.some((driver) => driver.id === current.driver_id) ? { ...current, driver_id: '' } : current)
         }
         setCreateDriversLoading(false)
@@ -772,7 +763,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
             setCreateFormError('')
           }}><option value="">{createAuthorizationsLoading ? 'Verificando autorizações…' : createVehicles.find((item) => item.id === createForm.vehicle_id)?.operational_status === 'CEDIDO' ? 'Selecione autorização vigente' : 'Uso pela unidade responsável'}</option>{createUseAuthorizations.map((authorization) => <option key={authorization.id} value={authorization.id}>{createUnits.find((unit) => unit.id === authorization.beneficiary_unit_id)?.nome || 'Beneficiária'} · {authorization.purpose} · até {formatDate(authorization.valid_until)}</option>)}</select>{createForm.vehicle_id && !createAuthorizationsLoading && !createUseAuthorizations.length && createVehicles.find((item) => item.id === createForm.vehicle_id)?.operational_status === 'CEDIDO' && <small>Nenhuma autorização aprovada e vigente com comprovante foi encontrada.</small>}</label>
           <label>Unidade beneficiária<input readOnly value={createUnits.find((unit) => unit.id === createForm.beneficiary_unit_id)?.nome || 'Será a unidade responsável, salvo cessão aprovada'} /></label>
-          <label>Motorista autorizado<select required value={createForm.driver_id} onChange={(event) => updateCreateForm('driver_id', event.target.value)} disabled={createDriversLoading || !createForm.vehicle_id}><option value="">{createDriversLoading ? 'Verificando autorizações…' : 'Selecione o motorista'}</option>{createDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nome}{driver.matricula ? ` · ${driver.matricula}` : ''}</option>)}</select>{createForm.vehicle_id && !createDriversLoading && !createDrivers.length && <small>Nenhum motorista com CNH vigente autorizado para este veículo na data escolhida.</small>}</label>
+          <label>Motorista autorizado<select required value={createForm.driver_id} onChange={(event) => updateCreateForm('driver_id', event.target.value)} disabled={createDriversLoading || !createForm.vehicle_id}><option value="">{createDriversLoading ? 'Verificando autorizações…' : 'Selecione o motorista'}</option>{createDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nome}{driver.matricula ? ` · ${driver.matricula}` : ''}{driver.cnh_category ? ` · Cat. ${driver.cnh_category}` : ''}</option>)}</select>{createForm.vehicle_id && !createDriversLoading && !createDrivers.length && <small>Nenhum motorista com CNH vigente autorizado para este veículo na data escolhida.</small>}</label>
           <label>Data e hora do abastecimento<input required type="datetime-local" value={createForm.performed_at} onChange={(event) => updateCreateForm('performed_at', event.target.value)} /></label>
           <label>Litros<input required type="number" min="0.001" max="9999999.999" step="0.001" value={createForm.liters} onChange={(event) => updateCreateForm('liters', event.target.value)} /></label>
           <label>Preço unitário<input required type="number" min="0" max="99999999.9999" step="0.0001" value={createForm.unit_price} onChange={(event) => updateCreateForm('unit_price', event.target.value)} /></label>
