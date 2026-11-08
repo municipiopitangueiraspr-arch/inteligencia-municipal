@@ -17,7 +17,7 @@ import { FleetFuelingsView } from './FleetFuelingsView'
 import { FleetMonthlyClosure } from './FleetMonthlyClosure'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'accessRequests' | 'settings'
-type FleetAccess = 'checking' | 'manager' | 'mayor' | 'denied' | 'error'
+type FleetAccess = 'checking' | 'manager' | 'mayor' | 'fiscal' | 'secretary' | 'denied' | 'error'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
 type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
@@ -64,6 +64,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const [view, setView] = useState<FleetView>('overview')
   const [accessLevel, setAccessLevel] = useState<FleetAccess>(supabase ? 'checking' : 'error')
   const [accessError, setAccessError] = useState(supabase ? '' : 'O serviço de dados está indisponível.')
+  const [scopeLabel, setScopeLabel] = useState('')
   const [pendingFuelings, setPendingFuelings] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -72,12 +73,15 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const checkAccess = useCallback(async () => {
     if (!supabase) return
     try {
-      const manager = await supabase.rpc('fleet_is_closure_manager')
-      if (manager.error) throw manager.error
-      if (manager.data === true) { setAccessLevel('manager'); setAccessError(''); return }
-      const municipalReader = await supabase.rpc('fleet_can_read_monthly_closures')
-      if (municipalReader.error) throw municipalReader.error
-      setAccessLevel(municipalReader.data === true ? 'mayor' : 'denied')
+      const { data, error } = await supabase.rpc('fleet_dashboard_access')
+      if (error) throw error
+      const access = data as { role?: string; units?: { name?: string; acronym?: string }[] } | null
+      const level: FleetAccess = access?.role === 'GESTOR_FROTAS' || access?.role === 'ADMINISTRADOR' ? 'manager'
+        : access?.role === 'PREFEITO' ? 'mayor'
+          : access?.role === 'FISCAL_FROTAS' ? 'fiscal'
+            : access?.role === 'GESTOR_SECRETARIA' ? 'secretary' : 'denied'
+      setAccessLevel(level)
+      setScopeLabel((access?.units || []).map((unit) => unit.acronym || unit.name).filter(Boolean).join(', '))
       setAccessError('')
     } catch {
       setAccessLevel('error')
@@ -95,7 +99,9 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
 
   const visibleNavItems = accessLevel === 'manager'
     ? navItems
-    : navItems.filter((item) => item.id === 'overview' || item.id === 'closure')
+    : accessLevel === 'mayor'
+      ? navItems.filter((item) => item.id === 'overview' || item.id === 'closure')
+      : navItems.filter((item) => item.id === 'overview')
 
   if (accessLevel === 'checking') return <div className="fleet-shell"><main className="fleet-main"><div className="fleet-loading"><RefreshCw className="spin" size={18}/> Validando seu perfil de acesso…</div></main></div>
   if (accessLevel === 'denied' || accessLevel === 'error') return <div className="fleet-shell"><main className="fleet-main"><section className="fleet-section fleet-page-section"><span className="fleet-kicker">MÓDULO OPERACIONAL</span><h1>Acesso ao módulo de Frotas</h1>{accessLevel === 'denied' ? <p>Este perfil não possui acesso ao painel municipal. Solicite ao administrador a vinculação do perfil correto.</p> : <div className="fleet-inline-error" role="alert"><CircleAlert size={15}/>{accessError}</div>}<div className="fleet-inline-actions"><button className="fleet-secondary-button" type="button" onClick={onBack}><ArrowLeft size={15}/> Voltar ao painel</button>{accessLevel === 'error'&&<button className="fleet-primary-button" type="button" onClick={()=>{setAccessLevel('checking');void checkAccess()}}>Tentar novamente</button>}</div></section></main></div>
@@ -105,12 +111,12 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
       <div className="fleet-sidebar-top"><button className="fleet-back" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><Truck size={20} /></span><div><strong>Gestão de Frotas</strong><small>Inteligência Municipal</small></div></div></div>
       <div className="fleet-section-label">OPERAÇÃO</div>
       <nav className="fleet-nav">{visibleNavItems.map(({ id, label, icon: Icon }) => <button key={id} className={`fleet-nav-item ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={17} />{label}{id === 'fuelings' && pendingFuelings > 0 && <span className="fleet-nav-count">{pendingFuelings}</span>}</button>)}</nav>
-      <div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong><small>Ambiente municipal</small></div></div><button className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div>
+      <div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong><small>{accessLevel === 'secretary' ? `Consulta · ${scopeLabel || 'unidade vinculada'}` : accessLevel === 'fiscal' ? 'Fiscalização · consulta' : accessLevel === 'mayor' ? 'Escopo municipal · consulta' : 'Escopo municipal'}</small></div></div><button className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div>
     </aside>
     <main className="fleet-main">
       <header className="fleet-header"><div><p className="fleet-kicker">MÓDULO OPERACIONAL</p><h1>{navItems.find((item) => item.id === view)?.label}</h1></div><div className="fleet-header-actions"><button className="fleet-icon-button" aria-label="Atualizar dados" onClick={() => void loadData()} disabled={refreshing}>{refreshing ? <RefreshCw className="spin" size={18} /> : <RefreshCw size={18} />}</button><button className="fleet-icon-button" aria-label="Notificações"><Bell size={18} /><span className="fleet-alert-dot" /></button><span className="fleet-protected"><ShieldCheck size={16} /> Dados protegidos</span></div></header>
       <div className="fleet-content">
-        {view === 'overview' && <FleetOverviewDashboard key={refreshKey} userEmail={userEmail} onPendingCount={setPendingFuelings} onNavigate={(target) => { if (accessLevel === 'manager') setView(target) }} />}
+        {view === 'overview' && <FleetOverviewDashboard key={refreshKey} userEmail={userEmail} onPendingCount={setPendingFuelings} readOnly={accessLevel !== 'manager'} scopeRole={accessLevel} scopeLabel={scopeLabel} onNavigate={(target) => { if (accessLevel === 'manager' || (target === 'closure' && accessLevel === 'mayor')) setView(target) }} />}
         {view === 'vehicles' && <FleetVehiclesView key={refreshKey} />}
         {view === 'fuelTypes' && <FuelTypesView key={refreshKey} onChanged={loadData} onRequestConfirmation={setConfirmation} />}
         {view === 'fuelings' && <FleetFuelingsView key={refreshKey} />}

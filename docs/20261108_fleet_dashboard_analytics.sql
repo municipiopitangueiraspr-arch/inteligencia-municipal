@@ -40,24 +40,35 @@ SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_municipio_id uuid;
+  v_scope jsonb;
+  v_scope_role text;
+  v_unit_scope_ids uuid[] := ARRAY[]::uuid[];
   v_timezone constant text := 'America/Sao_Paulo';
   v_start timestamptz;
   v_end timestamptz;
   v_period_months integer;
   v_previous_start timestamptz;
   v_year_start timestamptz;
+  v_previous_year_start timestamptz;
+  v_previous_year_end timestamptz;
+  v_today date;
+  v_today_start timestamptz;
+  v_today_end timestamptz;
+  v_current_month_start timestamptz;
   v_scan_start timestamptz;
   v_recent_limit integer;
 BEGIN
   IF auth.uid() IS NULL OR public.fleet_current_usuario_id() IS NULL THEN
     RAISE EXCEPTION 'Autenticação necessária para consultar o painel.' USING ERRCODE = '42501';
   END IF;
-  IF NOT public.fleet_is_mayor_or_manager() THEN
-    RAISE EXCEPTION 'Perfil sem permissão para consultar o painel gerencial de Frotas.' USING ERRCODE = '42501';
-  END IF;
-  v_municipio_id := public.fleet_current_municipio_id();
+  v_scope := public.fleet_dashboard_access();
+  v_municipio_id := (v_scope->>'municipio_id')::uuid;
+  v_scope_role := v_scope->>'role';
+  SELECT COALESCE(array_agg(value::uuid), ARRAY[]::uuid[])
+    INTO v_unit_scope_ids
+  FROM jsonb_array_elements_text(COALESCE(v_scope->'unit_ids','[]'::jsonb)) AS t(value);
   IF v_municipio_id IS NULL THEN
-    RAISE EXCEPTION 'Não foi possível determinar o município do usuário.' USING ERRCODE = '42501';
+    RAISE EXCEPTION 'Não foi possível determinar o município autorizado.' USING ERRCODE = '42501';
   END IF;
   IF p_start_month IS NULL OR p_end_month_exclusive IS NULL
      OR p_start_month >= p_end_month_exclusive
@@ -82,22 +93,44 @@ BEGIN
   v_end := p_end_month_exclusive::timestamp AT TIME ZONE v_timezone;
   v_period_months := (EXTRACT(YEAR FROM p_end_month_exclusive)::integer - EXTRACT(YEAR FROM p_start_month)::integer) * 12
                    + (EXTRACT(MONTH FROM p_end_month_exclusive)::integer - EXTRACT(MONTH FROM p_start_month)::integer);
+  IF v_period_months > 120 THEN
+    RAISE EXCEPTION 'O período do painel não pode ultrapassar 120 meses.' USING ERRCODE = '22023';
+  END IF;
+  IF p_end_month_exclusive > (date_trunc('month', statement_timestamp() AT TIME ZONE v_timezone) + interval '1 month')::date THEN
+    RAISE EXCEPTION 'O painel não aceita competências futuras.' USING ERRCODE = '22023';
+  END IF;
+  IF v_scope_role = 'GESTOR_SECRETARIA' AND (
+    (p_responsible_unit_id IS NOT NULL AND NOT (p_responsible_unit_id = ANY(v_unit_scope_ids)))
+    OR (p_beneficiary_unit_id IS NOT NULL AND NOT (p_beneficiary_unit_id = ANY(v_unit_scope_ids)))
+  ) THEN
+    RAISE EXCEPTION 'O filtro solicitado está fora do escopo da secretaria autorizada.' USING ERRCODE = '42501';
+  END IF;
   v_previous_start := (p_start_month - make_interval(months => v_period_months))::timestamp AT TIME ZONE v_timezone;
   v_year_start := make_date(EXTRACT(YEAR FROM (p_end_month_exclusive - 1))::integer, 1, 1)::timestamp AT TIME ZONE v_timezone;
-  v_scan_start := LEAST(v_start, v_previous_start, v_year_start);
+  v_previous_year_start := v_year_start - interval '1 year';
+  v_previous_year_end := v_end - interval '1 year';
+  v_today := (statement_timestamp() AT TIME ZONE v_timezone)::date;
+  v_today_start := v_today::timestamp AT TIME ZONE v_timezone;
+  v_today_end := statement_timestamp();
+  v_current_month_start := date_trunc('month', v_today::timestamp) AT TIME ZONE v_timezone;
+  v_scan_start := LEAST(v_start, v_previous_start, v_year_start, v_previous_year_start, v_today_start);
   v_recent_limit := CASE WHEN p_recent_limit IN (10,20,50) THEN p_recent_limit ELSE 20 END;
 
   RETURN (
     WITH base AS MATERIALIZED (
       SELECT
         f.id, f.municipio_id, f.vehicle_id, f.station_id, f.fuel_type_id, f.driver_id,
-        f.responsible_unit_id, f.beneficiary_unit_id, f.status::text AS status,
+        CASE WHEN f.responsible_unit_id IS NULL THEN v.responsible_unit_id ELSE f.responsible_unit_id END AS responsible_unit_id,
+        CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR f.beneficiary_unit_id = ANY(v_unit_scope_ids) THEN f.beneficiary_unit_id ELSE NULL END AS beneficiary_unit_id,
+        f.status::text AS status,
         f.performed_at, f.submitted_at, f.liters,
         COALESCE(f.total_amount, f.liters * f.unit_price, 0)::numeric AS amount,
         f.unit_price, f.odometer_km, f.inconsistency_code, f.inconsistency_notes,
         v.placa, v.marca, v.modelo, v.operational_status::text AS vehicle_status,
-        ru.nome AS responsible_unit_name, ru.sigla AS responsible_unit_sigla,
-        bu.nome AS beneficiary_unit_name, bu.sigla AS beneficiary_unit_sigla,
+        CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = ANY(v_unit_scope_ids) THEN ru.nome ELSE 'Outra secretaria' END AS responsible_unit_name,
+        CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = ANY(v_unit_scope_ids) THEN ru.sigla ELSE '' END AS responsible_unit_sigla,
+        CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR f.beneficiary_unit_id = ANY(v_unit_scope_ids) THEN bu.nome ELSE 'Outra secretaria' END AS beneficiary_unit_name,
+        CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR f.beneficiary_unit_id = ANY(v_unit_scope_ids) THEN bu.sigla ELSE '' END AS beneficiary_unit_sigla,
         d.nome AS driver_name,
         s.nome_fantasia_snapshot AS station_name,
         ft.nome AS fuel_type_name,
@@ -106,7 +139,7 @@ BEGIN
       LEFT JOIN public.fleet_vehicles v
         ON v.id = f.vehicle_id AND v.municipio_id = v_municipio_id
       LEFT JOIN public.unidades_organizacionais ru
-        ON ru.id = f.responsible_unit_id AND ru.municipio_id = v_municipio_id
+        ON ru.id = COALESCE(f.responsible_unit_id,v.responsible_unit_id) AND ru.municipio_id = v_municipio_id
       LEFT JOIN public.unidades_organizacionais bu
         ON bu.id = f.beneficiary_unit_id AND bu.municipio_id = v_municipio_id
       LEFT JOIN public.fleet_drivers d
@@ -123,10 +156,11 @@ BEGIN
         LIMIT 1
       ) doc ON true
       WHERE f.municipio_id = v_municipio_id
-        AND f.performed_at >= v_scan_start AND f.performed_at < v_end
+        AND f.performed_at >= v_scan_start AND f.performed_at < GREATEST(v_end, v_today_end)
+        AND (v_scope_role <> 'GESTOR_SECRETARIA' OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = ANY(v_unit_scope_ids))
         AND f.status::text NOT IN ('CANCELADO','RASCUNHO')
         AND f.canceled_at IS NULL
-        AND (p_responsible_unit_id IS NULL OR f.responsible_unit_id = p_responsible_unit_id)
+        AND (p_responsible_unit_id IS NULL OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = p_responsible_unit_id)
         AND (p_beneficiary_unit_id IS NULL OR f.beneficiary_unit_id = p_beneficiary_unit_id)
         AND (p_vehicle_id IS NULL OR f.vehicle_id = p_vehicle_id)
         AND (p_driver_id IS NULL OR f.driver_id = p_driver_id)
@@ -146,12 +180,19 @@ BEGIN
       FROM public.fleet_inconsistencies i
       LEFT JOIN public.fleet_vehicles v ON v.id=i.vehicle_id AND v.municipio_id=v_municipio_id
       WHERE i.municipio_id=v_municipio_id AND i.resolved_at IS NULL
-        AND i.created_at >= v_start AND i.created_at < v_end
         AND (
           (i.fueling_id IS NOT NULL AND EXISTS (SELECT 1 FROM current_rows cr WHERE cr.id=i.fueling_id))
-          OR (i.fueling_id IS NULL AND p_responsible_unit_id IS NULL AND p_beneficiary_unit_id IS NULL
-              AND p_vehicle_id IS NULL AND p_driver_id IS NULL AND p_station_id IS NULL AND p_fuel_type_id IS NULL
-              AND p_fueling_status IS NULL AND p_document_status IS NULL)
+          OR (i.fueling_id IS NULL AND (
+                (v_scope_role <> 'GESTOR_SECRETARIA' AND i.created_at >= v_start AND i.created_at < v_end
+                 AND p_responsible_unit_id IS NULL AND p_beneficiary_unit_id IS NULL
+                 AND p_vehicle_id IS NULL AND p_driver_id IS NULL AND p_station_id IS NULL AND p_fuel_type_id IS NULL
+                 AND p_fueling_status IS NULL AND p_document_status IS NULL)
+                OR (v_scope_role = 'GESTOR_SECRETARIA' AND i.vehicle_id IS NOT NULL AND EXISTS (
+                  SELECT 1 FROM public.fleet_vehicles scoped_v
+                  WHERE scoped_v.id=i.vehicle_id AND scoped_v.municipio_id=v_municipio_id
+                    AND scoped_v.responsible_unit_id = ANY(v_unit_scope_ids)
+                ))
+              ))
         )
     ), summary AS (
       SELECT
@@ -176,6 +217,18 @@ BEGIN
     ytd_summary AS (
       SELECT COALESCE(SUM(amount),0)::numeric AS amount, COUNT(*)::bigint AS count
       FROM base WHERE performed_at >= v_year_start AND performed_at < v_end
+    ),
+    previous_year_ytd_summary AS (
+      SELECT COALESCE(SUM(amount),0)::numeric AS amount, COUNT(*)::bigint AS count
+      FROM base WHERE performed_at >= v_previous_year_start AND performed_at < v_previous_year_end
+    ),
+    today_summary AS (
+      SELECT COALESCE(SUM(amount),0)::numeric AS amount, COUNT(*)::bigint AS count
+      FROM base WHERE performed_at >= v_today_start AND performed_at < v_today_end
+    ),
+    current_month_summary AS (
+      SELECT COALESCE(SUM(amount),0)::numeric AS amount, COUNT(*)::bigint AS count
+      FROM base WHERE performed_at >= v_current_month_start AND performed_at < v_today_end
     ),
     monthly_series AS (
       SELECT gs.month_start,
@@ -242,7 +295,8 @@ BEGIN
       SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.amount DESC),'[]'::jsonb) AS value
       FROM (
         SELECT station_id AS id, COALESCE(station_name,'Posto não identificado') AS label,
-               COUNT(*)::bigint AS fueling_count, SUM(liters)::numeric AS liters, SUM(amount)::numeric AS amount
+               COUNT(*)::bigint AS fueling_count, SUM(liters)::numeric AS liters, SUM(amount)::numeric AS amount,
+               CASE WHEN SUM(liters)=0 THEN NULL ELSE SUM(amount)/SUM(liters) END::numeric AS weighted_price_per_liter
         FROM current_rows GROUP BY station_id,station_name
         ORDER BY SUM(amount) DESC LIMIT 12
       ) x
@@ -297,7 +351,8 @@ BEGIN
           ON ch.closure_id=c.id AND ch.municipio_id=v_municipio_id
         LEFT JOIN public.fleet_fuel_stations s
           ON s.id=ch.station_id AND s.municipio_id=v_municipio_id
-        WHERE c.municipio_id=v_municipio_id
+        WHERE v_scope_role <> 'GESTOR_SECRETARIA'
+          AND c.municipio_id=v_municipio_id
           AND make_date(c.reference_year::integer,c.reference_month::integer,1) >= p_start_month
           AND make_date(c.reference_year::integer,c.reference_month::integer,1) < p_end_month_exclusive
           AND (p_station_id IS NULL OR ch.station_id=p_station_id)
@@ -316,7 +371,8 @@ BEGIN
           ON ch.closure_id=c.id AND ch.municipio_id=v_municipio_id
         LEFT JOIN public.fleet_fuel_stations s
           ON s.id=ch.station_id AND s.municipio_id=v_municipio_id
-        WHERE c.municipio_id=v_municipio_id
+        WHERE v_scope_role <> 'GESTOR_SECRETARIA'
+          AND c.municipio_id=v_municipio_id
           AND make_date(c.reference_year::integer,c.reference_month::integer,1) >= p_start_month
           AND make_date(c.reference_year::integer,c.reference_month::integer,1) < p_end_month_exclusive
           AND (p_station_id IS NULL OR ch.station_id=p_station_id)
@@ -328,11 +384,12 @@ BEGIN
       SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.cnh_valid_until),'[]'::jsonb) AS value
       FROM (
         SELECT d.id,d.nome AS driver_name,d.cnh_valid_until,
-               CASE WHEN d.cnh_valid_until < CURRENT_DATE THEN 'VENCIDA' ELSE 'VENCE_EM_ATE_60_DIAS' END AS alert_status,
-               (d.cnh_valid_until-CURRENT_DATE) AS days_until_expiry
+               CASE WHEN d.cnh_valid_until < v_today THEN 'VENCIDA' ELSE 'VENCE_EM_ATE_60_DIAS' END AS alert_status,
+               (d.cnh_valid_until-v_today) AS days_until_expiry
         FROM public.fleet_drivers d
         WHERE d.municipio_id=v_municipio_id AND d.ativo=true
-          AND d.cnh_valid_until IS NOT NULL AND d.cnh_valid_until <= CURRENT_DATE + 60
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR d.unidade_id = ANY(v_unit_scope_ids))
+          AND d.cnh_valid_until IS NOT NULL AND d.cnh_valid_until <= v_today + 60
         ORDER BY d.cnh_valid_until,d.nome
       ) x
     ),
@@ -342,6 +399,7 @@ BEGIN
         SELECT operational_status::text AS status,COUNT(*)::bigint AS vehicle_count
         FROM public.fleet_vehicles
         WHERE municipio_id=v_municipio_id AND operational_status::text <> 'ATIVO'
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR responsible_unit_id = ANY(v_unit_scope_ids))
         GROUP BY operational_status
       ) x
     ),
@@ -357,6 +415,7 @@ BEGIN
         WHERE a.municipio_id=v_municipio_id AND a.status::text='APROVADA'
           AND a.valid_from < v_end AND a.valid_until >= v_start
           AND (p_vehicle_id IS NULL OR a.vehicle_id=p_vehicle_id)
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR a.responsible_unit_id = ANY(v_unit_scope_ids))
           AND (p_responsible_unit_id IS NULL OR a.responsible_unit_id=p_responsible_unit_id)
           AND (p_beneficiary_unit_id IS NULL OR a.beneficiary_unit_id=p_beneficiary_unit_id)
         ORDER BY a.valid_from DESC
@@ -364,11 +423,18 @@ BEGIN
     ),
     filter_options AS (
       SELECT jsonb_build_object(
-        'units', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',u.id,'name',u.nome,'acronym',u.sigla) ORDER BY u.nome),'[]'::jsonb) FROM public.unidades_organizacionais u WHERE u.municipio_id=v_municipio_id),
-        'vehicles', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',v.id,'label',concat_ws(' · ',v.placa,concat_ws(' ',v.marca,v.modelo))) ORDER BY v.placa),'[]'::jsonb) FROM public.fleet_vehicles v WHERE v.municipio_id=v_municipio_id),
-        'drivers', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'label',d.nome) ORDER BY d.nome),'[]'::jsonb) FROM public.fleet_drivers d WHERE d.municipio_id=v_municipio_id AND d.ativo=true),
-        'stations', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',s.id,'label',COALESCE(s.nome_fantasia_snapshot,s.razao_social_snapshot)) ORDER BY COALESCE(s.nome_fantasia_snapshot,s.razao_social_snapshot)),'[]'::jsonb) FROM public.fleet_fuel_stations s WHERE s.municipio_id=v_municipio_id),
-        'fuel_types', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',ft.id,'label',ft.nome) ORDER BY ft.nome),'[]'::jsonb) FROM public.fleet_fuel_types ft WHERE ft.municipio_id=v_municipio_id)
+        'units', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',u.id,'name',u.nome,'acronym',u.sigla) ORDER BY u.nome),'[]'::jsonb) FROM public.unidades_organizacionais u WHERE u.municipio_id=v_municipio_id
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR u.id = ANY(v_unit_scope_ids))),
+        'vehicles', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',v.id,'label',concat_ws(' · ',v.placa,concat_ws(' ',v.marca,v.modelo))) ORDER BY v.placa),'[]'::jsonb) FROM public.fleet_vehicles v WHERE v.municipio_id=v_municipio_id
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR v.responsible_unit_id = ANY(v_unit_scope_ids)
+               OR EXISTS (SELECT 1 FROM current_rows cr WHERE cr.vehicle_id=v.id))),
+        'drivers', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',d.id,'label',d.nome) ORDER BY d.nome),'[]'::jsonb) FROM public.fleet_drivers d WHERE d.municipio_id=v_municipio_id AND d.ativo=true
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR d.unidade_id = ANY(v_unit_scope_ids)
+               OR EXISTS (SELECT 1 FROM current_rows cr WHERE cr.driver_id=d.id))),
+        'stations', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',s.id,'label',COALESCE(s.nome_fantasia_snapshot,s.razao_social_snapshot)) ORDER BY COALESCE(s.nome_fantasia_snapshot,s.razao_social_snapshot)),'[]'::jsonb) FROM public.fleet_fuel_stations s WHERE s.municipio_id=v_municipio_id
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR EXISTS (SELECT 1 FROM current_rows cr WHERE cr.station_id=s.id))),
+        'fuel_types', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',ft.id,'label',ft.nome) ORDER BY ft.nome),'[]'::jsonb) FROM public.fleet_fuel_types ft WHERE ft.municipio_id=v_municipio_id
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR EXISTS (SELECT 1 FROM current_rows cr WHERE cr.fuel_type_id=ft.id)))
       ) AS value
     )
     SELECT jsonb_build_object(
@@ -381,14 +447,20 @@ BEGIN
         'fueling_alert_count',s.fueling_alert_count,'distinct_vehicles',s.distinct_vehicles,
         'distinct_stations',s.distinct_stations,'average_per_fueling',s.average_per_fueling,
         'weighted_price_per_liter',s.weighted_price_per_liter,
-        'active_vehicle_count',(SELECT COUNT(*)::bigint FROM public.fleet_vehicles v WHERE v.municipio_id=v_municipio_id AND v.operational_status::text='ATIVO'),
+        'active_vehicle_count',(SELECT COUNT(*)::bigint FROM public.fleet_vehicles v WHERE v.municipio_id=v_municipio_id AND v.operational_status::text='ATIVO'
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR v.responsible_unit_id = ANY(v_unit_scope_ids))),
         'year_to_date_amount',ys.amount,'year_to_date_count',ys.count,
+        'previous_year_to_date_amount',pys.amount,'previous_year_to_date_count',pys.count,
+        'today_amount',tds.amount,'today_count',tds.count,
+        'current_month_amount',cms.amount,'current_month_count',cms.count,
         'previous_period_amount',ps.amount,'previous_period_count',ps.count,
         'period_variation_percent',CASE WHEN ps.amount=0 THEN NULL ELSE ((s.registered_amount-ps.amount)/ps.amount)*100 END,
         'period_variation_base_missing',ps.amount=0,
         'open_inconsistency_count',(SELECT COUNT(*)::bigint FROM scoped_inconsistencies),
-        'open_closure_count',(SELECT COUNT(*)::bigint FROM public.fleet_monthly_closures c WHERE c.municipio_id=v_municipio_id AND make_date(c.reference_year::integer,c.reference_month::integer,1)>=p_start_month AND make_date(c.reference_year::integer,c.reference_month::integer,1)<p_end_month_exclusive AND c.status::text NOT IN ('FECHADO','ENCERRADO') AND (p_station_id IS NULL OR EXISTS (SELECT 1 FROM public.fleet_monthly_closure_station_checks ch WHERE ch.closure_id=c.id AND ch.station_id=p_station_id))),
-        'cnh_expired_or_due_count',(SELECT COUNT(*)::bigint FROM public.fleet_drivers d WHERE d.municipio_id=v_municipio_id AND d.ativo=true AND d.cnh_valid_until IS NOT NULL AND d.cnh_valid_until<=CURRENT_DATE+60)
+        'open_closure_count',CASE WHEN v_scope_role = 'GESTOR_SECRETARIA' THEN 0 ELSE (SELECT COUNT(*)::bigint FROM public.fleet_monthly_closures c WHERE c.municipio_id=v_municipio_id AND make_date(c.reference_year::integer,c.reference_month::integer,1)>=p_start_month AND make_date(c.reference_year::integer,c.reference_month::integer,1)<p_end_month_exclusive AND c.status::text NOT IN ('FECHADO','ENCERRADO') AND (p_station_id IS NULL OR EXISTS (SELECT 1 FROM public.fleet_monthly_closure_station_checks ch WHERE ch.closure_id=c.id AND ch.station_id=p_station_id))) END,
+        'cnh_expired_or_due_count',(SELECT COUNT(*)::bigint FROM public.fleet_drivers d WHERE d.municipio_id=v_municipio_id AND d.ativo=true
+          AND (v_scope_role <> 'GESTOR_SECRETARIA' OR d.unidade_id = ANY(v_unit_scope_ids))
+          AND d.cnh_valid_until IS NOT NULL AND d.cnh_valid_until<=v_today+60)
       ),
       'monthly',mj.value,
       'by_responsible_unit',uj.value,
@@ -407,6 +479,7 @@ BEGIN
       'filter_options',fo.value
     )
     FROM summary s CROSS JOIN prev_summary ps CROSS JOIN ytd_summary ys
+      CROSS JOIN previous_year_ytd_summary pys CROSS JOIN today_summary tds CROSS JOIN current_month_summary cms
       CROSS JOIN month_json mj CROSS JOIN unit_json uj CROSS JOIN beneficiary_json bj
       CROSS JOIN vehicle_json vj CROSS JOIN driver_json dj CROSS JOIN station_json sj
       CROSS JOIN fuel_json fj CROSS JOIN recent_json rj CROSS JOIN alert_json aj
@@ -440,17 +513,26 @@ SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_municipio_id uuid;
+  v_scope jsonb;
+  v_scope_role text;
+  v_unit_scope_ids uuid[] := ARRAY[]::uuid[];
   v_timezone constant text := 'America/Sao_Paulo';
   v_start timestamptz;
   v_end timestamptz;
+  v_period_months integer;
   v_limit integer;
   v_offset integer;
 BEGIN
-  IF auth.uid() IS NULL OR public.fleet_current_usuario_id() IS NULL OR NOT public.fleet_is_mayor_or_manager() THEN
-    RAISE EXCEPTION 'Perfil sem permissão para consultar detalhes do painel de Frotas.' USING ERRCODE = '42501';
+  IF auth.uid() IS NULL OR public.fleet_current_usuario_id() IS NULL THEN
+    RAISE EXCEPTION 'Autenticação necessária para consultar detalhes do painel.' USING ERRCODE = '42501';
   END IF;
-  v_municipio_id := public.fleet_current_municipio_id();
-  IF v_municipio_id IS NULL THEN RAISE EXCEPTION 'Município não identificado.' USING ERRCODE = '42501'; END IF;
+  v_scope := public.fleet_dashboard_access();
+  v_municipio_id := (v_scope->>'municipio_id')::uuid;
+  v_scope_role := v_scope->>'role';
+  SELECT COALESCE(array_agg(value::uuid), ARRAY[]::uuid[])
+    INTO v_unit_scope_ids
+  FROM jsonb_array_elements_text(COALESCE(v_scope->'unit_ids','[]'::jsonb)) AS t(value);
+  IF v_municipio_id IS NULL THEN RAISE EXCEPTION 'Município autorizado não identificado.' USING ERRCODE = '42501'; END IF;
   IF p_start_month IS NULL OR p_end_month_exclusive IS NULL OR p_start_month >= p_end_month_exclusive
      OR date_trunc('month',p_start_month::timestamp)::date<>p_start_month
      OR date_trunc('month',p_end_month_exclusive::timestamp)::date<>p_end_month_exclusive THEN
@@ -467,18 +549,32 @@ BEGIN
     RAISE EXCEPTION 'Situação de comprovante inválida.' USING ERRCODE = '22023';
   END IF;
 
+  v_period_months := (EXTRACT(YEAR FROM p_end_month_exclusive)::integer - EXTRACT(YEAR FROM p_start_month)::integer) * 12
+                   + (EXTRACT(MONTH FROM p_end_month_exclusive)::integer - EXTRACT(MONTH FROM p_start_month)::integer);
+  IF v_period_months > 120 THEN RAISE EXCEPTION 'O período do detalhamento não pode ultrapassar 120 meses.' USING ERRCODE = '22023'; END IF;
+  IF p_end_month_exclusive > (date_trunc('month', statement_timestamp() AT TIME ZONE v_timezone) + interval '1 month')::date THEN
+    RAISE EXCEPTION 'O detalhamento não aceita competências futuras.' USING ERRCODE = '22023';
+  END IF;
+  IF v_scope_role = 'GESTOR_SECRETARIA' AND (
+    (p_responsible_unit_id IS NOT NULL AND NOT (p_responsible_unit_id = ANY(v_unit_scope_ids)))
+    OR (p_beneficiary_unit_id IS NOT NULL AND NOT (p_beneficiary_unit_id = ANY(v_unit_scope_ids)))
+    OR (p_dimension IN ('responsible_unit','beneficiary_unit') AND p_dimension_id IS NOT NULL AND NOT (p_dimension_id = ANY(v_unit_scope_ids)))
+  ) THEN RAISE EXCEPTION 'O filtro solicitado está fora do escopo da secretaria autorizada.' USING ERRCODE = '42501'; END IF;
   v_start := p_start_month::timestamp AT TIME ZONE v_timezone;
   v_end := p_end_month_exclusive::timestamp AT TIME ZONE v_timezone;
   v_limit := GREATEST(1,LEAST(COALESCE(p_limit,50),100));
-  v_offset := GREATEST(COALESCE(p_offset,0),0);
+  v_offset := GREATEST(0,LEAST(COALESCE(p_offset,0),100000));
 
   RETURN (
     WITH matched AS MATERIALIZED (
       SELECT f.id,f.status::text AS status,f.performed_at,f.submitted_at,f.vehicle_id,v.placa,
              concat_ws(' ',v.marca,v.modelo) AS vehicle_description,f.driver_id,d.nome AS driver_name,
              f.station_id,COALESCE(s.nome_fantasia_snapshot,s.razao_social_snapshot) AS station_name,
-             f.fuel_type_id,ft.nome AS fuel_type_name,f.responsible_unit_id,ru.nome AS responsible_unit_name,
-             f.beneficiary_unit_id,bu.nome AS beneficiary_unit_name,f.liters,
+             f.fuel_type_id,ft.nome AS fuel_type_name,
+             CASE WHEN f.responsible_unit_id IS NULL THEN v.responsible_unit_id ELSE f.responsible_unit_id END AS responsible_unit_id,
+             CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = ANY(v_unit_scope_ids) THEN ru.nome ELSE 'Outra secretaria' END AS responsible_unit_name,
+             CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR f.beneficiary_unit_id = ANY(v_unit_scope_ids) THEN f.beneficiary_unit_id ELSE NULL END AS beneficiary_unit_id,
+             CASE WHEN v_scope_role <> 'GESTOR_SECRETARIA' OR f.beneficiary_unit_id = ANY(v_unit_scope_ids) THEN bu.nome ELSE 'Outra secretaria' END AS beneficiary_unit_name,f.liters,
              COALESCE(f.total_amount,f.liters*f.unit_price,0)::numeric AS amount,f.unit_price,f.odometer_km,
              doc.document_status
       FROM public.fleet_fuelings f
@@ -486,7 +582,7 @@ BEGIN
       LEFT JOIN public.fleet_drivers d ON d.id=f.driver_id AND d.municipio_id=v_municipio_id
       LEFT JOIN public.fleet_fuel_stations s ON s.id=f.station_id AND s.municipio_id=v_municipio_id
       LEFT JOIN public.fleet_fuel_types ft ON ft.id=f.fuel_type_id AND ft.municipio_id=v_municipio_id
-      LEFT JOIN public.unidades_organizacionais ru ON ru.id=f.responsible_unit_id AND ru.municipio_id=v_municipio_id
+      LEFT JOIN public.unidades_organizacionais ru ON ru.id=COALESCE(f.responsible_unit_id,v.responsible_unit_id) AND ru.municipio_id=v_municipio_id
       LEFT JOIN public.unidades_organizacionais bu ON bu.id=f.beneficiary_unit_id AND bu.municipio_id=v_municipio_id
       LEFT JOIN LATERAL (
         SELECT fd.document_status::text AS document_status FROM public.fleet_fueling_documents fd
@@ -494,8 +590,9 @@ BEGIN
         ORDER BY fd.uploaded_at DESC,fd.id DESC LIMIT 1
       ) doc ON true
       WHERE f.municipio_id=v_municipio_id AND f.performed_at>=v_start AND f.performed_at<v_end
+        AND (v_scope_role <> 'GESTOR_SECRETARIA' OR COALESCE(f.responsible_unit_id,v.responsible_unit_id) = ANY(v_unit_scope_ids))
         AND f.status::text NOT IN ('CANCELADO','RASCUNHO') AND f.canceled_at IS NULL
-        AND (p_responsible_unit_id IS NULL OR f.responsible_unit_id=p_responsible_unit_id)
+        AND (p_responsible_unit_id IS NULL OR COALESCE(f.responsible_unit_id,v.responsible_unit_id)=p_responsible_unit_id)
         AND (p_beneficiary_unit_id IS NULL OR f.beneficiary_unit_id=p_beneficiary_unit_id)
         AND (p_vehicle_id IS NULL OR f.vehicle_id=p_vehicle_id)
         AND (p_driver_id IS NULL OR f.driver_id=p_driver_id)
@@ -505,7 +602,7 @@ BEGIN
         AND (p_document_status IS NULL OR (p_document_status='SEM_COMPROVANTE' AND doc.document_status IS NULL)
              OR (p_document_status<>'SEM_COMPROVANTE' AND doc.document_status=p_document_status))
         AND (p_dimension='all'
-             OR (p_dimension='responsible_unit' AND f.responsible_unit_id=p_dimension_id)
+             OR (p_dimension='responsible_unit' AND COALESCE(f.responsible_unit_id,v.responsible_unit_id)=p_dimension_id)
              OR (p_dimension='beneficiary_unit' AND f.beneficiary_unit_id=p_dimension_id)
              OR (p_dimension='vehicle' AND f.vehicle_id=p_dimension_id)
              OR (p_dimension='driver' AND f.driver_id=p_dimension_id)
