@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowDownUp, ArrowUp, Download, FileSpreadsheet, FileText, Filter, Plus, RotateCcw } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowUp, Download, Eye, FileSpreadsheet, FileText, Filter, Plus, RotateCcw, X } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Station } from "./FleetResources";
@@ -15,13 +15,23 @@ type Fueling = {
   liters: number;
   total_amount: number;
   status: string;
+  driver_id?: string | null;
+  driver_name?: string | null;
+  operational_status?: string | null;
+  review_status?: string | null;
+  entry_type?: string | null;
+  late_entry_reason?: string | null;
+  notes?: string | null;
+  protocol_number?: string | null;
+  unit_price?: number;
   station_receipt_number: string | null;
   vehicles?: { placa?: string; modelo?: string } | null;
   fuel_type?: { nome?: string } | null;
 };
 type VehicleOption = { id: string; placa: string; marca: string | null; modelo: string | null };
 type FuelOption = { id: string; nome: string; sigla: string | null };
-type SortKey = "performed_at" | "vehicle" | "fuel_type" | "liters" | "total_amount" | "status";
+type DocumentOption = { fueling_id: string; document_status: string; due_at?: string | null; is_current: boolean };
+type SortKey = "performed_at" | "vehicle" | "driver" | "fuel_type" | "liters" | "total_amount" | "status";
 type SortDirection = "asc" | "desc";
 type DateMode = "specific" | "period";
 type Props = {
@@ -29,6 +39,8 @@ type Props = {
   fuelings: Fueling[];
   vehicles: VehicleOption[];
   fuelTypes: FuelOption[];
+  documents: DocumentOption[];
+  receiptWindowHours: number;
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
@@ -56,6 +68,8 @@ const statusTone = (status: string) => {
   if (status === "CANCELADO") return "neutral";
   return "info";
 };
+const operationalLabels: Record<string, string> = { REGISTRADO: "Registrado", AGUARDANDO_COMPLEMENTACAO: "Aguardando complemento", SINALIZADO: "Sinalizado", CANCELADO: "Cancelado", RASCUNHO: "Rascunho" };
+const reviewLabels: Record<string, string> = { PENDENTE_DE_CONFERENCIA: "Pendente de conferência", COM_PENDENCIA: "Com pendência", CONTESTADO: "Contestação", REGULARIZADO: "Regularizado", CONFERIDO: "Conferido", ENCERRADO_NO_FECHAMENTO: "Encerrado no fechamento", EM_ANALISE: "Em análise" };
 const dateTime = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 const liters = (value: number) => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} L`;
@@ -88,14 +102,21 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes, loading, loadingMore, hasMore, onLoadMore, onNew }: Props) {
+export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes, documents, receiptWindowHours, loading, loadingMore, hasMore, onLoadMore, onNew }: Props) {
   const [dateMode, setDateMode] = useState<DateMode>("specific");
   const [specificDate, setSpecificDate] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+  const [driverId, setDriverId] = useState("");
   const [fuelTypeId, setFuelTypeId] = useState("");
   const [status, setStatus] = useState("");
+  const [operationalStatus, setOperationalStatus] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("");
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [lateOnly, setLateOnly] = useState(false);
+  const [detail, setDetail] = useState<Fueling | null>(null);
+  const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: "performed_at", direction: "desc" });
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
   const [exportError, setExportError] = useState("");
@@ -106,14 +127,26 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
       if (dateMode === "specific" && specificDate && day !== specificDate) return false;
       if (dateMode === "period" && ((dateStart && day < dateStart) || (dateEnd && day > dateEnd))) return false;
       if (vehicleId && item.vehicle_id !== vehicleId) return false;
+      if (driverId && item.driver_id !== driverId) return false;
       if (fuelTypeId && item.fuel_type_id !== fuelTypeId) return false;
       if (status && item.status !== status) return false;
+      if (operationalStatus && item.operational_status !== operationalStatus) return false;
+      if (reviewStatus && item.review_status !== reviewStatus) return false;
+      const document = documents.find((entry) => entry.fueling_id === item.id && entry.is_current);
+      const isPending = !["CONFERIDO", "INCLUIDO_NO_FECHAMENTO", "CANCELADO"].includes(item.status);
+      const deadline = document?.due_at ? Date.parse(document.due_at) : Date.parse(item.performed_at) + receiptWindowHours * 60 * 60 * 1000;
+      const isLate = item.entry_type === "POSTERIOR" || (!document || !["ACEITO", "CONFERIDO"].includes(document.document_status)) && deadline < Date.now();
+      if (pendingOnly && !isPending) return false;
+      if (lateOnly && !isLate) return false;
+      const query = search.trim().toLocaleLowerCase("pt-BR");
+      if (query && !`${item.protocol_number || ""} ${item.station_receipt_number || ""}`.toLocaleLowerCase("pt-BR").includes(query)) return false;
       return true;
     });
     result.sort((left, right) => {
       let comparison = 0;
       if (sort.key === "performed_at") comparison = new Date(left.performed_at).getTime() - new Date(right.performed_at).getTime();
       else if (sort.key === "vehicle") comparison = collator.compare(left.vehicles?.placa || "", right.vehicles?.placa || "");
+      else if (sort.key === "driver") comparison = collator.compare(left.driver_name || "", right.driver_name || "");
       else if (sort.key === "fuel_type") comparison = collator.compare(left.fuel_type?.nome || "", right.fuel_type?.nome || "");
       else if (sort.key === "liters") comparison = Number(left.liters || 0) - Number(right.liters || 0);
       else if (sort.key === "total_amount") comparison = Number(left.total_amount || 0) - Number(right.total_amount || 0);
@@ -121,18 +154,24 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
       return sort.direction === "asc" ? comparison : -comparison;
     });
     return result;
-  }, [fuelings, dateMode, specificDate, dateStart, dateEnd, vehicleId, fuelTypeId, status, sort]);
+  }, [fuelings, documents, receiptWindowHours, dateMode, specificDate, dateStart, dateEnd, vehicleId, driverId, fuelTypeId, status, operationalStatus, reviewStatus, pendingOnly, lateOnly, search, sort]);
 
-  const activeFilterCount = Number(dateMode === "specific" ? Boolean(specificDate) : Boolean(dateStart || dateEnd)) + Number(Boolean(vehicleId)) + Number(Boolean(fuelTypeId)) + Number(Boolean(status));
+  const activeFilterCount = Number(dateMode === "specific" ? Boolean(specificDate) : Boolean(dateStart || dateEnd)) + Number(Boolean(vehicleId)) + Number(Boolean(driverId)) + Number(Boolean(fuelTypeId)) + Number(Boolean(status)) + Number(Boolean(operationalStatus)) + Number(Boolean(reviewStatus)) + Number(pendingOnly) + Number(lateOnly) + Number(Boolean(search));
   const filterSummary = useMemo(() => {
     const values: string[] = [];
     if (dateMode === "specific" && specificDate) values.push(`Data: ${new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${specificDate}T12:00:00Z`))}`);
     if (dateMode === "period" && (dateStart || dateEnd)) values.push(`Período: ${dateStart ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${dateStart}T12:00:00Z`)) : "início"} a ${dateEnd ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${dateEnd}T12:00:00Z`)) : "hoje"}`);
     if (vehicleId) values.push(`Veículo: ${vehicles.find((item) => item.id === vehicleId)?.placa || "selecionado"}`);
+    if (driverId) values.push(`Motorista: ${fuelings.find((item) => item.driver_id === driverId)?.driver_name || "selecionado"}`);
     if (fuelTypeId) values.push(`Combustível: ${fuelTypes.find((item) => item.id === fuelTypeId)?.nome || "selecionado"}`);
     if (status) values.push(`Situação: ${statusLabels[status] || status}`);
+    if (operationalStatus) values.push(`Operação: ${operationalLabels[operationalStatus] || operationalStatus}`);
+    if (reviewStatus) values.push(`Conferência: ${reviewLabels[reviewStatus] || reviewStatus}`);
+    if (pendingOnly) values.push("Somente pendências");
+    if (lateOnly) values.push("Somente atrasados/posteriores");
+    if (search.trim()) values.push(`Protocolo/recibo: ${search.trim()}`);
     return values.length ? values.join(" | ") : "Sem filtros aplicados";
-  }, [dateMode, specificDate, dateStart, dateEnd, vehicleId, fuelTypeId, status, vehicles, fuelTypes]);
+  }, [dateMode, specificDate, dateStart, dateEnd, vehicleId, driverId, fuelTypeId, status, operationalStatus, reviewStatus, pendingOnly, lateOnly, search, vehicles, fuelTypes, fuelings]);
 
   function resetFilters() {
     setDateMode("specific");
@@ -140,8 +179,14 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
     setDateStart("");
     setDateEnd("");
     setVehicleId("");
+    setDriverId("");
     setFuelTypeId("");
     setStatus("");
+    setOperationalStatus("");
+    setReviewStatus("");
+    setPendingOnly(false);
+    setLateOnly(false);
+    setSearch("");
   }
   function toggleSort(key: SortKey) {
     setSort((current) => current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" });
@@ -409,12 +454,24 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
           <label>Veículo
             <select value={vehicleId} onChange={(event) => setVehicleId(event.target.value)}><option value="">Todos os veículos</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.placa} — {[vehicle.marca, vehicle.modelo].filter(Boolean).join(" ")}</option>)}</select>
           </label>
+          <label>Motorista
+            <select value={driverId} onChange={(event) => setDriverId(event.target.value)}><option value="">Todos os motoristas</option>{Array.from(new Map(fuelings.filter((item) => item.driver_id && item.driver_name).map((item) => [item.driver_id, item.driver_name])).entries()).map(([id, name]) => <option key={id} value={id || ""}>{name}</option>)}</select>
+          </label>
           <label>Tipo de combustível
             <select value={fuelTypeId} onChange={(event) => setFuelTypeId(event.target.value)}><option value="">Todos os combustíveis</option>{fuelTypes.map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ""}</option>)}</select>
           </label>
-          <label>Situação
+          <label>Situação geral
             <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todas as situações</option>{filterStatuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
           </label>
+          <label>Situação operacional
+            <select value={operationalStatus} onChange={(event) => setOperationalStatus(event.target.value)}><option value="">Todas as situações</option>{Object.entries(operationalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          </label>
+          <label>Conferência da Prefeitura
+            <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="">Todas as situações</option>{Object.entries(reviewLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          </label>
+          <label>Protocolo ou recibo<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Digite o número" /></label>
+          <label className="supplier-record-check"><input type="checkbox" checked={pendingOnly} onChange={(event) => setPendingOnly(event.target.checked)} /> Somente pendências</label>
+          <label className="supplier-record-check"><input type="checkbox" checked={lateOnly} onChange={(event) => setLateOnly(event.target.checked)} /> Posteriores ou com prazo vencido</label>
         </div>
       </div>
       {exportError && <div className="supplier-message error" role="alert">{exportError}</div>}
@@ -422,15 +479,17 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
         {loading ? <div className="supplier-loading">Carregando abastecimentos deste posto…</div> : filteredFuelings.length ? (
           <div className="supplier-table-wrap">
             <table className="supplier-table supplier-record-table">
-              <thead><tr>{column("performed_at", "Data do abastecimento")}{column("vehicle", "Veículo")}{column("fuel_type", "Combustível")}{column("liters", "Quantidade")}{column("total_amount", "Valor total")}{column("status", "Situação")}</tr></thead>
+              <thead><tr>{column("performed_at", "Data do abastecimento")}{column("vehicle", "Veículo")}{column("driver", "Motorista")}{column("fuel_type", "Combustível")}{column("liters", "Quantidade")}{column("total_amount", "Valor total")}{column("status", "Situação")}<th>Detalhes</th></tr></thead>
               <tbody>{filteredFuelings.map((item) => (
                 <tr key={item.id}>
                   <td><strong>{dateTime(item.performed_at)}</strong><small>Enviado em {dateTime(item.submitted_at)}</small></td>
                   <td><strong>{item.vehicles?.placa || "Não informado"}</strong><small>{item.vehicles?.modelo || "Veículo"}</small></td>
+                  <td>{item.driver_name || "Não informado"}</td>
                   <td>{item.fuel_type?.nome || fuelTypes.find((fuel) => fuel.id === item.fuel_type_id)?.nome || "—"}</td>
                   <td>{liters(item.liters)}</td>
                   <td><strong>{money(item.total_amount)}</strong></td>
-                  <td><span className={`supplier-status supplier-status-${statusTone(item.status)}`}><span className="supplier-status-dot" />{statusLabels[item.status] || item.status}</span></td>
+                  <td><span className={`supplier-status supplier-status-${statusTone(item.status)}`}><span className="supplier-status-dot" />{statusLabels[item.status] || item.status}</span><small>{reviewLabels[item.review_status || ""] || item.review_status || ""}</small></td>
+                  <td><button type="button" className="supplier-secondary supplier-record-detail-button" onClick={() => setDetail(item)}><Eye size={13} /> Detalhes</button></td>
                 </tr>
               ))}</tbody>
             </table>
@@ -440,6 +499,28 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
         )}
         {hasMore && !loading && <div className="supplier-load-more"><span>Exibindo {fuelings.length.toLocaleString("pt-BR")} registro(s) carregado(s) deste posto.</span><button className="supplier-secondary" type="button" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? "Carregando…" : "Carregar mais 100"}<Download size={14} /></button></div>}
       </div>
+      {detail && <div className="supplier-review-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setDetail(null); }}>
+        <section className="supplier-review-dialog supplier-record-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="supplier-record-detail-title">
+          <div className="supplier-review-heading"><span>REGISTRO DO SEU ESTABELECIMENTO</span><h3 id="supplier-record-detail-title">Detalhes do abastecimento</h3><p>Dados operacionais submetidos pelo posto e situação atual de conferência.</p></div>
+          <dl className="supplier-review-summary">
+            <div><dt>Protocolo</dt><dd>{detail.protocol_number || "Não informado"}</dd></div>
+            <div><dt>Recibo do posto</dt><dd>{detail.station_receipt_number || "Não informado"}</dd></div>
+            <div><dt>Data/hora efetiva</dt><dd>{dateTime(detail.performed_at)}</dd></div>
+            <div><dt>Registrado em</dt><dd>{dateTime(detail.submitted_at)}</dd></div>
+            <div><dt>Veículo</dt><dd>{detail.vehicles?.placa || "Não informado"} · {detail.vehicles?.modelo || ""}</dd></div>
+            <div><dt>Motorista</dt><dd>{detail.driver_name || "Não informado"}</dd></div>
+            <div><dt>Combustível</dt><dd>{detail.fuel_type?.nome || fuelTypes.find((fuel) => fuel.id === detail.fuel_type_id)?.nome || "Não informado"}</dd></div>
+            <div><dt>Volume / preço unitário</dt><dd>{liters(detail.liters)} · {money(detail.unit_price || 0)}/L</dd></div>
+            <div><dt>Valor total</dt><dd>{money(detail.total_amount)}</dd></div>
+            <div><dt>Situação operacional</dt><dd>{operationalLabels[detail.operational_status || ""] || detail.operational_status || "Não informada"}</dd></div>
+            <div><dt>Conferência da Prefeitura</dt><dd>{reviewLabels[detail.review_status || ""] || detail.review_status || "Não informada"}</dd></div>
+            <div><dt>Prazo do comprovante</dt><dd>{(() => { const doc = documents.find((item) => item.fueling_id === detail.id && item.is_current); const deadline = doc?.due_at ? Date.parse(doc.due_at) : Date.parse(detail.performed_at) + receiptWindowHours * 60 * 60 * 1000; return doc?.document_status === "ACEITO" || doc?.document_status === "CONFERIDO" ? "Conferido" : Date.now() > deadline ? "Vencido" : "Aguardando envio/conferência"; })()}</dd></div>
+            {detail.entry_type === "POSTERIOR" && <div className="supplier-wide"><dt>Justificativa do lançamento posterior</dt><dd>{detail.late_entry_reason || "Não informada"}</dd></div>}
+            {detail.notes && <div className="supplier-wide"><dt>Observações enviadas pelo posto</dt><dd>{detail.notes}</dd></div>}
+          </dl>
+          <div className="supplier-review-actions"><button type="button" className="supplier-welcome-secondary" onClick={() => setDetail(null)}><X size={14} /> Fechar</button></div>
+        </section>
+      </div>}
     </section>
   );
 }

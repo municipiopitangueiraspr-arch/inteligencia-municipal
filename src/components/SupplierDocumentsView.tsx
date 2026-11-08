@@ -8,6 +8,8 @@ type Fueling = {
   fuel_type_id: string;
   performed_at: string;
   submitted_at: string;
+  driver_name?: string | null;
+  protocol_number?: string | null;
   liters: number;
   total_amount: number;
   status: string;
@@ -17,7 +19,7 @@ type Fueling = {
 };
 type VehicleOption = { id: string; placa: string; marca: string | null; modelo: string | null };
 type FuelOption = { id: string; nome: string; sigla: string | null };
-type DocumentRecord = { id: string; fueling_id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null };
+type DocumentRecord = { id: string; fueling_id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; due_at?: string | null; is_current: boolean; rejection_reason: string | null };
 type Preview = { title: string; url: string; mimeType: string; file?: File; mode: "local" | "stored" };
 type Props = {
   fuelings: Fueling[];
@@ -30,6 +32,7 @@ type Props = {
   onLoadMore: () => void;
   onUpload: (fuelingId: string, file: File) => Promise<{ error: Error | null }>;
   onRefresh: () => Promise<void>;
+  receiptWindowHours: number;
 };
 
 type DateMode = "specific" | "period";
@@ -52,7 +55,7 @@ const localDay = (value: string) => {
 const isChecked = (status?: string) => status === "ACEITO" || status === "CONFERIDO";
 const isWaiting = (status?: string) => status === "ENVIADO" || status === "EM_ANALISE" || status === "PENDENTE";
 
-export function SupplierDocumentsView({ fuelings, documents, vehicles, fuelTypes, loading, loadingMore, hasMore, onLoadMore, onUpload, onRefresh }: Props) {
+export function SupplierDocumentsView({ fuelings, documents, vehicles, fuelTypes, loading, loadingMore, hasMore, onLoadMore, onUpload, onRefresh, receiptWindowHours }: Props) {
   const [dateMode, setDateMode] = useState<DateMode>("specific");
   const [specificDate, setSpecificDate] = useState("");
   const [dateStart, setDateStart] = useState("");
@@ -174,8 +177,23 @@ export function SupplierDocumentsView({ fuelings, documents, vehicles, fuelTypes
         const locked = isLocked(document);
         const vehicle = fueling.vehicles?.placa || vehicles.find((item) => item.id === fueling.vehicle_id)?.placa || "Veículo não identificado";
         const fuelName = fueling.fuel_type?.nome || fuelTypes.find((item) => item.id === fueling.fuel_type_id)?.nome || "Combustível";
+        const deadline = document?.due_at || new Date(Date.parse(fueling.performed_at) + receiptWindowHours * 60 * 60 * 1000).toISOString();
+        const deadlineOver = Date.parse(deadline) < Date.now() && !isChecked(document?.document_status);
         return <article className="supplier-document-card" key={fueling.id}>
-          <div className="supplier-document-card-main"><span className="supplier-document-card-icon"><FileCheck2 size={19} /></span><div className="supplier-document-card-details"><strong>{vehicle}</strong><small>{fueling.vehicles?.modelo || ""}{fueling.vehicles?.modelo ? " · " : ""}{fuelName} · {Number(fueling.liters).toLocaleString("pt-BR")} L</small><small><CalendarDays size={12} /> {dateTime(fueling.performed_at)}</small>{document && <small className="supplier-document-filename"><FileText size={12} /> {document.file_name} · enviado em {dateTime(document.uploaded_at)}</small>}{document?.document_status === "REJEITADO" && document.rejection_reason && <small className="supplier-rejection-reason">Motivo: {document.rejection_reason}</small>}</div></div>
+          <div className="supplier-document-card-main">
+            <span className="supplier-document-card-icon"><FileCheck2 size={19} /></span>
+            <div className="supplier-document-card-details">
+              <strong>{vehicle}</strong>
+              <small>{fueling.vehicles?.modelo || ""}{fueling.vehicles?.modelo ? " · " : ""}{fuelName} · {Number(fueling.liters).toLocaleString("pt-BR")} L</small>
+              <small><CalendarDays size={12} /> {dateTime(fueling.performed_at)} · {fueling.driver_name || "Motorista não informado"}</small>
+              {fueling.protocol_number && <small>Protocolo {fueling.protocol_number}{fueling.station_receipt_number ? ` · Recibo ${fueling.station_receipt_number}` : ""}</small>}
+              {document && <small className="supplier-document-filename"><FileText size={12} /> {document.file_name} · enviado em {dateTime(document.uploaded_at)}</small>}
+              <small className={deadlineOver ? "supplier-rejection-reason" : "supplier-upload-note"}>
+                <Clock3 size={12} /> {deadlineOver ? "Prazo de envio expirado · envie assim que possível" : `Prazo para envio: ${dateTime(deadline)}`}
+              </small>
+              {document?.document_status === "REJEITADO" && document.rejection_reason && <small className="supplier-rejection-reason">Motivo: {document.rejection_reason}</small>}
+            </div>
+          </div>
           <span className={`supplier-status supplier-status-${meta.tone}`}><span className="supplier-status-dot" />{meta.label}</span>
           <div className="supplier-document-card-actions">
             {document && <button className="supplier-secondary" type="button" onClick={() => void viewStoredDocument(document)} disabled={previewLoading}><Eye size={14} />{previewLoading ? "Abrindo…" : "Ver comprovante"}</button>}

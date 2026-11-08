@@ -35,6 +35,7 @@ function App() {
   const [isSupplierAccount, setIsSupplierAccount] = useState(false)
   const [activeArea, setActiveArea] = useState<'dashboard' | 'fleet'>('dashboard')
   const [email, setEmail] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -52,6 +53,8 @@ function App() {
       const supplierIdentity = isSupplierIdentity(user)
       const supplierRoute = new URLSearchParams(window.location.search).get('portal') === 'fornecedor' || window.location.hash === '#portal'
       setEmail(user.email || '')
+      const profileName = String(user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.nome || '').trim()
+      setDisplayName(profileName || user.email || '')
       setIsSupplierAccount(supplierIdentity)
       if (supplierIdentity || supplierRoute) {
         setSupplierMode(true)
@@ -88,6 +91,8 @@ function App() {
     const supplierIdentity = isSupplierIdentity(data.user)
     const useSupplierPortal = supplierMode || supplierIdentity
     setEmail(accountEmail)
+    const profileName = String(data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.user_metadata?.nome || '').trim()
+    setDisplayName(profileName || accountEmail)
     setIsSupplierAccount(supplierIdentity)
     if (supplierIdentity) setSupplierMode(true)
     setRequiresPasswordSetup(data.user.user_metadata?.cadastro_por_convite === true)
@@ -113,6 +118,7 @@ function App() {
     if (supabase) await supabase.auth.signOut()
     setSignedIn(false)
     setActiveArea('dashboard')
+    setDisplayName('')
     setSupplierContext(null)
     setRequiresPasswordSetup(false)
     setIsSupplierAccount(false)
@@ -123,7 +129,7 @@ function App() {
 
   if (sessionChecking) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#344054', background: '#f6f8fb' }}>Verificando sessão segura…</div>
   if (signedIn && requiresPasswordSetup) return <FirstAccessPasswordSetup isSupplier={isSupplierAccount} onComplete={() => setRequiresPasswordSetup(false)} onLogout={() => void logout()} />
-  if (signedIn && supplierMode && supplierContext) return <SupplierPortal station={supplierContext.station} role={supplierContext.role} userEmail={email} initialVehicleId={supplierContext.vehicleId} accessReason={supplierContext.accessReason} onLogout={() => void logout()} />
+  if (signedIn && supplierMode && supplierContext) return <SupplierPortal station={supplierContext.station} role={supplierContext.role} userEmail={email} userDisplayName={displayName || email} initialVehicleId={supplierContext.vehicleId} accessReason={supplierContext.accessReason} onLogout={() => void logout()} />
   if (signedIn && supplierMode) return <SupplierAccessRequest authenticatedEmail={email} onBack={() => void logout()} />
   if (signedIn) {
     if (activeArea === 'fleet') return <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
