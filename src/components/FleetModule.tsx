@@ -17,6 +17,7 @@ type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
 type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
 type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null; fuel_type?: { nome?: string } | null }
+type ConfirmationRequest = { eyebrow: string; title: string; message: string; details: string[]; confirmLabel: string; tone?: 'danger'; onConfirm: () => Promise<string | null> }
 
 const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
@@ -63,6 +64,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const [showVehicleForm, setShowVehicleForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
+  const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null)
   const [vehicleForm, setVehicleForm] = useState({ placa: '', marca: '', modelo: '', ano_fabricacao: '', ano_modelo: '', chassi: '', renavam: '', fuel_type_id: '', tank_capacity_l: '60', responsible_unit_id: '', operational_status: 'ATIVO', current_odometer_km: '', notes: '' })
 
   async function loadData() {
@@ -94,24 +96,52 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const monthFuelings = useMemo(() => fuelings.filter((fueling) => new Date(fueling.performed_at).getMonth() === new Date().getMonth()).length, [fuelings])
   const monthTotal = useMemo(() => fuelings.filter((fueling) => new Date(fueling.performed_at).getMonth() === new Date().getMonth()).reduce((sum, fueling) => sum + Number(fueling.total_amount || 0), 0), [fuelings])
 
-  async function createVehicle(event: React.FormEvent<HTMLFormElement>) {
+  function requestVehicleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!supabase) return
-    setSaving(true); setError('')
-    const payload = { placa: vehicleForm.placa.trim().toUpperCase(), marca: vehicleForm.marca.trim() || null, modelo: vehicleForm.modelo.trim() || null, ano_fabricacao: vehicleForm.ano_fabricacao ? Number(vehicleForm.ano_fabricacao) : null, ano_modelo: vehicleForm.ano_modelo ? Number(vehicleForm.ano_modelo) : null, chassi: vehicleForm.chassi.trim() || null, renavam: vehicleForm.renavam.trim() || null, fuel_type_id: vehicleForm.fuel_type_id || null, tank_capacity_l: Number(vehicleForm.tank_capacity_l), responsible_unit_id: vehicleForm.responsible_unit_id || null, operational_status: vehicleForm.operational_status, current_odometer_km: vehicleForm.current_odometer_km ? Number(vehicleForm.current_odometer_km) : null, notes: vehicleForm.notes.trim() || null, updated_at: new Date().toISOString() }
-    const { data: municipality } = await supabase.rpc('fleet_current_municipio_id')
-    const { data: currentUser } = await supabase.rpc('fleet_current_usuario_id')
-    const result = editingVehicle ? await supabase.from('fleet_vehicles').update(payload).eq('id', editingVehicle.id) : await supabase.from('fleet_vehicles').insert({ ...payload, municipio_id: municipality, created_by: currentUser })
-    const insertError = result.error
-    setSaving(false)
-    if (insertError) { setError(insertError.code === '23505' ? 'Já existe um veículo com esta placa.' : 'Não foi possível cadastrar o veículo.'); return }
-    let historyWarning = ''
-    if (editingVehicle) {
-      const eventType = editingVehicle.operational_status !== payload.operational_status ? 'SITUACAO' : editingVehicle.responsible_unit_id !== payload.responsible_unit_id ? 'TRANSFERENCIA' : 'ALTERACAO'
-      const historyResult = await supabase.from('fleet_vehicle_history').insert({ municipio_id: municipality, vehicle_id: editingVehicle.id, event_type: eventType, previous_data: editingVehicle, new_data: payload, reason: 'Edição realizada no cadastro oficial de veículos.', changed_by: currentUser })
-      if (historyResult.error) historyWarning = 'Veículo atualizado, mas o histórico da alteração não pôde ser registrado.'
+    setError('')
+    const plate = vehicleForm.placa.trim().toUpperCase()
+    const action = editingVehicle ? 'editar' : 'cadastrar'
+    setConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: editingVehicle ? 'Confirmar alteração do veículo' : 'Confirmar cadastro do veículo',
+      message: `Revise os dados abaixo. Ao confirmar, o sistema irá ${action} este registro oficial da frota.`,
+      details: [
+        `Placa: ${plate || 'Não informada'}`,
+        `Veículo: ${[vehicleForm.marca, vehicleForm.modelo].filter(Boolean).join(' ') || 'Não informado'}`,
+        `Situação: ${statusLabel[vehicleForm.operational_status] || vehicleForm.operational_status}`,
+      ],
+      confirmLabel: editingVehicle ? 'Confirmar e salvar alterações' : 'Confirmar cadastro',
+      onConfirm: saveVehicle,
+    })
+  }
+
+  async function saveVehicle(): Promise<string | null> {
+    if (!supabase) return 'O serviço de dados está indisponível. Tente novamente.'
+    setSaving(true)
+    setError('')
+    try {
+      const payload = { placa: vehicleForm.placa.trim().toUpperCase(), marca: vehicleForm.marca.trim() || null, modelo: vehicleForm.modelo.trim() || null, ano_fabricacao: vehicleForm.ano_fabricacao ? Number(vehicleForm.ano_fabricacao) : null, ano_modelo: vehicleForm.ano_modelo ? Number(vehicleForm.ano_modelo) : null, chassi: vehicleForm.chassi.trim() || null, renavam: vehicleForm.renavam.trim() || null, fuel_type_id: vehicleForm.fuel_type_id || null, tank_capacity_l: Number(vehicleForm.tank_capacity_l), responsible_unit_id: vehicleForm.responsible_unit_id || null, operational_status: vehicleForm.operational_status, current_odometer_km: vehicleForm.current_odometer_km ? Number(vehicleForm.current_odometer_km) : null, notes: vehicleForm.notes.trim() || null, updated_at: new Date().toISOString() }
+      const { data: municipality } = await supabase.rpc('fleet_current_municipio_id')
+      const { data: currentUser } = await supabase.rpc('fleet_current_usuario_id')
+      const result = editingVehicle ? await supabase.from('fleet_vehicles').update(payload).eq('id', editingVehicle.id) : await supabase.from('fleet_vehicles').insert({ ...payload, municipio_id: municipality, created_by: currentUser })
+      if (result.error) return result.error.code === '23505' ? 'Já existe um veículo com esta placa.' : 'Não foi possível salvar o veículo. Verifique suas permissões e tente novamente.'
+      let historyWarning = ''
+      if (editingVehicle) {
+        const eventType = editingVehicle.operational_status !== payload.operational_status ? 'SITUACAO' : editingVehicle.responsible_unit_id !== payload.responsible_unit_id ? 'TRANSFERENCIA' : 'ALTERACAO'
+        const historyResult = await supabase.from('fleet_vehicle_history').insert({ municipio_id: municipality, vehicle_id: editingVehicle.id, event_type: eventType, previous_data: editingVehicle, new_data: payload, reason: 'Edição realizada no cadastro oficial de veículos.', changed_by: currentUser })
+        if (historyResult.error) historyWarning = 'Veículo atualizado, mas o histórico da alteração não pôde ser registrado.'
+      }
+      setShowVehicleForm(false)
+      setEditingVehicle(null)
+      resetVehicleForm()
+      await loadData()
+      if (historyWarning) setError(historyWarning)
+      return null
+    } catch {
+      return 'Ocorreu uma falha de conexão e o veículo não pôde ser salvo. Tente novamente.'
+    } finally {
+      setSaving(false)
     }
-    setShowVehicleForm(false); setEditingVehicle(null); resetVehicleForm(); await loadData(); if (historyWarning) setError(historyWarning)
   }
 
   function resetVehicleForm() { setVehicleForm({ placa: '', marca: '', modelo: '', ano_fabricacao: '', ano_modelo: '', chassi: '', renavam: '', fuel_type_id: '', tank_capacity_l: '60', responsible_unit_id: '', operational_status: 'ATIVO', current_odometer_km: '', notes: '' }) }
@@ -131,7 +161,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {error && <div className="fleet-error" role="alert"><CircleAlert size={17} /> {error}</div>}
         {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
         {view === 'vehicles' && <Vehicles vehicles={vehicles} units={units} fuelTypes={fuelTypes} loading={loading} onAdd={openNewVehicle} onEdit={openEditVehicle} />}
-        {view === 'fuelTypes' && <FuelTypesView onChanged={loadData} />}
+        {view === 'fuelTypes' && <FuelTypesView onChanged={loadData} onRequestConfirmation={setConfirmation} />}
         {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
         {view === 'closure' && <MonthlyClosure />}
         {view === 'analytics' && <FuelConsumptionDashboard />}
@@ -142,7 +172,33 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'settings' && <SettingsPanel />}
       </div>
     </main>
-    {showVehicleForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowVehicleForm(false)}><form className="fleet-modal fleet-vehicle-modal" onSubmit={createVehicle}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CADASTRO OFICIAL</span><h2>{editingVehicle ? 'Editar veículo' : 'Novo veículo'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowVehicleForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Somente Gestor de Frotas ou Administrador pode alterar dados oficiais. Inativar preserva o histórico.</p><div className="fleet-form-section-title"><Truck size={15} /> Identificação do veículo</div><div className="fleet-form-grid"><label>Placa<input required maxLength={10} value={vehicleForm.placa} onChange={(event) => setVehicleForm({ ...vehicleForm, placa: event.target.value })} placeholder="ABC-1D23" /></label><label>Marca<input value={vehicleForm.marca} onChange={(event) => setVehicleForm({ ...vehicleForm, marca: event.target.value })} placeholder="Ex.: Renault" /></label><label>Modelo<input value={vehicleForm.modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, modelo: event.target.value })} placeholder="Ex.: Kangoo" /></label><label>Ano de fabricação<input type="number" min="1900" max="2200" value={vehicleForm.ano_fabricacao} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_fabricacao: event.target.value })} /></label><label>Ano do modelo<input type="number" min="1900" max="2200" value={vehicleForm.ano_modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_modelo: event.target.value })} /></label><label>Chassi<input maxLength={30} value={vehicleForm.chassi} onChange={(event) => setVehicleForm({ ...vehicleForm, chassi: event.target.value })} /></label><label>Renavam<input maxLength={20} value={vehicleForm.renavam} onChange={(event) => setVehicleForm({ ...vehicleForm, renavam: event.target.value })} /></label></div><div className="fleet-form-section-title"><Fuel size={15} /> Operação e responsabilidade</div><div className="fleet-form-grid"><label>Tipo de combustível<select value={vehicleForm.fuel_type_id} onChange={(event) => setVehicleForm({ ...vehicleForm, fuel_type_id: event.target.value })}><option value="">Não informado</option>{fuelTypes.filter((fuel) => fuel.ativo !== false).map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ''}</option>)}</select></label><label>Secretaria responsável<select value={vehicleForm.responsible_unit_id} onChange={(event) => setVehicleForm({ ...vehicleForm, responsible_unit_id: event.target.value })}><option value="">Não informada</option>{units.filter((unit) => unit.ativo !== false).map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label><label>Capacidade do tanque (litros)<input required type="number" min="1" step="0.01" value={vehicleForm.tank_capacity_l} onChange={(event) => setVehicleForm({ ...vehicleForm, tank_capacity_l: event.target.value })} /></label><label>Odômetro de referência (km)<input type="number" min="0" step="0.01" value={vehicleForm.current_odometer_km} onChange={(event) => setVehicleForm({ ...vehicleForm, current_odometer_km: event.target.value })} /></label><label>Situação operacional<select value={vehicleForm.operational_status} onChange={(event) => setVehicleForm({ ...vehicleForm, operational_status: event.target.value })}><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option><option value="EM_MANUTENCAO">Em manutenção</option><option value="BAIXADO">Baixado</option><option value="CEDIDO">Cedido</option></select></label><label className="fleet-form-wide">Observações<textarea value={vehicleForm.notes} onChange={(event) => setVehicleForm({ ...vehicleForm, notes: event.target.value })} placeholder="Informações complementares, características ou justificativa da situação..." /></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowVehicleForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editingVehicle ? 'Salvar alterações' : 'Cadastrar veículo'}</button></div></form></div>}
+    {showVehicleForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowVehicleForm(false)}><form className="fleet-modal fleet-vehicle-modal" onSubmit={requestVehicleSave}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CADASTRO OFICIAL</span><h2>{editingVehicle ? 'Editar veículo' : 'Novo veículo'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowVehicleForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Somente Gestor de Frotas ou Administrador pode alterar dados oficiais. Inativar preserva o histórico.</p><div className="fleet-form-section-title"><Truck size={15} /> Identificação do veículo</div><div className="fleet-form-grid"><label>Placa<input required maxLength={10} value={vehicleForm.placa} onChange={(event) => setVehicleForm({ ...vehicleForm, placa: event.target.value })} placeholder="ABC-1D23" /></label><label>Marca<input value={vehicleForm.marca} onChange={(event) => setVehicleForm({ ...vehicleForm, marca: event.target.value })} placeholder="Ex.: Renault" /></label><label>Modelo<input value={vehicleForm.modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, modelo: event.target.value })} placeholder="Ex.: Kangoo" /></label><label>Ano de fabricação<input type="number" min="1900" max="2200" value={vehicleForm.ano_fabricacao} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_fabricacao: event.target.value })} /></label><label>Ano do modelo<input type="number" min="1900" max="2200" value={vehicleForm.ano_modelo} onChange={(event) => setVehicleForm({ ...vehicleForm, ano_modelo: event.target.value })} /></label><label>Chassi<input maxLength={30} value={vehicleForm.chassi} onChange={(event) => setVehicleForm({ ...vehicleForm, chassi: event.target.value })} /></label><label>Renavam<input maxLength={20} value={vehicleForm.renavam} onChange={(event) => setVehicleForm({ ...vehicleForm, renavam: event.target.value })} /></label></div><div className="fleet-form-section-title"><Fuel size={15} /> Operação e responsabilidade</div><div className="fleet-form-grid"><label>Tipo de combustível<select value={vehicleForm.fuel_type_id} onChange={(event) => setVehicleForm({ ...vehicleForm, fuel_type_id: event.target.value })}><option value="">Não informado</option>{fuelTypes.filter((fuel) => fuel.ativo !== false).map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ''}</option>)}</select></label><label>Secretaria responsável<select value={vehicleForm.responsible_unit_id} onChange={(event) => setVehicleForm({ ...vehicleForm, responsible_unit_id: event.target.value })}><option value="">Não informada</option>{units.filter((unit) => unit.ativo !== false).map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label><label>Capacidade do tanque (litros)<input required type="number" min="1" step="0.01" value={vehicleForm.tank_capacity_l} onChange={(event) => setVehicleForm({ ...vehicleForm, tank_capacity_l: event.target.value })} /></label><label>Odômetro de referência (km)<input type="number" min="0" step="0.01" value={vehicleForm.current_odometer_km} onChange={(event) => setVehicleForm({ ...vehicleForm, current_odometer_km: event.target.value })} /></label><label>Situação operacional<select value={vehicleForm.operational_status} onChange={(event) => setVehicleForm({ ...vehicleForm, operational_status: event.target.value })}><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option><option value="EM_MANUTENCAO">Em manutenção</option><option value="BAIXADO">Baixado</option><option value="CEDIDO">Cedido</option></select></label><label className="fleet-form-wide">Observações<textarea value={vehicleForm.notes} onChange={(event) => setVehicleForm({ ...vehicleForm, notes: event.target.value })} placeholder="Informações complementares, características ou justificativa da situação..." /></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowVehicleForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editingVehicle ? 'Salvar alterações' : 'Cadastrar veículo'}</button></div></form></div>}
+    {confirmation && <FleetConfirmDialog request={confirmation} onClose={() => setConfirmation(null)} />}
+  </div>
+}
+
+function FleetConfirmDialog({ request, onClose }: { request: ConfirmationRequest; onClose: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function confirm() {
+    setBusy(true); setError('')
+    try {
+      const result = await request.onConfirm()
+      if (result) { setError(result); setBusy(false); return }
+      onClose()
+    } catch {
+      setError('A operação não pôde ser concluída. Tente novamente.')
+      setBusy(false)
+    }
+  }
+  return <div className="fleet-confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+    <section className="fleet-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="fleet-confirm-title">
+      <header className="fleet-confirm-heading"><span className={`fleet-confirm-emblem ${request.tone === 'danger' ? 'danger' : ''}`}><ShieldCheck size={20} /></span><div><span className="fleet-kicker">{request.eyebrow}</span><h2 id="fleet-confirm-title">{request.title}</h2></div></header>
+      <p className="fleet-confirm-message">{request.message}</p>
+      {request.details.length > 0 && <div className="fleet-confirm-details">{request.details.map((detail) => <div key={detail}><CheckCircle2 size={14} /><span>{detail}</span></div>)}</div>}
+      {error && <div className="fleet-confirm-error" role="alert"><CircleAlert size={15} />{error}</div>}
+      <footer className="fleet-confirm-actions"><button className="fleet-secondary-button" type="button" onClick={onClose} disabled={busy}>Cancelar</button><button className={`fleet-primary-button ${request.tone === 'danger' ? 'fleet-confirm-danger' : ''}`} type="button" onClick={() => void confirm()} disabled={busy}><ShieldCheck size={15} />{busy ? 'Salvando…' : request.confirmLabel}</button></footer>
+    </section>
   </div>
 }
 
@@ -215,7 +271,9 @@ function Vehicles({ vehicles, units, fuelTypes, loading, onAdd, onEdit }: { vehi
 type FuelTypeRecord = { id: string; nome: string; sigla: string | null; unidade_medida: string; ativo: boolean; created_at?: string; updated_at?: string }
 type FuelTypeUse = { id: string; fuel_type_id: string; performed_at: string; liters: number; status: string; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null }
 
-function FuelTypesView({ onChanged }: { onChanged: () => Promise<void> }) {
+type FuelTypeSortKey = 'name' | 'sigla' | 'unit' | 'status' | 'usage' | 'lastUse'
+
+function FuelTypesView({ onChanged, onRequestConfirmation }: { onChanged: () => Promise<void>; onRequestConfirmation: (request: ConfirmationRequest) => void }) {
   const [fuelTypes, setFuelTypes] = useState<FuelTypeRecord[]>([])
   const [uses, setUses] = useState<FuelTypeUse[]>([])
   const [loading, setLoading] = useState(true)
@@ -224,7 +282,14 @@ function FuelTypesView({ onChanged }: { onChanged: () => Promise<void> }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<FuelTypeRecord | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [unitFilter, setUnitFilter] = useState('')
+  const [activeFilter, setActiveFilter] = useState('')
+  const [usageFilter, setUsageFilter] = useState('')
+  const [sortKey, setSortKey] = useState<FuelTypeSortKey>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [form, setForm] = useState({ nome: '', sigla: '', unidade_medida: 'L', ativo: 'true' })
+  const collator = useMemo(() => new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }), [])
 
   async function loadFuelTypes() {
     if (!supabase) return
@@ -238,18 +303,122 @@ function FuelTypesView({ onChanged }: { onChanged: () => Promise<void> }) {
     setLoading(false)
   }
   useEffect(() => { void loadFuelTypes() }, [])
-  const usageCount = (id: string) => uses.filter((use) => use.fuel_type_id === id && use.status !== 'CANCELADO').length
-  const lastUse = (id: string) => uses.find((use) => use.fuel_type_id === id)?.performed_at
+  const usageCount = useCallback((id: string) => uses.filter((use) => use.fuel_type_id === id && use.status !== 'CANCELADO').length, [uses])
+  const lastUse = useCallback((id: string) => uses.find((use) => use.fuel_type_id === id)?.performed_at, [uses])
   const selectedType = fuelTypes.find((fuel) => fuel.id === selected) || null
   const selectedUses = selected ? uses.filter((use) => use.fuel_type_id === selected) : []
+  const unitOptions = useMemo(() => Array.from(new Set(fuelTypes.map((fuel) => fuel.unidade_medida).filter(Boolean))).sort(collator.compare), [fuelTypes, collator])
+  const visibleFuelTypes = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('pt-BR')
+    const filtered = fuelTypes.filter((fuel) => {
+      const searchable = [fuel.nome, fuel.sigla, fuel.unidade_medida].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR')
+      const count = usageCount(fuel.id)
+      return (!term || searchable.includes(term))
+        && (!unitFilter || fuel.unidade_medida === unitFilter)
+        && (!activeFilter || (activeFilter === 'ATIVO') === fuel.ativo)
+        && (!usageFilter || (usageFilter === 'COM_USO' ? count > 0 : count === 0))
+    })
+    const compare = (a: FuelTypeRecord, b: FuelTypeRecord) => {
+      switch (sortKey) {
+        case 'name': return collator.compare(a.nome, b.nome)
+        case 'sigla': return collator.compare(a.sigla || '', b.sigla || '')
+        case 'unit': return collator.compare(a.unidade_medida || '', b.unidade_medida || '')
+        case 'status': return collator.compare(a.ativo ? 'Ativo' : 'Inativo', b.ativo ? 'Ativo' : 'Inativo')
+        case 'usage': return usageCount(a.id) - usageCount(b.id)
+        case 'lastUse': return (lastUse(a.id) ? Date.parse(lastUse(a.id) as string) : 0) - (lastUse(b.id) ? Date.parse(lastUse(b.id) as string) : 0)
+      }
+    }
+    return filtered.sort((a, b) => compare(a, b) * (sortDirection === 'asc' ? 1 : -1))
+  }, [fuelTypes, search, unitFilter, activeFilter, usageFilter, sortKey, sortDirection, collator, usageCount, lastUse])
+  const activeFilters = Number(Boolean(search.trim())) + Number(Boolean(unitFilter)) + Number(Boolean(activeFilter)) + Number(Boolean(usageFilter))
+  function clearFilters() { setSearch(''); setUnitFilter(''); setActiveFilter(''); setUsageFilter('') }
+  function sortBy(key: FuelTypeSortKey) {
+    if (sortKey === key) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection('asc') }
+  }
+  function sortHeading(key: FuelTypeSortKey, label: string) {
+    const Icon = sortKey === key ? sortDirection === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
+    return <button type="button" className="fleet-sort-button" onClick={() => sortBy(key)} aria-label={`Ordenar por ${label}${sortKey === key ? sortDirection === 'asc' ? ', crescente' : ', decrescente' : ''}`}><span>{label}</span><Icon size={13} aria-hidden="true" /></button>
+  }
+  const sortAria = (key: FuelTypeSortKey) => sortKey === key ? sortDirection === 'asc' ? 'ascending' as const : 'descending' as const : 'none' as const
   function resetForm() { setForm({ nome: '', sigla: '', unidade_medida: 'L', ativo: 'true' }) }
   function openNew() { setEditing(null); resetForm(); setShowForm(true) }
   function openEdit(fuel: FuelTypeRecord) { setEditing(fuel); setForm({ nome: fuel.nome, sigla: fuel.sigla || '', unidade_medida: fuel.unidade_medida || 'L', ativo: String(fuel.ativo) }); setShowForm(true) }
-  async function save(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); if (!supabase) return; setSaving(true); setError(''); const payload = { nome: form.nome.trim(), sigla: form.sigla.trim().toUpperCase() || null, unidade_medida: form.unidade_medida.trim() || 'L', ativo: form.ativo === 'true', updated_at: new Date().toISOString() }; const result = editing ? await supabase.from('fleet_fuel_types').update(payload).eq('id', editing.id) : await supabase.from('fleet_fuel_types').insert({ ...payload, municipio_id: (await supabase.rpc('fleet_current_municipio_id')).data, created_by: (await supabase.rpc('fleet_current_usuario_id')).data }); setSaving(false); if (result.error) { setError(result.error.code === '23505' ? 'Já existe um tipo de combustível com este nome.' : 'Não foi possível salvar o tipo de combustível.'); return } setShowForm(false); setEditing(null); resetForm(); await loadFuelTypes(); await onChanged() }
-  async function toggleActive(fuel: FuelTypeRecord) { if (!supabase) return; setSaving(true); setError(''); const result = await supabase.from('fleet_fuel_types').update({ ativo: !fuel.ativo, updated_at: new Date().toISOString() }).eq('id', fuel.id); setSaving(false); if (result.error) setError('Não foi possível alterar a situação deste combustível.'); else { await loadFuelTypes(); await onChanged() } }
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">TABELA DE REFERÊNCIA</span><h2>Tipos de combustível</h2><p>Cadastre os combustíveis oficiais sem perder o histórico dos abastecimentos.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo combustível</button></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-fueltype-note"><History size={16} /><span>Inativar impede novos usos no cadastro, mas mantém os abastecimentos históricos vinculados ao tipo.</span></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelTypes.length ? <table className="fleet-table fleet-fueltype-table"><thead><tr><th>Combustível</th><th>Sigla</th><th>Unidade</th><th>Situação</th><th>Uso histórico</th><th>Último uso</th><th /></tr></thead><tbody>{fuelTypes.map((fuel) => <tr key={fuel.id}><td><strong>{fuel.nome}</strong><small>Cadastrado em {fuel.created_at ? formatDate(fuel.created_at) : '—'}</small></td><td className="fleet-plate">{fuel.sigla || '—'}</td><td>{fuel.unidade_medida}</td><td><StatusChip value={fuel.ativo ? 'ATIVO' : 'INATIVO'} /></td><td>{usageCount(fuel.id).toLocaleString('pt-BR')} abastecimento(s)</td><td>{lastUse(fuel.id) ? formatDate(lastUse(fuel.id)) : 'Nunca utilizado'}</td><td><div className="fleet-row-actions"><button className="fleet-row-action" aria-label={`Ver histórico de ${fuel.nome}`} onClick={() => setSelected(selected === fuel.id ? null : fuel.id)}><History size={15} /></button><button className="fleet-row-action" aria-label={`Editar ${fuel.nome}`} onClick={() => openEdit(fuel)}><Pencil size={15} /></button><button className="fleet-row-action" aria-label={`${fuel.ativo ? 'Inativar' : 'Ativar'} ${fuel.nome}`} onClick={() => void toggleActive(fuel)} disabled={saving}>{fuel.ativo ? <span className="fleet-action-label danger">Inativar</span> : <span className="fleet-action-label success">Ativar</span>}</button></div></td></tr>)}{selectedType && <tr className="fleet-history-row"><td colSpan={7}><div className="fleet-history-heading"><div><span className="fleet-kicker">HISTÓRICO DE UTILIZAÇÃO</span><strong>{selectedType.nome}</strong></div><button className="fleet-close" onClick={() => setSelected(null)}><X size={16} /></button></div>{selectedUses.length ? <div className="fleet-history-list">{selectedUses.slice(0, 20).map((use) => <div className="fleet-history-item" key={use.id}><span>{formatDate(use.performed_at)}</span><strong>{use.vehicles?.placa || 'Veículo não informado'}</strong><span>{use.stations?.nome_fantasia_snapshot || 'Posto não informado'}</span><span>{Number(use.liters).toLocaleString('pt-BR')} {selectedType.unidade_medida}</span><StatusChip value={use.status} /></div>)}</div> : <p className="fleet-history-empty">Nenhum abastecimento foi registrado com este combustível.</p>}</td></tr>}</tbody></table> : <EmptyState icon={Fuel} title="Nenhum combustível cadastrado" text="Cadastre o primeiro tipo para liberar a seleção nos veículos e abastecimentos." action="Novo combustível" onAction={openNew} />}</div>{showForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowForm(false)}><form className="fleet-modal fleet-fueltype-modal" onSubmit={save}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO OPERACIONAL</span><h2>{editing ? 'Editar combustível' : 'Novo combustível'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Gestor de Frotas ou Administrador pode cadastrar e alterar esta referência.</p><div className="fleet-form-grid"><label>Nome do combustível<input required maxLength={80} value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} placeholder="Ex.: Diesel S-10" /></label><label>Sigla<input maxLength={12} value={form.sigla} onChange={(event) => setForm({ ...form, sigla: event.target.value })} placeholder="Ex.: S10" /></label><label>Unidade de medida<input required maxLength={10} value={form.unidade_medida} onChange={(event) => setForm({ ...form, unidade_medida: event.target.value })} placeholder="L" /></label><label>Situação<select value={form.ativo} onChange={(event) => setForm({ ...form, ativo: event.target.value })}><option value="true">Ativo</option><option value="false">Inativo</option></select></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar combustível'}</button></div></form></div>}</section>
-}
 
+  function requestSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const name = form.nome.trim()
+    const action = editing ? 'alterar' : 'cadastrar'
+    onRequestConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: editing ? 'Confirmar alteração do combustível' : 'Confirmar cadastro do combustível',
+      message: `Confira os dados. Ao confirmar, o sistema irá ${action} esta referência da frota.`,
+      details: [`Combustível: ${name || 'Não informado'}`, `Sigla: ${form.sigla.trim().toUpperCase() || 'Não informada'}`, `Unidade: ${form.unidade_medida.trim() || 'Não informada'}`, `Situação: ${form.ativo === 'true' ? 'Ativo' : 'Inativo'}`],
+      confirmLabel: editing ? 'Confirmar e salvar alterações' : 'Confirmar cadastro',
+      onConfirm: saveFuelType,
+    })
+  }
+
+  async function saveFuelType(): Promise<string | null> {
+    if (!supabase) return 'O serviço de dados está indisponível. Tente novamente.'
+    setSaving(true); setError('')
+    try {
+      const payload = { nome: form.nome.trim(), sigla: form.sigla.trim().toUpperCase() || null, unidade_medida: form.unidade_medida.trim() || 'L', ativo: form.ativo === 'true', updated_at: new Date().toISOString() }
+      const result = editing
+        ? await supabase.from('fleet_fuel_types').update(payload).eq('id', editing.id)
+        : await supabase.from('fleet_fuel_types').insert({ ...payload, municipio_id: (await supabase.rpc('fleet_current_municipio_id')).data, created_by: (await supabase.rpc('fleet_current_usuario_id')).data })
+      if (result.error) return result.error.code === '23505' ? 'Já existe um tipo de combustível com este nome.' : 'Não foi possível salvar este combustível. Verifique suas permissões e tente novamente.'
+      setShowForm(false); setEditing(null); resetForm()
+      await loadFuelTypes(); await onChanged()
+      return null
+    } catch {
+      return 'Ocorreu uma falha de conexão e o combustível não pôde ser salvo. Tente novamente.'
+    } finally { setSaving(false) }
+  }
+
+  function requestToggleActive(fuel: FuelTypeRecord) {
+    const willActivate = !fuel.ativo
+    onRequestConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: willActivate ? 'Confirmar ativação do combustível' : 'Confirmar inativação do combustível',
+      message: willActivate
+        ? 'Ao ativar, este combustível ficará disponível para novos cadastros e operações da frota.'
+        : 'Ao inativar, este combustível deixará de aparecer para novos usos. O histórico de abastecimentos será preservado.',
+      details: [`Combustível: ${fuel.nome}`, `Sigla: ${fuel.sigla || 'Não informada'}`, `Unidade: ${fuel.unidade_medida}`, `Nova situação: ${willActivate ? 'Ativo' : 'Inativo'}`],
+      confirmLabel: willActivate ? 'Confirmar ativação' : 'Confirmar inativação',
+      tone: willActivate ? undefined : 'danger',
+      onConfirm: async () => {
+        if (!supabase) return 'O serviço de dados está indisponível. Tente novamente.'
+        setSaving(true); setError('')
+        try {
+          const result = await supabase.from('fleet_fuel_types').update({ ativo: willActivate, updated_at: new Date().toISOString() }).eq('id', fuel.id)
+          if (result.error) return 'Não foi possível alterar a situação deste combustível. Verifique suas permissões e tente novamente.'
+          await loadFuelTypes(); await onChanged()
+          return null
+        } catch {
+          return 'Ocorreu uma falha de conexão e a situação não foi alterada. Tente novamente.'
+        } finally { setSaving(false) }
+      },
+    })
+  }
+
+  return <section className="fleet-section fleet-page-section">
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">TABELA DE REFERÊNCIA</span><h2>Tipos de combustível</h2><p>Cadastre, edite, inative e consulte os combustíveis oficiais sem perder o histórico.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo combustível</button></div>
+    {error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}
+    <div className="fleet-fueltype-note"><History size={16} /><span>Inativar impede novos usos no cadastro, mas mantém os abastecimentos históricos vinculados ao tipo.</span></div>
+    <div className="fleet-vehicle-filters fleet-fueltype-filters">
+      <div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros</strong><span>{loading ? 'Carregando combustíveis…' : `${visibleFuelTypes.length.toLocaleString('pt-BR')} de ${fuelTypes.length.toLocaleString('pt-BR')} combustível(is)`}</span></div><button type="button" onClick={clearFilters} disabled={!activeFilters}><RotateCcw size={13} /> Limpar filtros</button></div>
+      <div className="fleet-vehicle-filter-grid fleet-fueltype-filter-grid">
+        <label className="fleet-vehicle-search">Buscar combustível<div><Search size={14} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome ou sigla" /></div></label>
+        <label>Unidade de medida<select value={unitFilter} onChange={(event) => setUnitFilter(event.target.value)}><option value="">Todas as unidades</option>{unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+        <label>Situação<select value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}><option value="">Todas as situações</option><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option></select></label>
+        <label>Uso histórico<select value={usageFilter} onChange={(event) => setUsageFilter(event.target.value)}><option value="">Com ou sem uso</option><option value="COM_USO">Já utilizado</option><option value="SEM_USO">Nunca utilizado</option></select></label>
+      </div>
+    </div>
+    <div className="fleet-table-panel">{loading ? <LoadingRows /> : visibleFuelTypes.length ? <table className="fleet-table fleet-fueltype-table"><thead><tr><th aria-sort={sortAria('name')}>{sortHeading('name', 'Combustível')}</th><th aria-sort={sortAria('sigla')}>{sortHeading('sigla', 'Sigla')}</th><th aria-sort={sortAria('unit')}>{sortHeading('unit', 'Unidade')}</th><th aria-sort={sortAria('status')}>{sortHeading('status', 'Situação')}</th><th aria-sort={sortAria('usage')}>{sortHeading('usage', 'Uso histórico')}</th><th aria-sort={sortAria('lastUse')}>{sortHeading('lastUse', 'Último uso')}</th><th><span className="fleet-sr-only">Ações</span></th></tr></thead><tbody>{visibleFuelTypes.map((fuel) => <tr key={fuel.id}><td><strong>{fuel.nome}</strong><small>Cadastrado em {fuel.created_at ? formatDate(fuel.created_at) : '—'}</small></td><td className="fleet-plate">{fuel.sigla || '—'}</td><td>{fuel.unidade_medida}</td><td><StatusChip value={fuel.ativo ? 'ATIVO' : 'INATIVO'} /></td><td>{usageCount(fuel.id).toLocaleString('pt-BR')} abastecimento(s)</td><td>{lastUse(fuel.id) ? formatDate(lastUse(fuel.id)) : 'Nunca utilizado'}</td><td><div className="fleet-row-actions"><button className="fleet-row-action" aria-label={`Ver histórico de ${fuel.nome}`} onClick={() => setSelected(selected === fuel.id ? null : fuel.id)}><History size={15} /></button><button className="fleet-row-action" aria-label={`Editar ${fuel.nome}`} onClick={() => openEdit(fuel)}><Pencil size={15} /></button><button className="fleet-row-action" aria-label={`${fuel.ativo ? 'Inativar' : 'Ativar'} ${fuel.nome}`} onClick={() => requestToggleActive(fuel)} disabled={saving}>{fuel.ativo ? <span className="fleet-action-label danger">Inativar</span> : <span className="fleet-action-label success">Ativar</span>}</button></div></td></tr>)}{selectedType && visibleFuelTypes.some((fuel) => fuel.id === selectedType.id) && <tr className="fleet-history-row"><td colSpan={7}><div className="fleet-history-heading"><div><span className="fleet-kicker">HISTÓRICO DE UTILIZAÇÃO</span><strong>{selectedType.nome}</strong></div><button className="fleet-close" onClick={() => setSelected(null)} aria-label="Fechar histórico"><X size={16} /></button></div>{selectedUses.length ? <div className="fleet-history-list">{selectedUses.slice(0, 20).map((use) => <div className="fleet-history-item" key={use.id}><span>{formatDate(use.performed_at)}</span><strong>{use.vehicles?.placa || 'Veículo não informado'}</strong><span>{use.stations?.nome_fantasia_snapshot || 'Posto não informado'}</span><span>{Number(use.liters).toLocaleString('pt-BR')} {selectedType.unidade_medida}</span><StatusChip value={use.status} /></div>)}</div> : <p className="fleet-history-empty">Nenhum abastecimento foi registrado com este combustível.</p>}</td></tr>}</tbody></table> : fuelTypes.length ? <EmptyState icon={Fuel} title="Nenhum combustível encontrado" text="Nenhum registro corresponde aos filtros. Ajuste ou limpe os filtros para ver outros resultados." action="Limpar filtros" onAction={clearFilters} /> : <EmptyState icon={Fuel} title="Nenhum combustível cadastrado" text="Cadastre o primeiro tipo para liberar a seleção nos veículos e abastecimentos." action="Novo combustível" onAction={openNew} />}</div>
+    {showForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowForm(false)}><form className="fleet-modal fleet-fueltype-modal" onSubmit={requestSave}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO OPERACIONAL</span><h2>{editing ? 'Editar combustível' : 'Novo combustível'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Gestor de Frotas ou Administrador pode cadastrar e alterar esta referência.</p><div className="fleet-form-grid"><label>Nome do combustível<input required maxLength={80} value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} placeholder="Ex.: Diesel S-10" /></label><label>Sigla<input maxLength={12} value={form.sigla} onChange={(event) => setForm({ ...form, sigla: event.target.value })} placeholder="Ex.: S10" /></label><label>Unidade de medida<input required maxLength={10} value={form.unidade_medida} onChange={(event) => setForm({ ...form, unidade_medida: event.target.value })} placeholder="L" /></label><label>Situação<select value={form.ativo} onChange={(event) => setForm({ ...form, ativo: event.target.value })}><option value="true">Ativo</option><option value="false">Inativo</option></select></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar combustível'}</button></div></form></div>}
+  </section>
+}
 function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
 
 function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; compact?: boolean }) { return <table className={`fleet-table ${compact ? 'fleet-table-compact' : ''}`}><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Quantidade</th><th>Total</th><th>Situação</th></tr></thead><tbody>{fuelings.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td></tr>)}</tbody></table> }
