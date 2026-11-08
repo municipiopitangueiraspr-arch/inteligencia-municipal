@@ -17,6 +17,7 @@ import { supabase } from "../lib/supabase";
 import { StationMembersPanel } from "./FleetResources";
 import type { Station } from "./FleetResources";
 import { SupplierFuelingRecords } from "./SupplierFuelingRecords";
+import { SupplierDocumentsView } from "./SupplierDocumentsView";
 import "./SupplierPortal.css";
 
 type SupplierPortalProps = {
@@ -47,7 +48,7 @@ type Fueling = {
   vehicles?: { placa?: string; modelo?: string } | null;
   fuel_type?: { nome?: string } | null;
 };
-type DocumentRecord = { id: string; fueling_id: string; file_name: string; document_status: string; uploaded_at: string };
+type DocumentRecord = { id: string; fueling_id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null };
 
 const roleLabels: Record<string, string> = {
   REPRESENTANTE_LEGAL: "Representante legal",
@@ -154,18 +155,16 @@ export function SupplierPortal({
           .limit(200),
       ]);
     const stationFuelings = (fuelingsResult.data || []) as unknown as Fueling[];
-    const documentFuelingIds = stationFuelings
-      .filter((item) => ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO", "ENVIADO_PELO_POSTO"].includes(item.status))
-      .slice(0, 100)
-      .map((item) => item.id);
+    const documentFuelingIds = stationFuelings.map((item) => item.id);
     const documentsResult = documentFuelingIds.length
       ? await supabase
           .from("fleet_fueling_documents")
-          .select("id,fueling_id,file_name,document_status,uploaded_at")
+          .select("id,fueling_id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason")
           .eq("municipio_id", municipalityId)
           .in("fueling_id", documentFuelingIds)
+          .eq("is_current", true)
           .order("uploaded_at", { ascending: false })
-          .limit(200)
+          .limit(500)
       : { data: [], error: null };
     if (
       fuelingsResult.error ||
@@ -209,21 +208,27 @@ export function SupplierPortal({
     const page = (data || []) as unknown as Fueling[];
     setFuelings((current) => [...current, ...page]);
     setHasMoreFuelings(page.length === 100);
-    const documentFuelingIds = page
-      .filter((item) => ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO", "ENVIADO_PELO_POSTO"].includes(item.status))
-      .map((item) => item.id);
+    const documentFuelingIds = page.map((item) => item.id);
     if (documentFuelingIds.length) {
+      const { data: municipalityId } = await supabase.rpc("fleet_current_municipio_id");
       const { data: addedDocuments, error: documentError } = await supabase
         .from("fleet_fueling_documents")
-        .select("id,fueling_id,file_name,document_status,uploaded_at")
-        .eq("municipio_id", (await supabase.rpc("fleet_current_municipio_id")).data)
+        .select("id,fueling_id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason")
+        .eq("municipio_id", municipalityId)
         .in("fueling_id", documentFuelingIds)
+        .eq("is_current", true)
         .order("uploaded_at", { ascending: false })
-        .limit(200);
+        .limit(500);
       if (!documentError && addedDocuments?.length) {
         setDocuments((current) => {
           const existingIds = new Set(current.map((item) => item.id));
-          return [...current, ...(addedDocuments as DocumentRecord[]).filter((item) => !existingIds.has(item.id))];
+          const merged = [...current, ...(addedDocuments as DocumentRecord[]).filter((item) => !existingIds.has(item.id))];
+          const pageIds = new Set(documentFuelingIds);
+          const latestByFueling = new Map<string, DocumentRecord>();
+          for (const document of merged) {
+            if (pageIds.has(document.fueling_id) && !latestByFueling.has(document.fueling_id)) latestByFueling.set(document.fueling_id, document);
+          }
+          return [...merged.filter((document) => !pageIds.has(document.fueling_id)), ...latestByFueling.values()];
         });
       }
     }
@@ -261,7 +266,8 @@ export function SupplierPortal({
     const path = `${municipalityId}/fuelings/${fuelingId}/${crypto.randomUUID()}-${safeName}`;
     const upload = await supabase.storage.from("fleet-documents").upload(path, file, { contentType: file.type, upsert: false });
     if (upload.error) return { error: upload.error };
-    const document = await supabase.from("fleet_fueling_documents").insert({ municipio_id: municipalityId, fueling_id: fuelingId, file_name: file.name, storage_path: path, mime_type: file.type, file_size_bytes: file.size, document_status: "ENVIADO", uploaded_by: currentUser, uploaded_at: new Date().toISOString(), due_at: new Date().toISOString(), is_current: true }).select("id").single();
+    const uploadedAt = new Date();
+    const document = await supabase.from("fleet_fueling_documents").insert({ municipio_id: municipalityId, fueling_id: fuelingId, file_name: file.name, storage_path: path, mime_type: file.type, file_size_bytes: file.size, document_status: "ENVIADO", uploaded_by: currentUser, uploaded_at: uploadedAt.toISOString(), due_at: new Date(uploadedAt.getTime() + 24 * 60 * 60 * 1000).toISOString(), is_current: true }).select("id").single();
     if (document.error) { await supabase.storage.from("fleet-documents").remove([path]); return { error: document.error }; }
     return { error: null };
   }
@@ -469,7 +475,18 @@ export function SupplierPortal({
             />
           )}
           {view === "documents" && (
-            <DocumentsView fuelings={fuelings} documents={documents} onUpload={uploadDocument} onRefresh={loadPortal} />
+            <SupplierDocumentsView
+              fuelings={fuelings}
+              documents={documents}
+              vehicles={vehicles}
+              fuelTypes={fuelTypes}
+              loading={loading}
+              loadingMore={loadingMoreFuelings}
+              hasMore={hasMoreFuelings}
+              onLoadMore={loadMoreFuelings}
+              onUpload={uploadDocument}
+              onRefresh={loadPortal}
+            />
           )}
         </div>
       </main>
@@ -665,95 +682,6 @@ function FuelingForm({
           </button>
         </div>
       </form>
-    </section>
-  );
-}
-function DocumentsView({
-  fuelings,
-  documents,
-  onUpload,
-  onRefresh,
-}: {
-  fuelings: Fueling[];
-  documents: DocumentRecord[];
-  onUpload: (fuelingId: string, file: File) => Promise<{ error: Error | null }>;
-  onRefresh: () => Promise<void>;
-}) {
-  const [uploading, setUploading] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
-  async function handleUpload(fuelingId: string, file: File) {
-    setUploading(fuelingId); setNotice("");
-    const result = await onUpload(fuelingId, file);
-    setUploading(null);
-    if (result.error) setNotice(result.error.message);
-    else { setNotice("Comprovante enviado para conferência do Gestor de Frotas."); await onRefresh(); }
-  }
-  return (
-    <section>
-      <div className="supplier-page-heading">
-        <div>
-          <span>DOCUMENTAÇÃO</span>
-          <h2>Comprovantes</h2>
-          <p>
-            Envie e acompanhe os comprovantes dos abastecimentos do seu posto.
-          </p>
-        </div>
-      </div>
-      <div className="supplier-document-grid">
-        {notice && <div className="supplier-message success">{notice}</div>}
-        {fuelings
-          .filter((item) =>
-            [
-              "PENDENTE_DE_COMPROVANTE",
-              "SOLICITADA_CORRECAO",
-              "ENVIADO_PELO_POSTO",
-            ].includes(item.status),
-          )
-          .slice(0, 20)
-          .map((item) => (
-            <article key={item.id}>
-              <div>
-                <FileCheck2 size={20} />
-                <strong>
-                  {item.vehicles?.placa || "Veículo não informado"}
-                </strong>
-                <small>
-                  {date(item.performed_at)} ·{" "}
-                  {Number(item.liters).toLocaleString("pt-BR")} L
-                </small>
-              </div>
-              <StatusTag status={item.status} />
-              <label className="supplier-upload">
-                {uploading === item.id ? "Enviando…" : "Selecionar comprovante"}
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  disabled={uploading === item.id}
-                  onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(item.id, file); }}
-                />
-              </label>
-              {documents.filter((document) => document.fueling_id === item.id).map((document) => <small className="supplier-upload-note" key={document.id}>Anexado: {document.file_name} · {document.document_status}</small>)}
-              <small className="supplier-upload-note">
-                Limite e validação serão aplicados no envio.
-              </small>
-            </article>
-          ))}
-        {!fuelings.some((item) =>
-          [
-            "PENDENTE_DE_COMPROVANTE",
-            "SOLICITADA_CORRECAO",
-            "ENVIADO_PELO_POSTO",
-          ].includes(item.status),
-        ) && (
-          <div className="supplier-empty">
-            <FileCheck2 size={25} />
-            <strong>Nenhum comprovante pendente</strong>
-            <p>
-              Quando houver documentação a enviar, ela aparecerá nesta área.
-            </p>
-          </div>
-        )}
-      </div>
     </section>
   );
 }
