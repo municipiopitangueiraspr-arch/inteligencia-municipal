@@ -1,119 +1,1270 @@
-import { useEffect, useState } from 'react'
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
-import { Building2, ChevronRight, Edit3, Plus, Save, Store, UserCheck, UserPlus, UserRound, X } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { useEffect, useState } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
+import {
+  Building2,
+  ChevronRight,
+  Edit3,
+  Plus,
+  Save,
+  Store,
+  UserCheck,
+  UserPlus,
+  UserRound,
+  X,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
 
-type StationStatus = 'PENDENTE' | 'ATIVO' | 'SUSPENSO' | 'INATIVO'
-export type Station = { id: string; razao_social_snapshot: string; nome_fantasia_snapshot: string | null; cnpj_snapshot: string; endereco: string | null; cidade: string | null; uf: string | null; representante_nome: string; representante_documento: string | null; representante_email: string | null; representante_telefone: string | null; status: StationStatus; credenciamento_started_at: string | null; credenciamento_ends_at: string | null; notes: string | null }
-type Driver = { id: string; nome: string; matricula: string | null; cpf: string | null; cnh_number: string | null; cnh_valid_until: string | null; unidade_id: string | null; ativo: boolean }
-type ResourceProps = { onSaved: () => Promise<void> }
-type StationFormState = { razao_social_snapshot: string; nome_fantasia_snapshot: string; cnpj_snapshot: string; endereco: string; cidade: string; uf: string; representante_nome: string; representante_documento: string; representante_email: string; representante_telefone: string; status: StationStatus; credenciamento_started_at: string; credenciamento_ends_at: string; notes: string }
-type DriverFormState = { nome: string; matricula: string; cpf: string; cnh_number: string; cnh_valid_until: string; ativo: string }
-type StationMember = { id: string; station_id: string; usuario_id: number; role: 'REPRESENTANTE_LEGAL' | 'OPERADOR' | 'FRENTISTA' | 'CAIXA_CONFERENTE'; ativo: boolean; is_primary_contact: boolean }
-type UserCandidate = { id: number; nome: string; email: string | null; cargo: string | null; perfil: string | null; ativo: boolean; telefone: string | null }
+type StationStatus = "PENDENTE" | "ATIVO" | "SUSPENSO" | "INATIVO";
+export type Station = {
+  id: string;
+  razao_social_snapshot: string;
+  nome_fantasia_snapshot: string | null;
+  cnpj_snapshot: string;
+  endereco: string | null;
+  cidade: string | null;
+  uf: string | null;
+  representante_nome: string;
+  representante_documento: string | null;
+  representante_email: string | null;
+  representante_telefone: string | null;
+  status: StationStatus;
+  credenciamento_started_at: string | null;
+  credenciamento_ends_at: string | null;
+  notes: string | null;
+};
+type Driver = {
+  id: string;
+  nome: string;
+  matricula: string | null;
+  cpf: string | null;
+  cnh_number: string | null;
+  cnh_valid_until: string | null;
+  unidade_id: string | null;
+  ativo: boolean;
+};
+type ResourceProps = { onSaved: () => Promise<void> };
+type StationFormState = {
+  razao_social_snapshot: string;
+  nome_fantasia_snapshot: string;
+  cnpj_snapshot: string;
+  endereco: string;
+  cidade: string;
+  uf: string;
+  representante_nome: string;
+  representante_documento: string;
+  representante_email: string;
+  representante_telefone: string;
+  status: StationStatus;
+  credenciamento_started_at: string;
+  credenciamento_ends_at: string;
+  notes: string;
+};
+type DriverFormState = {
+  nome: string;
+  matricula: string;
+  cpf: string;
+  cnh_number: string;
+  cnh_valid_until: string;
+  ativo: string;
+};
+type StationMember = {
+  id: string;
+  station_id: string;
+  usuario_id: number;
+  role: "REPRESENTANTE_LEGAL" | "OPERADOR" | "FRENTISTA" | "CAIXA_CONFERENTE";
+  ativo: boolean;
+  is_primary_contact: boolean;
+  nome?: string | null;
+  email?: string | null;
+  cargo?: string | null;
+};
+type UserCandidate = {
+  id: number;
+  nome: string;
+  email: string | null;
+  cargo: string | null;
+  perfil: string | null;
+  ativo: boolean;
+  telefone: string | null;
+};
 
-const stationStatusLabel: Record<StationStatus, string> = { PENDENTE: 'Pendente', ATIVO: 'Ativo', SUSPENSO: 'Suspenso', INATIVO: 'Inativo' }
+const stationStatusLabel: Record<StationStatus, string> = {
+  PENDENTE: "Pendente",
+  ATIVO: "Ativo",
+  SUSPENSO: "Suspenso",
+  INATIVO: "Inativo",
+};
 
-function normalizeError(code?: string) { return code === '23505' ? 'Já existe um registro com estes dados.' : 'Não foi possível salvar. Verifique os dados e as permissões do seu perfil.' }
-function inputValue(value: string | null | undefined) { return value || '' }
+function normalizeError(code?: string) {
+  return code === "23505"
+    ? "Já existe um registro com estes dados."
+    : "Não foi possível salvar. Verifique os dados e as permissões do seu perfil.";
+}
+function inputValue(value: string | null | undefined) {
+  return value || "";
+}
 
 export function StationsView({ onSaved }: ResourceProps) {
-  const [stations, setStations] = useState<Station[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [formError, setFormError] = useState('')
-  const [editing, setEditing] = useState<Station | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [query, setQuery] = useState('')
-  const [membersStation, setMembersStation] = useState<Station | null>(null)
-  const [form, setForm] = useState<StationFormState>({ razao_social_snapshot: '', nome_fantasia_snapshot: '', cnpj_snapshot: '', endereco: '', cidade: '', uf: '', representante_nome: '', representante_documento: '', representante_email: '', representante_telefone: '', status: 'PENDENTE', credenciamento_started_at: '', credenciamento_ends_at: '', notes: '' })
+  const [stations, setStations] = useState<Station[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [editing, setEditing] = useState<Station | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [membersStation, setMembersStation] = useState<Station | null>(null);
+  const [form, setForm] = useState<StationFormState>({
+    razao_social_snapshot: "",
+    nome_fantasia_snapshot: "",
+    cnpj_snapshot: "",
+    endereco: "",
+    cidade: "",
+    uf: "",
+    representante_nome: "",
+    representante_documento: "",
+    representante_email: "",
+    representante_telefone: "",
+    status: "PENDENTE",
+    credenciamento_started_at: "",
+    credenciamento_ends_at: "",
+    notes: "",
+  });
 
   async function loadStations() {
-    if (!supabase) return
-    setLoading(true); setError('')
-    const { data, error: resultError } = await supabase.from('fleet_fuel_stations').select('id,razao_social_snapshot,nome_fantasia_snapshot,cnpj_snapshot,endereco,cidade,uf,representante_nome,representante_documento,representante_email,representante_telefone,status,credenciamento_started_at,credenciamento_ends_at,notes').order('nome_fantasia_snapshot').limit(100)
-    if (resultError) setError('Não foi possível carregar os postos permitidos para este usuário.')
-    else setStations((data || []) as Station[])
-    setLoading(false)
+    if (!supabase) return;
+    setLoading(true);
+    setError("");
+    const { data, error: resultError } = await supabase
+      .from("fleet_fuel_stations")
+      .select(
+        "id,razao_social_snapshot,nome_fantasia_snapshot,cnpj_snapshot,endereco,cidade,uf,representante_nome,representante_documento,representante_email,representante_telefone,status,credenciamento_started_at,credenciamento_ends_at,notes",
+      )
+      .order("nome_fantasia_snapshot")
+      .limit(100);
+    if (resultError)
+      setError(
+        "Não foi possível carregar os postos permitidos para este usuário.",
+      );
+    else setStations((data || []) as Station[]);
+    setLoading(false);
   }
-  useEffect(() => { void loadStations() }, [])
+  useEffect(() => {
+    void loadStations();
+  }, []);
 
-  function openNew() { setEditing(null); setForm({ razao_social_snapshot: '', nome_fantasia_snapshot: '', cnpj_snapshot: '', endereco: '', cidade: '', uf: '', representante_nome: '', representante_documento: '', representante_email: '', representante_telefone: '', status: 'PENDENTE', credenciamento_started_at: '', credenciamento_ends_at: '', notes: '' }); setFormError(''); setShowForm(true) }
-  function openEdit(station: Station) { setEditing(station); setForm({ razao_social_snapshot: station.razao_social_snapshot, nome_fantasia_snapshot: inputValue(station.nome_fantasia_snapshot), cnpj_snapshot: station.cnpj_snapshot, endereco: inputValue(station.endereco), cidade: inputValue(station.cidade), uf: inputValue(station.uf), representante_nome: station.representante_nome, representante_documento: inputValue(station.representante_documento), representante_email: inputValue(station.representante_email), representante_telefone: inputValue(station.representante_telefone), status: station.status, credenciamento_started_at: inputValue(station.credenciamento_started_at), credenciamento_ends_at: inputValue(station.credenciamento_ends_at), notes: inputValue(station.notes) }); setFormError(''); setShowForm(true) }
+  function openNew() {
+    setEditing(null);
+    setForm({
+      razao_social_snapshot: "",
+      nome_fantasia_snapshot: "",
+      cnpj_snapshot: "",
+      endereco: "",
+      cidade: "",
+      uf: "",
+      representante_nome: "",
+      representante_documento: "",
+      representante_email: "",
+      representante_telefone: "",
+      status: "PENDENTE",
+      credenciamento_started_at: "",
+      credenciamento_ends_at: "",
+      notes: "",
+    });
+    setFormError("");
+    setShowForm(true);
+  }
+  function openEdit(station: Station) {
+    setEditing(station);
+    setForm({
+      razao_social_snapshot: station.razao_social_snapshot,
+      nome_fantasia_snapshot: inputValue(station.nome_fantasia_snapshot),
+      cnpj_snapshot: station.cnpj_snapshot,
+      endereco: inputValue(station.endereco),
+      cidade: inputValue(station.cidade),
+      uf: inputValue(station.uf),
+      representante_nome: station.representante_nome,
+      representante_documento: inputValue(station.representante_documento),
+      representante_email: inputValue(station.representante_email),
+      representante_telefone: inputValue(station.representante_telefone),
+      status: station.status,
+      credenciamento_started_at: inputValue(station.credenciamento_started_at),
+      credenciamento_ends_at: inputValue(station.credenciamento_ends_at),
+      notes: inputValue(station.notes),
+    });
+    setFormError("");
+    setShowForm(true);
+  }
   async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!supabase) return
-    setSaving(true); setFormError('')
-    const payload = { razao_social_snapshot: form.razao_social_snapshot.trim(), nome_fantasia_snapshot: form.nome_fantasia_snapshot.trim() || null, cnpj_snapshot: form.cnpj_snapshot.trim(), endereco: form.endereco.trim() || null, cidade: form.cidade.trim() || null, uf: form.uf.trim().toUpperCase() || null, representante_nome: form.representante_nome.trim(), representante_documento: form.representante_documento.trim() || null, representante_email: form.representante_email.trim() || null, representante_telefone: form.representante_telefone.trim() || null, status: form.status, credenciamento_started_at: form.credenciamento_started_at || null, credenciamento_ends_at: form.credenciamento_ends_at || null, notes: form.notes.trim() || null, updated_at: new Date().toISOString() }
-    const result = editing ? await supabase.from('fleet_fuel_stations').update(payload).eq('id', editing.id) : await createStation(payload)
-    setSaving(false)
-    if (result.error) { setFormError(normalizeError(result.error.code)); return }
-    setShowForm(false); await loadStations(); await onSaved()
+    event.preventDefault();
+    if (!supabase) return;
+    setSaving(true);
+    setFormError("");
+    const payload = {
+      razao_social_snapshot: form.razao_social_snapshot.trim(),
+      nome_fantasia_snapshot: form.nome_fantasia_snapshot.trim() || null,
+      cnpj_snapshot: form.cnpj_snapshot.trim(),
+      endereco: form.endereco.trim() || null,
+      cidade: form.cidade.trim() || null,
+      uf: form.uf.trim().toUpperCase() || null,
+      representante_nome: form.representante_nome.trim(),
+      representante_documento: form.representante_documento.trim() || null,
+      representante_email: form.representante_email.trim() || null,
+      representante_telefone: form.representante_telefone.trim() || null,
+      status: form.status,
+      credenciamento_started_at: form.credenciamento_started_at || null,
+      credenciamento_ends_at: form.credenciamento_ends_at || null,
+      notes: form.notes.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const result = editing
+      ? await supabase
+          .from("fleet_fuel_stations")
+          .update(payload)
+          .eq("id", editing.id)
+      : await createStation(payload);
+    setSaving(false);
+    if (result.error) {
+      setFormError(normalizeError(result.error.code));
+      return;
+    }
+    setShowForm(false);
+    await loadStations();
+    await onSaved();
   }
   async function createStation(payload: Record<string, unknown>) {
-    const { data: municipio } = await supabase!.rpc('fleet_current_municipio_id')
-    const { data: currentUser } = await supabase!.rpc('fleet_current_usuario_id')
-    return supabase!.from('fleet_fuel_stations').insert({ ...payload, municipio_id: municipio, created_by: currentUser })
+    const { data: municipio } = await supabase!.rpc(
+      "fleet_current_municipio_id",
+    );
+    const { data: currentUser } = await supabase!.rpc(
+      "fleet_current_usuario_id",
+    );
+    return supabase!
+      .from("fleet_fuel_stations")
+      .insert({ ...payload, municipio_id: municipio, created_by: currentUser });
   }
-  const filtered = stations.filter((station) => `${station.nome_fantasia_snapshot || ''} ${station.razao_social_snapshot} ${station.cnpj_snapshot}`.toLowerCase().includes(query.toLowerCase()))
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DE APOIO</span><h2>Postos credenciados</h2><p>Estabelecimentos autorizados a submeter abastecimentos da frota.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo posto</button></div>{error && <div className="fleet-inline-error">{error}</div>}<div className="fleet-resource-toolbar"><div className="fleet-resource-summary"><Store size={17} /><strong>{stations.length}</strong><span>postos carregados</span></div><input className="fleet-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome ou CNPJ" /></div><div className="fleet-table-panel">{loading ? <div className="fleet-loading">Carregando postos…</div> : filtered.length ? <table className="fleet-table fleet-resource-table"><thead><tr><th>Estabelecimento</th><th>Documento</th><th>Representante</th><th>Contato</th><th>Status</th><th>Usuários</th><th /></tr></thead><tbody>{filtered.map((station) => <tr key={station.id}><td><strong>{station.nome_fantasia_snapshot || station.razao_social_snapshot}</strong><small>{station.razao_social_snapshot}</small></td><td>{station.cnpj_snapshot}</td><td><strong>{station.representante_nome}</strong><small>{station.representante_documento || 'Documento não informado'}</small></td><td><small>{station.representante_email || 'E-mail não informado'}</small><small>{station.representante_telefone || 'Telefone não informado'}</small></td><td><span className={`fleet-status ${station.status === 'ATIVO' ? 'success' : station.status === 'SUSPENSO' ? 'danger' : 'warning'}`}>{stationStatusLabel[station.status]}</span></td><td><button className="fleet-secondary-button fleet-members-button" onClick={() => setMembersStation(station)}><UserPlus size={14} /> Gerenciar</button></td><td><button className="fleet-row-action" onClick={() => openEdit(station)} aria-label={`Editar ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`}><Edit3 size={16} /></button></td></tr>)}</tbody></table> : <div className="fleet-empty"><span><Store size={24} /></span><strong>Nenhum posto encontrado</strong><p>Cadastre o primeiro estabelecimento credenciado para iniciar a operação.</p><button className="fleet-primary-button" onClick={openNew}><Plus size={15} /> Novo posto</button></div>}</div>{membersStation && <StationMembersPanel station={membersStation} onClose={() => setMembersStation(null)} onSaved={onSaved} />}{showForm && <StationForm form={form} setForm={setForm} editing={editing} saving={saving} error={formError} onClose={() => setShowForm(false)} onSubmit={save} />}</section>
-
+  const filtered = stations.filter((station) =>
+    `${station.nome_fantasia_snapshot || ""} ${station.razao_social_snapshot} ${station.cnpj_snapshot}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  return (
+    <section className="fleet-section fleet-page-section">
+      <div className="fleet-page-heading">
+        <div>
+          <span className="fleet-kicker">CADASTRO DE APOIO</span>
+          <h2>Postos credenciados</h2>
+          <p>
+            Estabelecimentos autorizados a submeter abastecimentos da frota.
+          </p>
+        </div>
+        <button className="fleet-primary-button" onClick={openNew}>
+          <Plus size={16} /> Novo posto
+        </button>
+      </div>
+      {error && <div className="fleet-inline-error">{error}</div>}
+      <div className="fleet-resource-toolbar">
+        <div className="fleet-resource-summary">
+          <Store size={17} />
+          <strong>{stations.length}</strong>
+          <span>postos carregados</span>
+        </div>
+        <input
+          className="fleet-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Buscar por nome ou CNPJ"
+        />
+      </div>
+      <div className="fleet-table-panel">
+        {loading ? (
+          <div className="fleet-loading">Carregando postos…</div>
+        ) : filtered.length ? (
+          <table className="fleet-table fleet-resource-table">
+            <thead>
+              <tr>
+                <th>Estabelecimento</th>
+                <th>Documento</th>
+                <th>Representante</th>
+                <th>Contato</th>
+                <th>Status</th>
+                <th>Usuários</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((station) => (
+                <tr key={station.id}>
+                  <td>
+                    <strong>
+                      {station.nome_fantasia_snapshot ||
+                        station.razao_social_snapshot}
+                    </strong>
+                    <small>{station.razao_social_snapshot}</small>
+                  </td>
+                  <td>{station.cnpj_snapshot}</td>
+                  <td>
+                    <strong>{station.representante_nome}</strong>
+                    <small>
+                      {station.representante_documento ||
+                        "Documento não informado"}
+                    </small>
+                  </td>
+                  <td>
+                    <small>
+                      {station.representante_email || "E-mail não informado"}
+                    </small>
+                    <small>
+                      {station.representante_telefone ||
+                        "Telefone não informado"}
+                    </small>
+                  </td>
+                  <td>
+                    <span
+                      className={`fleet-status ${station.status === "ATIVO" ? "success" : station.status === "SUSPENSO" ? "danger" : "warning"}`}
+                    >
+                      {stationStatusLabel[station.status]}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="fleet-secondary-button fleet-members-button"
+                      onClick={() => setMembersStation(station)}
+                    >
+                      <UserPlus size={14} /> Gerenciar
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className="fleet-row-action"
+                      onClick={() => openEdit(station)}
+                      aria-label={`Editar ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="fleet-empty">
+            <span>
+              <Store size={24} />
+            </span>
+            <strong>Nenhum posto encontrado</strong>
+            <p>
+              Cadastre o primeiro estabelecimento credenciado para iniciar a
+              operação.
+            </p>
+            <button className="fleet-primary-button" onClick={openNew}>
+              <Plus size={15} /> Novo posto
+            </button>
+          </div>
+        )}
+      </div>
+      {membersStation && (
+        <StationMembersPanel
+          station={membersStation}
+          onClose={() => setMembersStation(null)}
+          onSaved={onSaved}
+        />
+      )}
+      {showForm && (
+        <StationForm
+          form={form}
+          setForm={setForm}
+          editing={editing}
+          saving={saving}
+          error={formError}
+          onClose={() => setShowForm(false)}
+          onSubmit={save}
+        />
+      )}
+    </section>
+  );
 }
 
-
-export function StationMembersPanel({ station, onClose, onSaved }: { station: Station; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [members, setMembers] = useState<StationMember[]>([])
-  const [users, setUsers] = useState<UserCandidate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({ usuario_id: '', role: 'OPERADOR' as StationMember['role'], is_primary_contact: 'false' })
+export function StationMembersPanel({
+  station,
+  onClose,
+  onSaved,
+  allowCreateUser = false,
+}: {
+  station: Station;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  allowCreateUser?: boolean;
+}) {
+  const [members, setMembers] = useState<StationMember[]>([]);
+  const [users, setUsers] = useState<UserCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    usuario_id: "",
+    role: "OPERADOR" as StationMember["role"],
+    is_primary_contact: "false",
+  });
+  const [createForm, setCreateForm] = useState({
+    nome: "",
+    email: "",
+    telefone: "",
+    password: "",
+    role: "OPERADOR" as Exclude<StationMember["role"], "REPRESENTANTE_LEGAL">,
+  });
 
   async function load() {
-    if (!supabase) return
-    setLoading(true); setError('')
-    const [membersResult, usersResult] = await Promise.all([
-      supabase.from('fleet_station_members').select('id,station_id,usuario_id,role,ativo,is_primary_contact').eq('station_id', station.id).order('created_at').limit(100),
-      supabase.rpc('fleet_station_user_candidates'),
-    ])
-    if (membersResult.error || usersResult.error) setError('Não foi possível carregar os usuários do posto. Verifique se seu perfil possui permissão de administração.')
-    else { setMembers((membersResult.data || []) as StationMember[]); setUsers((usersResult.data || []) as UserCandidate[]) }
-    setLoading(false)
+    if (!supabase) return;
+    setLoading(true);
+    setError("");
+    const membersResult = await supabase.rpc("fleet_station_member_directory", {
+      p_station_id: station.id,
+    });
+    const usersResult = allowCreateUser
+      ? { data: [] as UserCandidate[], error: null }
+      : await supabase.rpc("fleet_station_user_candidates");
+    if (membersResult.error || usersResult.error)
+      setError(
+        "Não foi possível carregar os usuários do posto. Verifique se seu perfil possui permissão de administração.",
+      );
+    else {
+      setMembers((membersResult.data || []) as StationMember[]);
+      setUsers((usersResult.data || []) as UserCandidate[]);
+    }
+    setLoading(false);
   }
-  useEffect(() => { void load() }, [station.id])
-  const user = (id: number) => users.find((item) => item.id === id)
-  const roleLabel: Record<StationMember['role'], string> = { REPRESENTANTE_LEGAL: 'Representante legal', OPERADOR: 'Operador', FRENTISTA: 'Frentista', CAIXA_CONFERENTE: 'Caixa/conferente' }
-  async function addMember(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!supabase || !form.usuario_id) return; setSaving(true); setError(''); const municipio = await supabase.rpc('fleet_current_municipio_id'); const granted = await supabase.rpc('fleet_current_usuario_id'); const result = await supabase.from('fleet_station_members').insert({ municipio_id: municipio.data, station_id: station.id, usuario_id: Number(form.usuario_id), role: form.role, ativo: true, is_primary_contact: form.is_primary_contact === 'true', granted_by: granted.data }); setSaving(false); if (result.error) { setError(result.error.code === '23505' ? 'Este usuário já está vinculado a este posto.' : 'Não foi possível vincular o usuário.'); return } setForm({ usuario_id: '', role: 'OPERADOR', is_primary_contact: 'false' }); await load(); await onSaved() }
-  async function updateMember(member: StationMember, changes: Partial<StationMember>) { if (!supabase) return; setSaving(true); setError(''); const result = await supabase.from('fleet_station_members').update({ ...changes, updated_at: new Date().toISOString() }).eq('id', member.id); setSaving(false); if (result.error) setError('Não foi possível atualizar este usuário.'); else { await load(); await onSaved() } }
-  return <div className="fleet-modal-backdrop" role="presentation"><section className="fleet-modal fleet-members-modal"><div className="fleet-modal-heading"><div><span className="fleet-kicker">ACESSO OPERACIONAL</span><h2>Usuários do posto</h2><p className="fleet-members-subtitle">{station.nome_fantasia_snapshot || station.razao_social_snapshot}</p></div><button type="button" className="fleet-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div><div className="fleet-members-note"><UserCheck size={16} /><span>Cada usuário fica vinculado exclusivamente a este estabelecimento e somente usuários ativos poderão operar.</span></div>{error && <div className="fleet-inline-error">{error}</div>}<form className="fleet-member-add-form" onSubmit={addMember}><label>Usuário existente<select required value={form.usuario_id} onChange={(event) => setForm({ ...form, usuario_id: event.target.value })}><option value="">Selecione um usuário</option>{users.filter((candidate) => !members.some((member) => member.usuario_id === candidate.id)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.nome} — {candidate.email || candidate.cargo || 'sem contato'}</option>)}</select></label><label>Papel<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as StationMember['role'] })}><option value="REPRESENTANTE_LEGAL">Representante legal</option><option value="OPERADOR">Operador</option><option value="FRENTISTA">Frentista</option><option value="CAIXA_CONFERENTE">Caixa/conferente</option></select></label><label>Contato principal<select value={form.is_primary_contact} onChange={(event) => setForm({ ...form, is_primary_contact: event.target.value })}><option value="false">Não</option><option value="true">Sim</option></select></label><button type="submit" className="fleet-primary-button" disabled={saving}><UserPlus size={15} /> Vincular usuário</button></form><div className="fleet-members-list">{loading ? <div className="fleet-loading">Carregando usuários…</div> : members.length ? members.map((member) => <article className="fleet-member-card" key={member.id}><div className="fleet-member-identity"><span className="fleet-user-avatar"><UserRound size={14} /></span><div><strong>{user(member.usuario_id)?.nome || `Usuário #${member.usuario_id}`}</strong><small>{user(member.usuario_id)?.email || user(member.usuario_id)?.cargo || 'Contato não informado'}</small></div></div><div><span className="fleet-member-role">{roleLabel[member.role]}</span>{member.is_primary_contact && <span className="fleet-primary-badge">Contato principal</span>}</div><div className="fleet-member-actions"><label>Perfil<select value={member.role} onChange={(event) => void updateMember(member, { role: event.target.value as StationMember['role'] })} disabled={saving}><option value="REPRESENTANTE_LEGAL">Representante legal</option><option value="OPERADOR">Operador</option><option value="FRENTISTA">Frentista</option><option value="CAIXA_CONFERENTE">Caixa/conferente</option></select></label><label>Situação<select value={String(member.ativo)} onChange={(event) => void updateMember(member, { ativo: event.target.value === 'true' })} disabled={saving}><option value="true">Ativo</option><option value="false">Inativo</option></select></label><label>Principal<select value={String(member.is_primary_contact)} onChange={(event) => void updateMember(member, { is_primary_contact: event.target.value === 'true' })} disabled={saving}><option value="false">Não</option><option value="true">Sim</option></select></label></div></article>) : <div className="fleet-history-empty">Nenhum usuário vinculado a este posto.</div>}</div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={onClose}>Fechar</button></div></section></div>
+  useEffect(() => {
+    void load();
+  }, [station.id]);
+  const user = (id: number) => users.find((item) => item.id === id);
+  const roleLabel: Record<StationMember["role"], string> = {
+    REPRESENTANTE_LEGAL: "Representante legal",
+    OPERADOR: "Operador",
+    FRENTISTA: "Frentista",
+    CAIXA_CONFERENTE: "Caixa/conferente",
+  };
+  async function addMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !form.usuario_id) return;
+    setSaving(true);
+    setError("");
+    const municipio = await supabase.rpc("fleet_current_municipio_id");
+    const granted = await supabase.rpc("fleet_current_usuario_id");
+    const result = await supabase
+      .from("fleet_station_members")
+      .insert({
+        municipio_id: municipio.data,
+        station_id: station.id,
+        usuario_id: Number(form.usuario_id),
+        role: form.role,
+        ativo: true,
+        is_primary_contact: form.is_primary_contact === "true",
+        granted_by: granted.data,
+      });
+    setSaving(false);
+    if (result.error) {
+      setError(
+        result.error.code === "23505"
+          ? "Este usuário já está vinculado a este posto."
+          : "Não foi possível vincular o usuário.",
+      );
+      return;
+    }
+    setForm({ usuario_id: "", role: "OPERADOR", is_primary_contact: "false" });
+    await load();
+    await onSaved();
+  }
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !allowCreateUser) return;
+    setSaving(true);
+    setError("");
+    const result = await supabase.functions.invoke("create-station-user", {
+      body: { station_id: station.id, ...createForm },
+    });
+    setSaving(false);
+    if (result.error || result.data?.error) {
+      setError(result.data?.error || "Não foi possível criar o acesso.");
+      return;
+    }
+    setCreateForm({
+      nome: "",
+      email: "",
+      telefone: "",
+      password: "",
+      role: "OPERADOR",
+    });
+    await load();
+    await onSaved();
+  }
+  async function updateMember(
+    member: StationMember,
+    changes: Partial<StationMember>,
+  ) {
+    if (!supabase) return;
+    setSaving(true);
+    setError("");
+    const result = await supabase
+      .from("fleet_station_members")
+      .update({ ...changes, updated_at: new Date().toISOString() })
+      .eq("id", member.id);
+    setSaving(false);
+    if (result.error) setError("Não foi possível atualizar este usuário.");
+    else {
+      await load();
+      await onSaved();
+    }
+  }
+  return (
+    <div className="fleet-modal-backdrop" role="presentation">
+      <section className="fleet-modal fleet-members-modal">
+        <div className="fleet-modal-heading">
+          <div>
+            <span className="fleet-kicker">ACESSO OPERACIONAL</span>
+            <h2>Usuários do posto</h2>
+            <p className="fleet-members-subtitle">
+              {station.nome_fantasia_snapshot || station.razao_social_snapshot}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="fleet-close"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="fleet-members-note">
+          <UserCheck size={16} />
+          <span>
+            Cada usuário fica vinculado exclusivamente a este estabelecimento e
+            somente usuários ativos poderão operar.
+          </span>
+        </div>
+        {error && <div className="fleet-inline-error">{error}</div>}
+        {allowCreateUser && (
+          <form className="fleet-member-create-form" onSubmit={createUser}>
+            <div className="fleet-form-section-title"><UserPlus size={16} /> Criar novo acesso do posto</div>
+            <p className="fleet-members-help">Somente o representante legal pode criar acessos. O usuário receberá o e-mail e a senha definidos aqui.</p>
+            <div className="fleet-form-grid">
+              <label>Nome completo<input required value={createForm.nome} onChange={(event) => setCreateForm({ ...createForm, nome: event.target.value })} /></label>
+              <label>E-mail de acesso<input required type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} /></label>
+              <label>Telefone<input value={createForm.telefone} onChange={(event) => setCreateForm({ ...createForm, telefone: event.target.value })} /></label>
+              <label>Senha inicial<input required minLength={8} type="password" value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} /></label>
+              <label>Papel<select value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value as typeof createForm.role })}><option value="OPERADOR">Operador</option><option value="FRENTISTA">Frentista</option><option value="CAIXA_CONFERENTE">Caixa/conferente</option></select></label>
+            </div>
+            <button type="submit" className="fleet-primary-button" disabled={saving}><UserPlus size={15} /> {saving ? "Criando acesso…" : "Criar usuário do posto"}</button>
+          </form>
+        )}
+        {!allowCreateUser && <form className="fleet-member-add-form" onSubmit={addMember}>
+          <label>
+            Usuário existente
+            <select
+              required
+              value={form.usuario_id}
+              onChange={(event) =>
+                setForm({ ...form, usuario_id: event.target.value })
+              }
+            >
+              <option value="">Selecione um usuário</option>
+              {users
+                .filter(
+                  (candidate) =>
+                    !members.some(
+                      (member) => member.usuario_id === candidate.id,
+                    ),
+                )
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.nome} —{" "}
+                    {candidate.email || candidate.cargo || "sem contato"}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Papel
+            <select
+              value={form.role}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  role: event.target.value as StationMember["role"],
+                })
+              }
+            >
+              <option value="REPRESENTANTE_LEGAL">Representante legal</option>
+              <option value="OPERADOR">Operador</option>
+              <option value="FRENTISTA">Frentista</option>
+              <option value="CAIXA_CONFERENTE">Caixa/conferente</option>
+            </select>
+          </label>
+          <label>
+            Contato principal
+            <select
+              value={form.is_primary_contact}
+              onChange={(event) =>
+                setForm({ ...form, is_primary_contact: event.target.value })
+              }
+            >
+              <option value="false">Não</option>
+              <option value="true">Sim</option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            className="fleet-primary-button"
+            disabled={saving}
+          >
+            <UserPlus size={15} /> Vincular usuário
+          </button>
+        </form>}
+        <div className="fleet-members-list">
+          {loading ? (
+            <div className="fleet-loading">Carregando usuários…</div>
+          ) : members.length ? (
+            members.map((member) => (
+              <article className="fleet-member-card" key={member.id}>
+                <div className="fleet-member-identity">
+                  <span className="fleet-user-avatar">
+                    <UserRound size={14} />
+                  </span>
+                  <div>
+                        <strong>{member.nome || user(member.usuario_id)?.nome || `Usuário #${member.usuario_id}`}</strong>
+                        <small>
+                          {member.email || user(member.usuario_id)?.email ||
+                            user(member.usuario_id)?.cargo ||
+                        "Contato não informado"}
+                    </small>
+                  </div>
+                </div>
+                <div>
+                  <span className="fleet-member-role">
+                    {roleLabel[member.role]}
+                  </span>
+                  {member.is_primary_contact && (
+                    <span className="fleet-primary-badge">
+                      Contato principal
+                    </span>
+                  )}
+                </div>
+                <div className="fleet-member-actions">
+                  <label>
+                    Perfil
+                    <select
+                      value={member.role}
+                      onChange={(event) =>
+                        void updateMember(member, {
+                          role: event.target.value as StationMember["role"],
+                        })
+                      }
+                      disabled={saving}
+                    >
+                      <option value="REPRESENTANTE_LEGAL">
+                        Representante legal
+                      </option>
+                      <option value="OPERADOR">Operador</option>
+                      <option value="FRENTISTA">Frentista</option>
+                      <option value="CAIXA_CONFERENTE">Caixa/conferente</option>
+                    </select>
+                  </label>
+                  <label>
+                    Situação
+                    <select
+                      value={String(member.ativo)}
+                      onChange={(event) =>
+                        void updateMember(member, {
+                          ativo: event.target.value === "true",
+                        })
+                      }
+                      disabled={saving}
+                    >
+                      <option value="true">Ativo</option>
+                      <option value="false">Inativo</option>
+                    </select>
+                  </label>
+                  <label>
+                    Principal
+                    <select
+                      value={String(member.is_primary_contact)}
+                      onChange={(event) =>
+                        void updateMember(member, {
+                          is_primary_contact: event.target.value === "true",
+                        })
+                      }
+                      disabled={saving}
+                    >
+                      <option value="false">Não</option>
+                      <option value="true">Sim</option>
+                    </select>
+                  </label>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="fleet-history-empty">
+              Nenhum usuário vinculado a este posto.
+            </div>
+          )}
+        </div>
+        <div className="fleet-modal-actions">
+          <button
+            type="button"
+            className="fleet-secondary-button"
+            onClick={onClose}
+          >
+            Fechar
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
-function StationForm({ form, setForm, editing, saving, error, onClose, onSubmit }: { form: StationFormState; setForm: Dispatch<SetStateAction<StationFormState>>; editing: Station | null; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  const update = (key: string, value: string) => setForm({ ...form, [key]: value })
-  return <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="fleet-modal fleet-resource-modal" onSubmit={onSubmit}><div className="fleet-modal-heading"><div><span className="fleet-kicker">{editing ? 'ATUALIZAÇÃO CADASTRAL' : 'CADASTRO OFICIAL'}</span><h2>{editing ? 'Editar posto' : 'Novo posto credenciado'}</h2></div><button type="button" className="fleet-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>{error && <div className="fleet-inline-error">{error}</div>}<div className="fleet-form-section-title"><Building2 size={16} /> Dados do estabelecimento</div><div className="fleet-form-grid"><Field label="Razão social" required value={form.razao_social_snapshot} onChange={(value) => update('razao_social_snapshot', value)} /><Field label="Nome fantasia" value={form.nome_fantasia_snapshot} onChange={(value) => update('nome_fantasia_snapshot', value)} /><Field label="CNPJ" required value={form.cnpj_snapshot} onChange={(value) => update('cnpj_snapshot', value)} placeholder="00.000.000/0001-00" /><Field label="Cidade" value={form.cidade} onChange={(value) => update('cidade', value)} /><Field label="UF" maxLength={2} value={form.uf} onChange={(value) => update('uf', value)} placeholder="PR" /><Field label="Endereço" value={form.endereco} onChange={(value) => update('endereco', value)} /></div><div className="fleet-form-section-title"><UserRound size={16} /> Representante legal</div><div className="fleet-form-grid"><Field label="Nome completo" required value={form.representante_nome} onChange={(value) => update('representante_nome', value)} /><Field label="Documento" value={form.representante_documento} onChange={(value) => update('representante_documento', value)} /><Field label="E-mail" type="email" value={form.representante_email} onChange={(value) => update('representante_email', value)} /><Field label="Telefone" value={form.representante_telefone} onChange={(value) => update('representante_telefone', value)} /></div><div className="fleet-form-section-title"><Save size={16} /> Credenciamento</div><div className="fleet-form-grid"><Field label="Início" type="date" value={form.credenciamento_started_at} onChange={(value) => update('credenciamento_started_at', value)} /><Field label="Validade" type="date" value={form.credenciamento_ends_at} onChange={(value) => update('credenciamento_ends_at', value)} /><label>Status<select value={form.status} onChange={(event) => update('status', event.target.value)}><option value="PENDENTE">Pendente</option><option value="ATIVO">Ativo</option><option value="SUSPENSO">Suspenso</option><option value="INATIVO">Inativo</option></select></label><label className="fleet-form-wide">Observações<textarea value={form.notes} onChange={(event) => update('notes', event.target.value)} rows={4} placeholder="Registre informações úteis para a operação, contato ou análise do credenciamento." /></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={onClose}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : <><Save size={15} /> Salvar posto</>}</button></div></form></div>
+function StationForm({
+  form,
+  setForm,
+  editing,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  form: StationFormState;
+  setForm: Dispatch<SetStateAction<StationFormState>>;
+  editing: Station | null;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const update = (key: string, value: string) =>
+    setForm({ ...form, [key]: value });
+  return (
+    <div
+      className="fleet-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <form className="fleet-modal fleet-resource-modal" onSubmit={onSubmit}>
+        <div className="fleet-modal-heading">
+          <div>
+            <span className="fleet-kicker">
+              {editing ? "ATUALIZAÇÃO CADASTRAL" : "CADASTRO OFICIAL"}
+            </span>
+            <h2>{editing ? "Editar posto" : "Novo posto credenciado"}</h2>
+          </div>
+          <button
+            type="button"
+            className="fleet-close"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {error && <div className="fleet-inline-error">{error}</div>}
+        <div className="fleet-form-section-title">
+          <Building2 size={16} /> Dados do estabelecimento
+        </div>
+        <div className="fleet-form-grid">
+          <Field
+            label="Razão social"
+            required
+            value={form.razao_social_snapshot}
+            onChange={(value) => update("razao_social_snapshot", value)}
+          />
+          <Field
+            label="Nome fantasia"
+            value={form.nome_fantasia_snapshot}
+            onChange={(value) => update("nome_fantasia_snapshot", value)}
+          />
+          <Field
+            label="CNPJ"
+            required
+            value={form.cnpj_snapshot}
+            onChange={(value) => update("cnpj_snapshot", value)}
+            placeholder="00.000.000/0001-00"
+          />
+          <Field
+            label="Cidade"
+            value={form.cidade}
+            onChange={(value) => update("cidade", value)}
+          />
+          <Field
+            label="UF"
+            maxLength={2}
+            value={form.uf}
+            onChange={(value) => update("uf", value)}
+            placeholder="PR"
+          />
+          <Field
+            label="Endereço"
+            value={form.endereco}
+            onChange={(value) => update("endereco", value)}
+          />
+        </div>
+        <div className="fleet-form-section-title">
+          <UserRound size={16} /> Representante legal
+        </div>
+        <div className="fleet-form-grid">
+          <Field
+            label="Nome completo"
+            required
+            value={form.representante_nome}
+            onChange={(value) => update("representante_nome", value)}
+          />
+          <Field
+            label="Documento"
+            value={form.representante_documento}
+            onChange={(value) => update("representante_documento", value)}
+          />
+          <Field
+            label="E-mail"
+            type="email"
+            value={form.representante_email}
+            onChange={(value) => update("representante_email", value)}
+          />
+          <Field
+            label="Telefone"
+            value={form.representante_telefone}
+            onChange={(value) => update("representante_telefone", value)}
+          />
+        </div>
+        <div className="fleet-form-section-title">
+          <Save size={16} /> Credenciamento
+        </div>
+        <div className="fleet-form-grid">
+          <Field
+            label="Início"
+            type="date"
+            value={form.credenciamento_started_at}
+            onChange={(value) => update("credenciamento_started_at", value)}
+          />
+          <Field
+            label="Validade"
+            type="date"
+            value={form.credenciamento_ends_at}
+            onChange={(value) => update("credenciamento_ends_at", value)}
+          />
+          <label>
+            Status
+            <select
+              value={form.status}
+              onChange={(event) => update("status", event.target.value)}
+            >
+              <option value="PENDENTE">Pendente</option>
+              <option value="ATIVO">Ativo</option>
+              <option value="SUSPENSO">Suspenso</option>
+              <option value="INATIVO">Inativo</option>
+            </select>
+          </label>
+          <label className="fleet-form-wide">
+            Observações
+            <textarea
+              value={form.notes}
+              onChange={(event) => update("notes", event.target.value)}
+              rows={4}
+              placeholder="Registre informações úteis para a operação, contato ou análise do credenciamento."
+            />
+          </label>
+        </div>
+        <div className="fleet-modal-actions">
+          <button
+            type="button"
+            className="fleet-secondary-button"
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="fleet-primary-button"
+            disabled={saving}
+          >
+            {saving ? (
+              "Salvando…"
+            ) : (
+              <>
+                <Save size={15} /> Salvar posto
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 export function DriversView({ onSaved }: ResourceProps) {
-  const [drivers, setDrivers] = useState<Driver[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [formError, setFormError] = useState('')
-  const [editing, setEditing] = useState<Driver | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [query, setQuery] = useState('')
-  const [form, setForm] = useState<DriverFormState>({ nome: '', matricula: '', cpf: '', cnh_number: '', cnh_valid_until: '', ativo: 'true' })
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [editing, setEditing] = useState<Driver | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [form, setForm] = useState<DriverFormState>({
+    nome: "",
+    matricula: "",
+    cpf: "",
+    cnh_number: "",
+    cnh_valid_until: "",
+    ativo: "true",
+  });
 
-  async function loadDrivers() { if (!supabase) return; setLoading(true); setError(''); const { data, error: resultError } = await supabase.from('fleet_drivers').select('id,nome,matricula,cpf,cnh_number,cnh_valid_until,unidade_id,ativo').order('nome').limit(100); if (resultError) setError('Não foi possível carregar os motoristas permitidos para este usuário.'); else setDrivers((data || []) as Driver[]); setLoading(false) }
-  useEffect(() => { void loadDrivers() }, [])
-  function openNew() { setEditing(null); setForm({ nome: '', matricula: '', cpf: '', cnh_number: '', cnh_valid_until: '', ativo: 'true' }); setFormError(''); setShowForm(true) }
-  function openEdit(driver: Driver) { setEditing(driver); setForm({ nome: driver.nome, matricula: inputValue(driver.matricula), cpf: inputValue(driver.cpf), cnh_number: inputValue(driver.cnh_number), cnh_valid_until: inputValue(driver.cnh_valid_until), ativo: String(driver.ativo) }); setFormError(''); setShowForm(true) }
-  async function save(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!supabase) return; setSaving(true); setFormError(''); const payload = { nome: form.nome.trim(), matricula: form.matricula.trim() || null, cpf: form.cpf.trim() || null, cnh_number: form.cnh_number.trim() || null, cnh_valid_until: form.cnh_valid_until || null, ativo: form.ativo === 'true', updated_at: new Date().toISOString() }; const result = editing ? await supabase.from('fleet_drivers').update(payload).eq('id', editing.id) : await createDriver(payload); setSaving(false); if (result.error) { setFormError(normalizeError(result.error.code)); return } setShowForm(false); await loadDrivers(); await onSaved() }
-  async function createDriver(payload: Record<string, unknown>) { const { data: municipio } = await supabase!.rpc('fleet_current_municipio_id'); const { data: currentUser } = await supabase!.rpc('fleet_current_usuario_id'); return supabase!.from('fleet_drivers').insert({ ...payload, municipio_id: municipio, created_by: currentUser }) }
-  const filtered = drivers.filter((driver) => `${driver.nome} ${driver.matricula || ''} ${driver.cpf || ''}`.toLowerCase().includes(query.toLowerCase()))
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DE APOIO</span><h2>Motoristas</h2><p>Condutores e habilitações autorizadas para operar veículos municipais.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo motorista</button></div>{error && <div className="fleet-inline-error">{error}</div>}<div className="fleet-resource-toolbar"><div className="fleet-resource-summary"><UserRound size={17} /><strong>{drivers.length}</strong><span>motoristas carregados</span></div><input className="fleet-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome, matrícula ou CPF" /></div><div className="fleet-table-panel">{loading ? <div className="fleet-loading">Carregando motoristas…</div> : filtered.length ? <table className="fleet-table fleet-resource-table"><thead><tr><th>Motorista</th><th>Matrícula</th><th>CPF</th><th>CNH</th><th>Situação</th><th /></tr></thead><tbody>{filtered.map((driver) => <tr key={driver.id}><td><strong>{driver.nome}</strong><small>{driver.cnh_valid_until ? `Validade da CNH: ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${driver.cnh_valid_until}T00:00:00`))}` : 'Validade da CNH não informada'}</small></td><td>{driver.matricula || '—'}</td><td>{driver.cpf || '—'}</td><td><strong>{driver.cnh_number || 'Não informada'}</strong></td><td><span className={`fleet-status ${driver.ativo ? 'success' : 'neutral'}`}>{driver.ativo ? 'Ativo' : 'Inativo'}</span></td><td><button className="fleet-row-action" onClick={() => openEdit(driver)} aria-label={`Editar ${driver.nome}`}><Edit3 size={16} /></button></td></tr>)}</tbody></table> : <div className="fleet-empty"><span><UserRound size={24} /></span><strong>Nenhum motorista encontrado</strong><p>Cadastre o primeiro motorista para relacioná-lo aos abastecimentos.</p><button className="fleet-primary-button" onClick={openNew}><Plus size={15} /> Novo motorista</button></div>}</div>{showForm && <DriverForm form={form} setForm={setForm} editing={editing} saving={saving} error={formError} onClose={() => setShowForm(false)} onSubmit={save} />}</section>
+  async function loadDrivers() {
+    if (!supabase) return;
+    setLoading(true);
+    setError("");
+    const { data, error: resultError } = await supabase
+      .from("fleet_drivers")
+      .select(
+        "id,nome,matricula,cpf,cnh_number,cnh_valid_until,unidade_id,ativo",
+      )
+      .order("nome")
+      .limit(100);
+    if (resultError)
+      setError(
+        "Não foi possível carregar os motoristas permitidos para este usuário.",
+      );
+    else setDrivers((data || []) as Driver[]);
+    setLoading(false);
+  }
+  useEffect(() => {
+    void loadDrivers();
+  }, []);
+  function openNew() {
+    setEditing(null);
+    setForm({
+      nome: "",
+      matricula: "",
+      cpf: "",
+      cnh_number: "",
+      cnh_valid_until: "",
+      ativo: "true",
+    });
+    setFormError("");
+    setShowForm(true);
+  }
+  function openEdit(driver: Driver) {
+    setEditing(driver);
+    setForm({
+      nome: driver.nome,
+      matricula: inputValue(driver.matricula),
+      cpf: inputValue(driver.cpf),
+      cnh_number: inputValue(driver.cnh_number),
+      cnh_valid_until: inputValue(driver.cnh_valid_until),
+      ativo: String(driver.ativo),
+    });
+    setFormError("");
+    setShowForm(true);
+  }
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+    setSaving(true);
+    setFormError("");
+    const payload = {
+      nome: form.nome.trim(),
+      matricula: form.matricula.trim() || null,
+      cpf: form.cpf.trim() || null,
+      cnh_number: form.cnh_number.trim() || null,
+      cnh_valid_until: form.cnh_valid_until || null,
+      ativo: form.ativo === "true",
+      updated_at: new Date().toISOString(),
+    };
+    const result = editing
+      ? await supabase
+          .from("fleet_drivers")
+          .update(payload)
+          .eq("id", editing.id)
+      : await createDriver(payload);
+    setSaving(false);
+    if (result.error) {
+      setFormError(normalizeError(result.error.code));
+      return;
+    }
+    setShowForm(false);
+    await loadDrivers();
+    await onSaved();
+  }
+  async function createDriver(payload: Record<string, unknown>) {
+    const { data: municipio } = await supabase!.rpc(
+      "fleet_current_municipio_id",
+    );
+    const { data: currentUser } = await supabase!.rpc(
+      "fleet_current_usuario_id",
+    );
+    return supabase!
+      .from("fleet_drivers")
+      .insert({ ...payload, municipio_id: municipio, created_by: currentUser });
+  }
+  const filtered = drivers.filter((driver) =>
+    `${driver.nome} ${driver.matricula || ""} ${driver.cpf || ""}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
+  );
+  return (
+    <section className="fleet-section fleet-page-section">
+      <div className="fleet-page-heading">
+        <div>
+          <span className="fleet-kicker">CADASTRO DE APOIO</span>
+          <h2>Motoristas</h2>
+          <p>
+            Condutores e habilitações autorizadas para operar veículos
+            municipais.
+          </p>
+        </div>
+        <button className="fleet-primary-button" onClick={openNew}>
+          <Plus size={16} /> Novo motorista
+        </button>
+      </div>
+      {error && <div className="fleet-inline-error">{error}</div>}
+      <div className="fleet-resource-toolbar">
+        <div className="fleet-resource-summary">
+          <UserRound size={17} />
+          <strong>{drivers.length}</strong>
+          <span>motoristas carregados</span>
+        </div>
+        <input
+          className="fleet-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Buscar por nome, matrícula ou CPF"
+        />
+      </div>
+      <div className="fleet-table-panel">
+        {loading ? (
+          <div className="fleet-loading">Carregando motoristas…</div>
+        ) : filtered.length ? (
+          <table className="fleet-table fleet-resource-table">
+            <thead>
+              <tr>
+                <th>Motorista</th>
+                <th>Matrícula</th>
+                <th>CPF</th>
+                <th>CNH</th>
+                <th>Situação</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((driver) => (
+                <tr key={driver.id}>
+                  <td>
+                    <strong>{driver.nome}</strong>
+                    <small>
+                      {driver.cnh_valid_until
+                        ? `Validade da CNH: ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${driver.cnh_valid_until}T00:00:00`))}`
+                        : "Validade da CNH não informada"}
+                    </small>
+                  </td>
+                  <td>{driver.matricula || "—"}</td>
+                  <td>{driver.cpf || "—"}</td>
+                  <td>
+                    <strong>{driver.cnh_number || "Não informada"}</strong>
+                  </td>
+                  <td>
+                    <span
+                      className={`fleet-status ${driver.ativo ? "success" : "neutral"}`}
+                    >
+                      {driver.ativo ? "Ativo" : "Inativo"}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="fleet-row-action"
+                      onClick={() => openEdit(driver)}
+                      aria-label={`Editar ${driver.nome}`}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="fleet-empty">
+            <span>
+              <UserRound size={24} />
+            </span>
+            <strong>Nenhum motorista encontrado</strong>
+            <p>
+              Cadastre o primeiro motorista para relacioná-lo aos
+              abastecimentos.
+            </p>
+            <button className="fleet-primary-button" onClick={openNew}>
+              <Plus size={15} /> Novo motorista
+            </button>
+          </div>
+        )}
+      </div>
+      {showForm && (
+        <DriverForm
+          form={form}
+          setForm={setForm}
+          editing={editing}
+          saving={saving}
+          error={formError}
+          onClose={() => setShowForm(false)}
+          onSubmit={save}
+        />
+      )}
+    </section>
+  );
 }
 
-function DriverForm({ form, setForm, editing, saving, error, onClose, onSubmit }: { form: DriverFormState; setForm: Dispatch<SetStateAction<DriverFormState>>; editing: Driver | null; saving: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) { const update = (key: keyof DriverFormState, value: string) => setForm({ ...form, [key]: value }); return <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><form className="fleet-modal fleet-resource-modal" onSubmit={onSubmit}><div className="fleet-modal-heading"><div><span className="fleet-kicker">{editing ? 'ATUALIZAÇÃO CADASTRAL' : 'CADASTRO OFICIAL'}</span><h2>{editing ? 'Editar motorista' : 'Novo motorista'}</h2></div><button type="button" className="fleet-close" onClick={onClose} aria-label="Fechar"><X size={18} /></button></div>{error && <div className="fleet-inline-error">{error}</div>}<div className="fleet-form-section-title"><UserRound size={16} /> Dados pessoais e funcionais</div><div className="fleet-form-grid"><Field label="Nome completo" required value={form.nome} onChange={(value) => update('nome', value)} /><Field label="Matrícula" value={form.matricula} onChange={(value) => update('matricula', value)} /><Field label="CPF" value={form.cpf} onChange={(value) => update('cpf', value)} /><label>Situação<select value={form.ativo} onChange={(event) => update('ativo', event.target.value)}><option value="true">Ativo</option><option value="false">Inativo</option></select></label></div><div className="fleet-form-section-title"><ChevronRight size={16} /> Habilitação</div><div className="fleet-form-grid"><Field label="Número da CNH" value={form.cnh_number} onChange={(value) => update('cnh_number', value)} /><Field label="Validade da CNH" type="date" value={form.cnh_valid_until} onChange={(value) => update('cnh_valid_until', value)} /></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={onClose}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : <><Save size={15} /> Salvar motorista</>}</button></div></form></div> }
+function DriverForm({
+  form,
+  setForm,
+  editing,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  form: DriverFormState;
+  setForm: Dispatch<SetStateAction<DriverFormState>>;
+  editing: Driver | null;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const update = (key: keyof DriverFormState, value: string) =>
+    setForm({ ...form, [key]: value });
+  return (
+    <div
+      className="fleet-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <form className="fleet-modal fleet-resource-modal" onSubmit={onSubmit}>
+        <div className="fleet-modal-heading">
+          <div>
+            <span className="fleet-kicker">
+              {editing ? "ATUALIZAÇÃO CADASTRAL" : "CADASTRO OFICIAL"}
+            </span>
+            <h2>{editing ? "Editar motorista" : "Novo motorista"}</h2>
+          </div>
+          <button
+            type="button"
+            className="fleet-close"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {error && <div className="fleet-inline-error">{error}</div>}
+        <div className="fleet-form-section-title">
+          <UserRound size={16} /> Dados pessoais e funcionais
+        </div>
+        <div className="fleet-form-grid">
+          <Field
+            label="Nome completo"
+            required
+            value={form.nome}
+            onChange={(value) => update("nome", value)}
+          />
+          <Field
+            label="Matrícula"
+            value={form.matricula}
+            onChange={(value) => update("matricula", value)}
+          />
+          <Field
+            label="CPF"
+            value={form.cpf}
+            onChange={(value) => update("cpf", value)}
+          />
+          <label>
+            Situação
+            <select
+              value={form.ativo}
+              onChange={(event) => update("ativo", event.target.value)}
+            >
+              <option value="true">Ativo</option>
+              <option value="false">Inativo</option>
+            </select>
+          </label>
+        </div>
+        <div className="fleet-form-section-title">
+          <ChevronRight size={16} /> Habilitação
+        </div>
+        <div className="fleet-form-grid">
+          <Field
+            label="Número da CNH"
+            value={form.cnh_number}
+            onChange={(value) => update("cnh_number", value)}
+          />
+          <Field
+            label="Validade da CNH"
+            type="date"
+            value={form.cnh_valid_until}
+            onChange={(value) => update("cnh_valid_until", value)}
+          />
+        </div>
+        <div className="fleet-modal-actions">
+          <button
+            type="button"
+            className="fleet-secondary-button"
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="fleet-primary-button"
+            disabled={saving}
+          >
+            {saving ? (
+              "Salvando…"
+            ) : (
+              <>
+                <Save size={15} /> Salvar motorista
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
-function Field({ label, value, onChange, required = false, type = 'text', placeholder, maxLength }: { label: string; value: string; onChange: (value: string) => void; required?: boolean; type?: string; placeholder?: string; maxLength?: number }) { return <label>{label}{required && ' *'}<input required={required} type={type} maxLength={maxLength} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label> }
+function Field({
+  label,
+  value,
+  onChange,
+  required = false,
+  type = "text",
+  placeholder,
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  type?: string;
+  placeholder?: string;
+  maxLength?: number;
+}) {
+  return (
+    <label>
+      {label}
+      {required && " *"}
+      <input
+        required={required}
+        type={type}
+        maxLength={maxLength}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
