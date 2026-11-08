@@ -1,0 +1,31 @@
+Fontes de requisitos consultadas para o dashboard da Gestão de Frotas
+
+Documento principal (Google Docs, pasta do Drive informada pelo usuário):
+https://docs.google.com/document/d/10MoNvj5-AYzVNKwzy9BOqXApyZSQPJG5/edit?usp=sharing&ouid=116818890489337337294&rtpof=true&sd=true
+Cópia de trabalho local consultada: /home/ubuntu/fleet-v2.txt
+
+Seções da especificação usadas na definição do escopo:
+- §1.4.5: indicadores gerenciais de gastos com combustível por mês/exercício, litros e quantidade, dimensões por secretaria/veículo/motorista/estabelecimento, comparativos, abastecimentos recentes, evolução mensal, maiores despesas e pendências/inconsistências; interface responsiva.
+- §§1.4.4 e 1.7: fechamento mensal, comprovantes, conciliação e limites do escopo inicial.
+- §§6.5, 6.6 e 6.9–6.14: períodos, métricas de abastecimento e dimensões/rankings.
+- §6.15: alertas com situação e acesso à origem; variações não provam irregularidade.
+- §6.16: painel de acompanhamento dos fechamentos.
+- §§6.19–6.23: atualização, acessibilidade, desempenho, filtros no banco e permissões no backend.
+- §6.24: métricas de manutenção, pneus, oficinas, seguros, IPVA, licenciamento, multas e custo total de propriedade ficam condicionadas aos módulos futuros.
+- §6.25: critérios de aceite, incluindo comparativos, alertas, exportações, horário de atualização e segurança.
+- §6.26: diretrizes para não duplicar despesas, centralizar cálculos, distinguir valores registrados/conferidos/fiscais, preservar secretarias responsável/beneficiária e rastrear registros.
+
+Validação do modelo de dados associado realizada via Supabase MCP em 2026-11-08:
+- Enumeração de `fleet_fueling_status` inclui CANCELADO e não inclui um status ESTORNADO separado; `fleet_fuelings` tem `canceled_at`.
+- `fleet_fueling_documents` mantém estado do comprovante; ACEITO é o estado considerado conferido/aceito no fechamento atual.
+- Existem dimensões de abastecimento por `responsible_unit_id`, `beneficiary_unit_id`, `vehicle_id`, `driver_id`, `station_id` e `fuel_type_id`.
+- `fleet_monthly_closure_station_checks` armazena valores registrados, fiscais e divergência; `fleet_inconsistencies` armazena status, severidade, vínculo ao abastecimento/veículo e resolução.
+- Existem autorizações temporárias aprovadas de veículos, com secretaria responsável/beneficiária e período de validade.
+- O front-end inicial só carregava os 100 abastecimentos mais recentes na Visão Geral; Dashboard de consumo/Relatórios usavam limite 5.000 e agregação no cliente.
+
+Limitações interpretativas a manter visíveis:
+- A tabela não apresenta estado ESTORNADO; a implementação exclui CANCELADO e linhas com `canceled_at` preenchido, sem inventar evento de estorno.
+- A média por litro é valor registrado dividido por litros e é rotulada como média ponderada/registrada, não como consumo efetivo.
+- Valores fiscais são mostrados por fechamento/posto, não somados de novo ao valor operacional.
+- Cessões no painel referem-se somente a autorizações aprovadas registradas, não a movimentações genéricas que não estejam modeladas.
+- A especificação prevê etapas futuras para manutenção e outras despesas; o dashboard de abastecimentos não deve sugerir que esses módulos já existem.

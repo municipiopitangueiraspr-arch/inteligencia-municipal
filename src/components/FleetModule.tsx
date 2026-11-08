@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert, Filter,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, CircleAlert, Filter,
   ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
   RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X, Eye,
 } from 'lucide-react'
@@ -10,6 +10,7 @@ import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
 import { DriversView } from './FleetResources'
 import { StationManagementView } from './StationManagementView'
+import { FleetOverviewDashboard } from './FleetOverviewDashboard'
 import './FleetModule.css'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'accessRequests' | 'settings'
@@ -60,7 +61,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [units, setUnits] = useState<FleetOption[]>([])
   const [fuelTypes, setFuelTypes] = useState<FleetOption[]>([])
-  const [fuelings, setFuelings] = useState<Fueling[]>([])
+  const [pendingFuelings, setPendingFuelings] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -74,17 +75,15 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
     if (!supabase) return
     setError('')
     setRefreshing(true)
-    const [vehicleResult, fuelingResult, unitResult, fuelTypeResult] = await Promise.all([
+    const [vehicleResult, unitResult, fuelTypeResult] = await Promise.all([
       supabase.from('fleet_vehicles').select('id,placa,marca,modelo,ano_fabricacao,ano_modelo,chassi,renavam,fuel_type_id,tank_capacity_l,responsible_unit_id,operational_status,current_odometer_km,notes').order('placa').limit(100),
-      supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,modelo),stations:fleet_fuel_stations(nome_fantasia_snapshot),fuel_type:fleet_fuel_types(nome)').order('performed_at', { ascending: false }).limit(100),
       supabase.from('unidades_organizacionais').select('id,nome,sigla,ativo').order('nome').limit(200),
       supabase.from('fleet_fuel_types').select('id,nome,sigla,unidade_medida,ativo').order('nome').limit(100),
     ])
-    const firstError = vehicleResult.error || fuelingResult.error
+    const firstError = vehicleResult.error
     if (firstError) setError('Não foi possível carregar os dados permitidos para este usuário. Verifique o perfil de Frotas.')
     else {
       setVehicles((vehicleResult.data || []) as Vehicle[])
-      setFuelings((fuelingResult.data || []) as unknown as Fueling[])
       setUnits((unitResult.data || []) as FleetOption[])
       setFuelTypes((fuelTypeResult.data || []) as FleetOption[])
     }
@@ -93,11 +92,6 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   }
 
   useEffect(() => { void loadData() }, [])
-
-  const activeVehicles = useMemo(() => vehicles.filter((vehicle) => vehicle.operational_status === 'ATIVO').length, [vehicles])
-  const pendingFuelings = useMemo(() => fuelings.filter((fueling) => ['ENVIADO_PELO_POSTO', 'PENDENTE_DE_CONFERENCIA', 'EM_ANALISE', 'COM_INCONSISTENCIA'].includes(fueling.status)).length, [fuelings])
-  const monthFuelings = useMemo(() => fuelings.filter((fueling) => new Date(fueling.performed_at).getMonth() === new Date().getMonth()).length, [fuelings])
-  const monthTotal = useMemo(() => fuelings.filter((fueling) => new Date(fueling.performed_at).getMonth() === new Date().getMonth()).reduce((sum, fueling) => sum + Number(fueling.total_amount || 0), 0), [fuelings])
 
   function requestVehicleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -162,7 +156,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
       <header className="fleet-header"><div><p className="fleet-kicker">MÓDULO OPERACIONAL</p><h1>{navItems.find((item) => item.id === view)?.label}</h1></div><div className="fleet-header-actions"><button className="fleet-icon-button" aria-label="Atualizar dados" onClick={() => void loadData()} disabled={refreshing}>{refreshing ? <RefreshCw className="spin" size={18} /> : <RefreshCw size={18} />}</button><button className="fleet-icon-button" aria-label="Notificações"><Bell size={18} /><span className="fleet-alert-dot" /></button><span className="fleet-protected"><ShieldCheck size={16} /> Dados protegidos</span></div></header>
       <div className="fleet-content">
         {error && <div className="fleet-error" role="alert"><CircleAlert size={17} /> {error}</div>}
-        {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
+        {view === 'overview' && <FleetOverviewDashboard userEmail={userEmail} onPendingCount={setPendingFuelings} onNavigate={(target) => setView(target)} />}
         {view === 'vehicles' && <Vehicles vehicles={vehicles} units={units} fuelTypes={fuelTypes} loading={loading} onAdd={openNewVehicle} onEdit={openEditVehicle} />}
         {view === 'fuelTypes' && <FuelTypesView onChanged={loadData} onRequestConfirmation={setConfirmation} />}
         {view === 'fuelings' && <Fuelings onRequestConfirmation={setConfirmation} />}
@@ -203,11 +197,6 @@ function FleetConfirmDialog({ request, onClose }: { request: ConfirmationRequest
       <footer className="fleet-confirm-actions"><button className="fleet-secondary-button" type="button" onClick={onClose} disabled={busy}>Cancelar</button><button className={`fleet-primary-button ${request.tone === 'danger' ? 'fleet-confirm-danger' : ''}`} type="button" onClick={() => void confirm()} disabled={busy}><ShieldCheck size={15} />{busy ? 'Salvando…' : request.confirmLabel}</button></footer>
     </section>
   </div>
-}
-
-function Overview({ activeVehicles, pendingFuelings, monthFuelings, monthTotal, fuelings, onNavigate }: { activeVehicles: number; pendingFuelings: number; monthFuelings: number; monthTotal: number; fuelings: Fueling[]; onNavigate: (view: FleetView) => void }) {
-  const metrics = [{ label: 'Veículos ativos', value: activeVehicles, helper: 'Frota disponível', icon: Truck, tone: 'blue' }, { label: 'Abastecimentos no mês', value: monthFuelings, helper: formatMoney(monthTotal), icon: Fuel, tone: 'green' }, { label: 'Aguardando conferência', value: pendingFuelings, helper: 'Ações do gestor', icon: ClipboardCheck, tone: 'amber' }, { label: 'Postos monitorados', value: '—', helper: 'Consulte a rede credenciada', icon: Store, tone: 'violet' }]
-  return <><section className="fleet-hero"><div><span className="fleet-hero-kicker">CONTROLE OPERACIONAL</span><h2>Frota em movimento, dados sob controle.</h2><p>Acompanhe abastecimentos, veículos e pendências em um único espaço de trabalho.</p></div><div className="fleet-hero-mark"><Gauge size={38} /></div></section><section className="fleet-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">ACOMPANHAMENTO</span><h2>Indicadores do módulo</h2></div><span className="fleet-period">Atualizado agora</span></div><div className="fleet-metric-grid">{metrics.map(({ label, value, helper, icon: Icon, tone }) => <article className="fleet-metric" key={label}><span className={`fleet-metric-icon ${tone}`}><Icon size={19} /></span><div><span>{label}</span><strong>{value}</strong><small>{helper}</small></div></article>)}</div></section><section className="fleet-section fleet-two-columns"><div className="fleet-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">FILA DE TRABALHO</span><h2>Abastecimentos recentes</h2></div><button className="fleet-link-button" onClick={() => onNavigate('fuelings')}>Ver fila <ChevronRight size={14} /></button></div><FuelingTable fuelings={fuelings.slice(0, 5)} compact /></div><div className="fleet-panel fleet-attention-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">ATENÇÃO</span><h2>Próximas ações</h2></div></div><div className="fleet-attention-item"><span className="fleet-attention-icon"><ClipboardCheck size={18} /></span><div><strong>{pendingFuelings ? `${pendingFuelings} abastecimento(s) aguardam conferência` : 'Nenhuma pendência registrada'}</strong><p>{pendingFuelings ? 'Revise os comprovantes e valide os registros enviados.' : 'Quando houver ações, elas aparecerão nesta área.'}</p></div></div></div></section></>
 }
 
 type VehicleSortKey = 'vehicle' | 'plate' | 'unit' | 'fuel' | 'tank' | 'odometer' | 'status'
@@ -686,101 +675,103 @@ function FuelingCorrectionDialog({ fueling, document, onCancel, onConfirm }: { f
   }
   return <div className="fleet-confirm-backdrop fleet-correction-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel() }}><form className="fleet-confirm-dialog fleet-correction-dialog" role="dialog" aria-modal="true" aria-labelledby="fleet-correction-title" onSubmit={submit}><header className="fleet-confirm-heading"><span className="fleet-confirm-emblem danger"><RotateCcw size={19} /></span><div><span className="fleet-kicker">INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS</span><h2 id="fleet-correction-title">Solicitar retificação</h2></div></header><p className="fleet-confirm-message">O comprovante será marcado como rejeitado e o abastecimento como “Correção solicitada”. O posto verá o motivo e poderá enviar um novo arquivo.</p><div className="fleet-confirm-details"><div><CheckCircle2 size={14} /><span>Veículo: {fueling.vehicles?.placa || 'Não informado'} · {formatDate(fueling.performed_at)}</span></div><div><CheckCircle2 size={14} /><span>Comprovante: {document.file_name}</span></div></div><label className="fleet-correction-reason">Motivo e orientação para o posto<textarea required minLength={8} maxLength={1000} rows={4} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex.: O recibo está ilegível. Envie uma imagem completa em que seja possível ler data, litros e valor." /></label>{error && <div className="fleet-confirm-error" role="alert"><CircleAlert size={15} />{error}</div>}<footer className="fleet-confirm-actions"><button className="fleet-secondary-button" type="button" onClick={onCancel} disabled={saving}>Cancelar</button><button className="fleet-primary-button fleet-confirm-danger" type="submit" disabled={saving || reason.trim().length < 8}><RotateCcw size={15} />{saving ? 'Registrando…' : 'Rejeitar e solicitar retificação'}</button></footer></form></div>
 }
-function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; compact?: boolean }) { return <table className={`fleet-table ${compact ? 'fleet-table-compact' : ''}`}><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Quantidade</th><th>Total</th><th>Situação</th></tr></thead><tbody>{fuelings.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td></tr>)}</tbody></table> }
-
-type ReportFueling = { liters: number; total_amount: number; status: string; performed_at: string; responsible_unit_id: string; units?: { nome?: string; sigla?: string } | null }
+type DashboardMetricRow = { id: string | null; label: string; description?: string; acronym?: string; fueling_count: number; liters: number; amount: number; weighted_price_per_liter?: number | null }
+type CentralDashboardData = {
+  updated_at: string
+  summary: { fueling_count: number; liters: number; registered_amount: number; confirmed_amount: number; confirmed_count: number; distinct_vehicles: number; year_to_date_amount: number; average_per_fueling: number }
+  by_vehicle: DashboardMetricRow[]
+  by_responsible_unit: DashboardMetricRow[]
+  filter_options: { units: { id: string; name: string; acronym: string }[] }
+}
+type AnalyticsRow = { tipo: string; descricao: string; abastecimentos: number; litros: number; custo: number; media: number }
 type ReportRow = { id: string; secretaria: string; sigla: string; abastecimentos: number; litros: number; custo: number; media: number }
 
-type AnalyticsFueling = { liters: number; total_amount: number; status: string; vehicles?: { placa?: string; marca?: string; modelo?: string; notes?: string | null } | null }
-type AnalyticsRow = { tipo: string; abastecimentos: number; litros: number; custo: number; media: number }
-
-function vehicleType(vehicle?: AnalyticsFueling['vehicles']) {
-  const noteType = vehicle?.notes?.split('|')[1]
-  if (noteType) return noteType.replaceAll('_', ' ')
-  const text = `${vehicle?.marca || ''} ${vehicle?.modelo || ''}`.toLowerCase()
-  if (text.includes('ônibus') || text.includes('onibus')) return 'Ônibus'
-  if (text.includes('micro')) return 'Micro-ônibus'
-  if (text.includes('van')) return 'Van'
-  if (text.includes('caminh') || text.includes('pipa')) return 'Caminhão'
-  if (text.includes('retro') || text.includes('escav')) return 'Pá retroescavadeira'
-  if (text.includes('rolo') || text.includes('motonivel')) return 'Máquina pesada'
-  if (text.includes('utilit') || text.includes('fiorino')) return 'Carro utilitário'
-  return vehicle?.modelo || 'Não classificado'
+function monthEndExclusive(value: string) {
+  const [year, month] = value.split('-').map(Number)
+  return `${month === 12 ? year + 1 : year}-${String(month === 12 ? 1 : month + 1).padStart(2, '0')}-01`
+}
+function formatReference(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}-01T00:00:00Z`))
+}
+function callDashboardOverview(period: string, responsibleUnitId: string | null = null) {
+  if (!supabase) return Promise.resolve({ data: null, error: new Error('O serviço de dados está indisponível.') })
+  return supabase.rpc('fleet_dashboard_overview', {
+    p_start_month: `${period}-01`, p_end_month_exclusive: monthEndExclusive(period),
+    p_responsible_unit_id: responsibleUnitId, p_beneficiary_unit_id: null, p_vehicle_id: null,
+    p_driver_id: null, p_station_id: null, p_fuel_type_id: null, p_fueling_status: null,
+    p_document_status: null, p_recent_limit: 10,
+  })
 }
 
 function FuelConsumptionDashboard() {
   const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
   const [period, setPeriod] = useState(initialPeriod)
-  const [fuelings, setFuelings] = useState<AnalyticsFueling[]>([])
+  const [overview, setOverview] = useState<CentralDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  function range(value: string) { const [year, month] = value.split('-').map(Number); return { start: new Date(Date.UTC(year, month - 1, 1)).toISOString(), end: new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1)).toISOString() } }
-  async function loadAnalytics() {
-    if (!supabase) return
+  const requestId = useRef(0)
+  useEffect(() => {
+    const id = ++requestId.current
     setLoading(true); setError('')
-    const dates = range(period)
-    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,vehicle_id,vehicles:fleet_vehicles(placa,marca,modelo,notes)').gte('performed_at', dates.start).lt('performed_at', dates.end).limit(5000)
-    if (result.error) setError('Não foi possível carregar o dashboard de consumo. Verifique as permissões do perfil de Frotas.')
-    else setFuelings((result.data || []) as unknown as AnalyticsFueling[])
-    setLoading(false)
-  }
-  useEffect(() => { void loadAnalytics() }, [period])
-  const rows = Array.from(fuelings.filter((fueling) => fueling.status !== 'CANCELADO').reduce((map, fueling) => { const tipo = vehicleType(fueling.vehicles); const current = map.get(tipo) || { tipo, abastecimentos: 0, litros: 0, custo: 0, media: 0 }; current.abastecimentos += 1; current.litros += Number(fueling.liters || 0); current.custo += Number(fueling.total_amount || 0); current.media = current.custo / current.abastecimentos; map.set(tipo, current); return map }, new Map<string, AnalyticsRow>()).values()).sort((a, b) => b.litros - a.litros)
-  const maxLiters = Math.max(...rows.map((row) => row.litros), 1); const maxCost = Math.max(...rows.map((row) => row.custo), 1); const totalLiters = rows.reduce((sum, row) => sum + row.litros, 0); const totalCost = rows.reduce((sum, row) => sum + row.custo, 0); const totalFuelings = rows.reduce((sum, row) => sum + row.abastecimentos, 0); const periodLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period}-01T00:00:00Z`))
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">INTELIGÊNCIA OPERACIONAL</span><h2>Dashboard de consumo</h2><p>Visão gerencial do consumo de combustível por tipo de veículo.</p></div><div className="fleet-report-period"><BarChart3 size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Consumo total</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>{periodLabel}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><BarChart3 size={19} /></span><div><span>Custo total</span><strong>{formatMoney(totalCost)}</strong><small>sem cancelados</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><Truck size={19} /></span><div><span>Tipos monitorados</span><strong>{rows.length}</strong><small>categorias da frota</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><ClipboardCheck size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings}</strong><small>registros analisados</small></div></article></div>{loading ? <LoadingRows /> : rows.length ? <><div className="fleet-chart-grid"><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VOLUME</span><h2>Litros por tipo de veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`litros-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}</span><strong>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill blue" style={{ width: `${(row.litros / maxLiters) * 100}%` }} /></div></div>)}</div></article><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">CUSTO</span><h2>Valor por tipo de veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`custo-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}</span><strong>{formatMoney(row.custo)}</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill gold" style={{ width: `${(row.custo / maxCost) * 100}%` }} /></div></div>)}</div></article></div><div className="fleet-table-panel"><table className="fleet-table fleet-report-table"><thead><tr><th>Tipo de veículo</th><th>Abastecimentos</th><th>Litros</th><th>Custo total</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.tipo}><td><strong>{row.tipo}</strong><small>Classificação derivada do cadastro do veículo</small></td><td>{row.abastecimentos}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table></div></> : <EmptyState icon={BarChart3} title="Nenhum consumo encontrado" text="Não há abastecimentos para a competência selecionada." />}</section>
+    void callDashboardOverview(period).then(({ data, error: requestError }) => {
+      if (id !== requestId.current) return
+      if (requestError) { setOverview(null); setError('Não foi possível carregar o dashboard. Verifique o perfil de Frotas e tente atualizar.') }
+      else setOverview(data as unknown as CentralDashboardData)
+      setLoading(false)
+    })
+  }, [period])
+  const rows: AnalyticsRow[] = (overview?.by_vehicle || []).map((row) => ({ tipo: row.label, descricao: row.description || '', abastecimentos: Number(row.fueling_count || 0), litros: Number(row.liters || 0), custo: Number(row.amount || 0), media: Number(row.fueling_count || 0) ? Number(row.amount || 0) / Number(row.fueling_count || 0) : 0 }))
+  const maxLiters = Math.max(...rows.map((row) => row.litros), 1)
+  const maxCost = Math.max(...rows.map((row) => row.custo), 1)
+  const totalLiters = Number(overview?.summary?.liters || 0)
+  const totalCost = Number(overview?.summary?.registered_amount || 0)
+  const totalFuelings = Number(overview?.summary?.fueling_count || 0)
+  const periodLabel = formatReference(period)
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">INTELIGÊNCIA OPERACIONAL</span><h2>Dashboard de consumo</h2><p>Volume e valores por veículo, agregados no Supabase para a competência selecionada.</p></div><div className="fleet-report-period"><BarChart3 size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>{periodLabel} · backend</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><BarChart3 size={19} /></span><div><span>Valor registrado</span><strong>{formatMoney(totalCost)}</strong><small>Exclui cancelamentos e rascunhos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><Truck size={19} /></span><div><span>Veículos distintos</span><strong>{Number(overview?.summary?.distinct_vehicles || 0).toLocaleString('pt-BR')}</strong><small>Ativos no período filtrado</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><ClipboardCheck size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings.toLocaleString('pt-BR')}</strong><small>Contagem integral da competência</small></div></article></div>{loading ? <LoadingRows /> : overview && rows.length ? <><div className="fleet-overview-updated"><span>Atualizado em {formatDate(overview.updated_at)}</span><span>Os totais são integrais; a visualização por veículo apresenta os 12 maiores e permite detalhamento completo na Visão Geral.</span></div><div className="fleet-chart-grid"><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VOLUME</span><h2>Litros por veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`litros-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}{row.descricao ? ` · ${row.descricao}` : ''}</span><strong>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill blue" style={{ width: `${(row.litros / maxLiters) * 100}%` }} /></div></div>)}</div></article><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VALOR REGISTRADO</span><h2>Valor por veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`custo-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}{row.descricao ? ` · ${row.descricao}` : ''}</span><strong>{formatMoney(row.custo)}</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill gold" style={{ width: `${(row.custo / maxCost) * 100}%` }} /></div></div>)}</div></article></div><div className="fleet-table-panel"><table className="fleet-table fleet-report-table"><thead><tr><th>Veículo</th><th>Abastecimentos</th><th>Litros</th><th>Valor registrado</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.tipo}><td><strong>{row.tipo}</strong><small>{row.descricao || 'Descrição não informada no cadastro'}</small></td><td>{row.abastecimentos.toLocaleString('pt-BR')}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table></div></> : !loading && <EmptyState icon={BarChart3} title="Nenhum consumo encontrado" text="Não há abastecimentos válidos para a competência selecionada." />}</section>
 }
 
 function FuelCostReports() {
   const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
   const [period, setPeriod] = useState(initialPeriod)
-  const [fuelings, setFuelings] = useState<ReportFueling[]>([])
+  const [overview, setOverview] = useState<CentralDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [secretaria, setSecretaria] = useState('TODAS')
-
-  function bounds(value: string) {
-    const [year, month] = value.split('-').map(Number)
-    return { year, month, start: new Date(Date.UTC(year, month - 1, 1)).toISOString(), end: new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1)).toISOString() }
-  }
-  async function loadReport() {
-    if (!supabase) return
+  const requestId = useRef(0)
+  useEffect(() => {
+    const id = ++requestId.current
     setLoading(true); setError('')
-    const range = bounds(period)
-    const result = await supabase.from('fleet_fuelings').select('liters,total_amount,status,performed_at,responsible_unit_id,units:unidades_organizacionais!fleet_fuelings_responsible_unit_id_fkey(nome,sigla)').gte('performed_at', range.start).lt('performed_at', range.end).order('performed_at', { ascending: true }).limit(5000)
-    if (result.error) setError('Não foi possível carregar o relatório de custos. Verifique as permissões do perfil de Frotas.')
-    else setFuelings((result.data || []) as unknown as ReportFueling[])
-    setLoading(false)
-  }
-  useEffect(() => { void loadReport() }, [period])
+    void callDashboardOverview(period, secretaria === 'TODAS' ? null : secretaria).then(({ data, error: requestError }) => {
+      if (id !== requestId.current) return
+      if (requestError) { setOverview(null); setError('Não foi possível carregar o relatório centralizado. Verifique o perfil de Frotas e tente atualizar.') }
+      else setOverview(data as unknown as CentralDashboardData)
+      setLoading(false)
+    })
+  }, [period, secretaria])
 
-  const validFuelings = fuelings.filter((fueling) => fueling.status !== 'CANCELADO')
-  const rows = Array.from(validFuelings.reduce((map, fueling) => {
-    const key = fueling.responsible_unit_id
-    const current = map.get(key) || { id: key, secretaria: fueling.units?.nome || 'Secretaria não identificada', sigla: fueling.units?.sigla || '—', abastecimentos: 0, litros: 0, custo: 0, media: 0 }
-    current.abastecimentos += 1; current.litros += Number(fueling.liters || 0); current.custo += Number(fueling.total_amount || 0); current.media = current.custo / current.abastecimentos
-    map.set(key, current); return map
-  }, new Map<string, ReportRow>()).values()).sort((a, b) => b.custo - a.custo)
-  const secretarias = rows.map((row) => ({ id: row.id, nome: row.secretaria })).sort((a, b) => a.nome.localeCompare(b.nome))
-  const filteredRows = secretaria === 'TODAS' ? rows : rows.filter((row) => row.id === secretaria)
-  const totalLiters = filteredRows.reduce((sum, row) => sum + row.litros, 0)
-  const totalCost = filteredRows.reduce((sum, row) => sum + row.custo, 0)
-  const totalFuelings = filteredRows.reduce((sum, row) => sum + row.abastecimentos, 0)
-  const periodLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period}-01T00:00:00Z`))
+  const rows: ReportRow[] = (overview?.by_responsible_unit || []).map((row) => ({ id: row.id || row.label, secretaria: row.label, sigla: row.acronym || '—', abastecimentos: Number(row.fueling_count || 0), litros: Number(row.liters || 0), custo: Number(row.amount || 0), media: Number(row.fueling_count || 0) ? Number(row.amount || 0) / Number(row.fueling_count || 0) : 0 }))
+  const totalLiters = Number(overview?.summary?.liters || 0)
+  const totalCost = Number(overview?.summary?.registered_amount || 0)
+  const totalFuelings = Number(overview?.summary?.fueling_count || 0)
+  const periodLabel = formatReference(period)
+  const units = overview?.filter_options?.units || []
+  const selectedUnit = rows[0]?.secretaria || '—'
 
   function exportExcel() {
-    const sheetData = filteredRows.map((row) => ({ Secretaria: row.secretaria, Sigla: row.sigla, Abastecimentos: row.abastecimentos, 'Litros registrados': Number(row.litros.toFixed(2)), 'Custo total (R$)': Number(row.custo.toFixed(2)), 'Custo médio (R$)': Number(row.media.toFixed(2)) }))
-    const summary = [{ Relatório: 'Custos de combustíveis por secretaria', Competência: periodLabel, Secretaria: secretaria === 'TODAS' ? 'Todas' : filteredRows[0]?.secretaria || '—', Abastecimentos: totalFuelings, 'Litros registrados': Number(totalLiters.toFixed(2)), 'Custo total (R$)': Number(totalCost.toFixed(2)) }]
-    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Resumo'); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sheetData), 'Por secretaria'); XLSX.writeFile(workbook, `relatorio-combustiveis-${period}.xlsx`)
+    if (!overview) return
+    const sheetData = rows.map((row) => ({ Secretaria: row.secretaria, Sigla: row.sigla, Abastecimentos: row.abastecimentos, 'Litros registrados': Number(row.litros.toFixed(2)), 'Valor registrado (R$)': Number(row.custo.toFixed(2)), 'Média por abastecimento (R$)': Number(row.media.toFixed(2)) }))
+    const summary = [{ Relatório: 'Custos de combustíveis por secretaria', Competência: periodLabel, Secretaria: secretaria === 'TODAS' ? 'Todas' : selectedUnit, Abastecimentos: totalFuelings, 'Litros registrados': Number(totalLiters.toFixed(2)), 'Valor registrado (R$)': Number(totalCost.toFixed(2)), 'Abrangência do ranking': 'Maiores 12 unidades; os cartões apresentam o total integral do backend.' }]
+    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Resumo'); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sheetData), 'Ranking por secretaria'); XLSX.writeFile(workbook, `relatorio-combustiveis-${period}.xlsx`)
   }
-
   function exportPdf() {
+    if (!overview) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setTextColor(11, 41, 64); doc.setFontSize(17); doc.text('Custos de combustíveis por secretaria', 14, 17); doc.setFontSize(9); doc.setTextColor(91, 112, 123); doc.text(`Competência: ${periodLabel}  •  Filtro: ${secretaria === 'TODAS' ? 'Todas as secretarias' : filteredRows[0]?.secretaria || '—'}`, 14, 24); doc.text(`Total: ${totalFuelings} abastecimentos  •  ${totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L  •  ${formatMoney(totalCost)}`, 14, 30)
-    autoTable(doc, { startY: 37, head: [['Secretaria', 'Sigla', 'Abastecimentos', 'Litros', 'Custo total', 'Custo médio']], body: filteredRows.map((row) => [row.secretaria, row.sigla, row.abastecimentos.toLocaleString('pt-BR'), `${row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L`, formatMoney(row.custo), formatMoney(row.media)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] } })
+    doc.setTextColor(11, 41, 64); doc.setFontSize(17); doc.text('Custos de combustíveis por secretaria', 14, 17); doc.setFontSize(9); doc.setTextColor(91, 112, 123); doc.text(`Competência: ${periodLabel}  •  Filtro: ${secretaria === 'TODAS' ? 'Todas as secretarias' : selectedUnit}`, 14, 24); doc.text(`Total integral: ${totalFuelings} abastecimentos  •  ${totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L  •  ${formatMoney(totalCost)}`, 14, 30); doc.text('Tabela: ranking das 12 maiores unidades; valores totais do resumo são integrais e calculados no backend.', 14, 35)
+    autoTable(doc, { startY: 41, head: [['Secretaria', 'Sigla', 'Abastecimentos', 'Litros', 'Valor registrado', 'Média por abastecimento']], body: rows.map((row) => [row.secretaria, row.sigla, row.abastecimentos.toLocaleString('pt-BR'), `${row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L`, formatMoney(row.custo), formatMoney(row.media)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] } })
     doc.save(`relatorio-combustiveis-${period}.pdf`)
   }
 
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ANÁLISE GERENCIAL</span><h2>Relatórios de combustíveis</h2><p>Compare litros e custos consolidados por secretaria.</p></div><div className="fleet-report-period"><FileText size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-report-toolbar"><label><span>Secretaria</span><select value={secretaria} onChange={(event) => setSecretaria(event.target.value)}><option value="TODAS">Todas as secretarias</option>{secretarias.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label><div className="fleet-report-actions"><button className="fleet-secondary-button" onClick={exportExcel} disabled={loading || !filteredRows.length}><FileSpreadsheet size={15} /> Exportar Excel</button><button className="fleet-primary-button" onClick={exportPdf} disabled={loading || !filteredRows.length}><Download size={15} /> Exportar PDF</button></div></div><div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings}</strong><small>{periodLabel}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>sem cancelados</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><BarChart3 size={19} /></span><div><span>Custo consolidado</span><strong>{formatMoney(totalCost)}</strong><small>{filteredRows.length} secretaria(s)</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><FileText size={19} /></span><div><span>Custo médio</span><strong>{formatMoney(totalFuelings ? totalCost / totalFuelings : 0)}</strong><small>por abastecimento</small></div></article></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : filteredRows.length ? <table className="fleet-table fleet-report-table"><thead><tr><th>Secretaria</th><th>Sigla</th><th>Abastecimentos</th><th>Litros</th><th>Custo total</th><th>Custo médio</th></tr></thead><tbody>{filteredRows.map((row) => <tr key={row.id}><td><strong>{row.secretaria}</strong><small>Centro de custo operacional</small></td><td className="fleet-plate">{row.sigla}</td><td>{row.abastecimentos}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table> : <EmptyState icon={BarChart3} title="Nenhum custo encontrado" text="Não há abastecimentos para a competência e secretaria selecionadas." />}</div></section>
+  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ANÁLISE GERENCIAL</span><h2>Relatórios de combustíveis</h2><p>Totais calculados no Supabase e ranking de gastos por secretaria responsável.</p></div><div className="fleet-report-period"><FileText size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-report-toolbar"><label><span>Secretaria responsável</span><select value={secretaria} onChange={(event) => setSecretaria(event.target.value)}><option value="TODAS">Todas as secretarias</option>{units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="fleet-report-actions"><button className="fleet-secondary-button" onClick={exportExcel} disabled={loading || !rows.length}><FileSpreadsheet size={15} /> Exportar Excel</button><button className="fleet-primary-button" onClick={exportPdf} disabled={loading || !rows.length}><Download size={15} /> Exportar PDF</button></div></div><p className="fleet-overview-helper">Seleção de secretaria e competência enviada ao backend. Com “Todas”, a tabela lista as 12 maiores unidades; os cartões abaixo continuam refletindo o total integral, sem corte amostral.</p><div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos válidos</span><strong>{totalFuelings.toLocaleString('pt-BR')}</strong><small>{periodLabel} · total integral</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>Exclui cancelamentos e rascunhos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><BarChart3 size={19} /></span><div><span>Valor registrado</span><strong>{formatMoney(totalCost)}</strong><small>{secretaria === 'TODAS' ? 'Todas as unidades' : selectedUnit}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><FileText size={19} /></span><div><span>Média por abastecimento</span><strong>{formatMoney(Number(overview?.summary?.average_per_fueling || 0))}</strong><small>Agregada pelo backend</small></div></article></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : rows.length ? <table className="fleet-table fleet-report-table"><thead><tr><th>Secretaria</th><th>Sigla</th><th>Abastecimentos</th><th>Litros</th><th>Valor registrado</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.secretaria}</strong><small>Centro de custo operacional</small></td><td className="fleet-plate">{row.sigla}</td><td>{row.abastecimentos.toLocaleString('pt-BR')}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table> : !loading && <EmptyState icon={BarChart3} title="Nenhum custo encontrado" text="Não há abastecimentos válidos para a competência e secretaria selecionadas." />}</div></section>
 }
 
 type Closure = { id: string; reference_year: number; reference_month: number; status: string; started_at: string | null; checked_at: string | null; closed_at: string | null }
