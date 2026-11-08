@@ -83,6 +83,16 @@ function date(value: string) {
     timeStyle: "short",
   }).format(new Date(value));
 }
+function statusTone(status: string) {
+  if (["CONFERIDO", "INCLUIDO_NO_FECHAMENTO"].includes(status)) return "success";
+  if (["PENDENTE_DE_COMPROVANTE", "PENDENTE_DE_CONFERENCIA", "COM_INCONSISTENCIA"].includes(status)) return "danger";
+  if (["SOLICITADA_CORRECAO", "ENVIADO_PELO_POSTO", "EM_ANALISE", "CORRIGIDO"].includes(status)) return "warning";
+  if (status === "CANCELADO") return "neutral";
+  return "info";
+}
+function StatusTag({ status }: { status: string }) {
+  return <span className={`supplier-status supplier-status-${statusTone(status)}`}><span className="supplier-status-dot" />{statusLabels[status] || status}</span>;
+}
 
 export function SupplierPortal({
   station,
@@ -461,9 +471,7 @@ function PortalTable({
               <td>{Number(item.liters).toLocaleString("pt-BR")} L</td>
               <td>{money(item.total_amount)}</td>
               <td>
-                <span className="supplier-status">
-                  {statusLabels[item.status] || item.status}
-                </span>
+                <StatusTag status={item.status} />
               </td>
             </tr>
           ))}
@@ -663,7 +671,7 @@ function DocumentsView({
                   {Number(item.liters).toLocaleString("pt-BR")} L
                 </small>
               </div>
-              <span>{statusLabels[item.status] || item.status}</span>
+              <StatusTag status={item.status} />
               <label className="supplier-upload">
                 {uploading === item.id ? "Enviando…" : "Selecionar comprovante"}
                 <input
