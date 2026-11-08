@@ -599,6 +599,7 @@ function FuelingForm({
   const [performedAt, setPerformedAt] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
   const [authorizedDrivers, setAuthorizedDrivers] = useState<Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [driverLookupError, setDriverLookupError] = useState("");
   const [driverId, setDriverId] = useState("");
   const [odometer, setOdometer] = useState("");
   const [liters, setLiters] = useState("");
@@ -660,14 +661,26 @@ function FuelingForm({
     return () => { cancelled = true; };
   }, [stationId, vehicleId, performedAt]);
   useEffect(() => {
-    if (!vehicleId || !supabase || !performedAt) { setAuthorizedDrivers([]); setLoadingDrivers(false); setDriverId(""); return; }
+    if (!vehicleId || !supabase || !performedAt) { setAuthorizedDrivers([]); setLoadingDrivers(false); setDriverId(""); setDriverLookupError(""); return; }
     let cancelled = false;
+    setAuthorizedDrivers([]);
+    setDriverId("");
+    setDriverLookupError("");
     setLoadingDrivers(true);
-    void supabase.rpc("fleet_supplier_driver_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: driverError }) => {
-      if (cancelled) return;
-      setAuthorizedDrivers(driverError ? [] : (data || []) as Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>);
-      setLoadingDrivers(false);
-    });
+    void (async () => {
+      try {
+        const { data, error: driverError } = await supabase.rpc("fleet_supplier_driver_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() });
+        if (cancelled) return;
+        setAuthorizedDrivers(driverError ? [] : (data || []) as Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>);
+        setDriverLookupError(driverError ? "Não foi possível consultar os motoristas autorizados. Revise o veículo e a data e tente novamente." : "");
+        setLoadingDrivers(false);
+      } catch {
+        if (cancelled) return;
+        setAuthorizedDrivers([]);
+        setDriverLookupError("A consulta de motoristas falhou. Revise o veículo e a data e tente novamente.");
+        setLoadingDrivers(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [stationId, vehicleId, performedAt]);
   useEffect(() => {
@@ -770,7 +783,7 @@ function FuelingForm({
                 <option key={driver.id} value={driver.id}>{driver.nome}</option>
               ))}
             </select>
-            {vehicleId && !loadingDrivers && authorizedDrivers.length === 0 && <small className="supplier-upload-note">Não há motorista com CNH vigente e autorização para este veículo nesta data.</small>}
+            {driverLookupError ? <small className="supplier-upload-note" role="alert">{driverLookupError}</small> : vehicleId && !loadingDrivers && authorizedDrivers.length === 0 && <small className="supplier-upload-note">Não há motorista com CNH vigente e autorização para este veículo nesta data.</small>}
           </label>
           <label>
             Data e hora real

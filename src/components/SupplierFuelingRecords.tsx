@@ -73,6 +73,15 @@ const reviewLabels: Record<string, string> = { PENDENTE_DE_CONFERENCIA: "Pendent
 const dateTime = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 const liters = (value: number) => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} L`;
+function documentStatusText(document: DocumentOption | undefined, deadline: number) {
+  const status = document?.document_status?.toUpperCase();
+  if (status === "ACEITO" || status === "CONFERIDO") return "Conferido";
+  if (status === "REJEITADO") return "Rejeitado; substituição necessária";
+  if (["ENVIADO", "EM_ANALISE", "AGUARDANDO_VERIFICACAO"].includes(status || "")) return "Enviado; aguardando verificação";
+  if (["PENDENTE", "PENDENTE_DE_ENVIO"].includes(status || "")) return "Aguardando envio";
+  if (document) return "Comprovante registrado; verificação pendente";
+  return Date.now() > deadline ? "Prazo de envio vencido" : "Aguardando envio";
+}
 const localDay = (value: string) => {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
   const part = (type: string) => parts.find((item) => item.type === type)?.value || "";
@@ -514,8 +523,8 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
             <div><dt>Valor total</dt><dd>{money(detail.total_amount)}</dd></div>
             <div><dt>Situação operacional</dt><dd>{operationalLabels[detail.operational_status || ""] || detail.operational_status || "Não informada"}</dd></div>
             <div><dt>Conferência da Prefeitura</dt><dd>{reviewLabels[detail.review_status || ""] || detail.review_status || "Não informada"}</dd></div>
-            <div><dt>Prazo do comprovante</dt><dd>{(() => { const doc = documents.find((item) => item.fueling_id === detail.id && item.is_current); const deadline = doc?.due_at ? Date.parse(doc.due_at) : Date.parse(detail.performed_at) + receiptWindowHours * 60 * 60 * 1000; return doc?.document_status === "ACEITO" || doc?.document_status === "CONFERIDO" ? "Conferido" : Date.now() > deadline ? "Vencido" : "Aguardando envio/conferência"; })()}</dd></div>
-            {detail.entry_type === "POSTERIOR" && <div className="supplier-wide"><dt>Justificativa do lançamento posterior</dt><dd>{detail.late_entry_reason || "Não informada"}</dd></div>}
+            <div><dt>Prazo do comprovante</dt><dd>{(() => { const doc = documents.find((item) => item.fueling_id === detail.id && item.is_current); const deadline = doc?.due_at ? Date.parse(doc.due_at) : Date.parse(detail.performed_at) + receiptWindowHours * 60 * 60 * 1000; return documentStatusText(doc, deadline); })()}</dd></div>
+            {detail.entry_type === "POSTERIOR" && <div className="supplier-wide"><dt>Justificativa do lançamento posterior</dt><dd>{detail.late_entry_reason || "Detalhe não disponibilizado nesta consulta."}</dd></div>}
             {detail.notes && <div className="supplier-wide"><dt>Observações enviadas pelo posto</dt><dd>{detail.notes}</dd></div>}
           </dl>
           <div className="supplier-review-actions"><button type="button" className="supplier-welcome-secondary" onClick={() => setDetail(null)}><X size={14} /> Fechar</button></div>
