@@ -118,6 +118,7 @@ export function FleetMonthlyClosure() {
   const [closure, setClosure] = useState<Closure | null>(null)
   const [readOnly, setReadOnly] = useState(false)
   const [accessVerified, setAccessVerified] = useState(false)
+  const [accessDenied, setAccessDenied] = useState(false)
   const [municipalSummary, setMunicipalSummary] = useState<MunicipalSummaryData | null>(null)
   const [checks, setChecks] = useState<StationCheck[]>([])
   const [stations, setStations] = useState<Station[]>([])
@@ -164,6 +165,14 @@ export function FleetMonthlyClosure() {
       const managerAccess = await supabase.rpc('fleet_is_closure_manager')
       if (managerAccess.error) throw managerAccess.error
       if (managerAccess.data !== true) {
+        const readAccess = await supabase.rpc('fleet_can_read_monthly_closures')
+        if (readAccess.error) throw readAccess.error
+        if (readAccess.data !== true) {
+          setReadOnly(false); setAccessDenied(true)
+          setError('Este perfil autenticado não possui autorização para consultar o fechamento mensal municipal.')
+          return
+        }
+        setAccessDenied(false)
         setReadOnly(true)
         const periodValues = periodParts(period)
         const summaryResult = await supabase.rpc('fleet_monthly_closure_municipal_summary', { p_reference_year: periodValues.year, p_reference_month: periodValues.month })
@@ -173,7 +182,7 @@ export function FleetMonthlyClosure() {
         setAccessVerified(true)
         return
       }
-      setReadOnly(false); setAccessVerified(true)
+      setAccessDenied(false); setReadOnly(false); setAccessVerified(true)
       const bounds = periodParts(period)
       let closureQuery = await supabase.from('fleet_monthly_closures')
         .select('id,reference_year,reference_month,status,started_at,checked_at,closed_at,reopened_at,reopening_reason,notes')
@@ -228,13 +237,13 @@ export function FleetMonthlyClosure() {
   }, [period, loadFuelingPage])
   const handleRefresh = () => {
     if (!supabase) { setLoading(false); setError('O serviço de dados está indisponível.'); return }
-    setLoading(true); setError(''); setAccessVerified(false); setMunicipalSummary(null); setNotice('')
+    setLoading(true); setError(''); setAccessVerified(false); setAccessDenied(false); setMunicipalSummary(null); setNotice('')
     void load()
   }
   const handlePeriodChange = (nextPeriod: string) => {
     if (nextPeriod === period) { handleRefresh(); return }
     setPeriod(nextPeriod); setLoading(!!supabase); setError(supabase ? '' : 'O serviço de dados está indisponível.')
-    setAccessVerified(false); setMunicipalSummary(null); setNotice('')
+    setAccessVerified(false); setAccessDenied(false); setMunicipalSummary(null); setNotice('')
   }
   useEffect(() => { void load() }, [load])
 
@@ -254,7 +263,13 @@ export function FleetMonthlyClosure() {
   }, [fuelings, selectedStation, statusFilter, search])
   const statuses = ['RASCUNHO','ENVIADO_PELO_POSTO','PENDENTE_DE_COMPROVANTE','PENDENTE_DE_CONFERENCIA','EM_ANALISE','COM_INCONSISTENCIA','SOLICITADA_CORRECAO','CORRIGIDO','CONFERIDO','INCLUIDO_NO_FECHAMENTO','CANCELADO']
 
-  if (!accessVerified) return <section className="fleet-section fleet-page-section fleet-closure-v2-readonly"><div className="fleet-page-heading"><div><span className="fleet-kicker">FECHAMENTO MENSAL</span><h2>Consulta gerencial</h2><p>Verificando o perfil e o escopo de acesso municipal…</p></div><input type="month" aria-label="Competência" value={period} onChange={(event)=>handlePeriodChange(event.target.value)}/></div>{error&&<div className="fleet-inline-error" role="alert"><CircleAlert size={15}/>{error}</div>}{loading?<div className="fleet-loading"><RefreshCw className="spin" size={18}/> Validando as permissões…</div>:<button className="fleet-secondary-button" type="button" onClick={handleRefresh}>Tentar novamente</button>}</section>
+  if (!accessVerified) return (
+    <section className="fleet-section fleet-page-section fleet-closure-v2-readonly">
+      <div className="fleet-page-heading"><div><span className="fleet-kicker">FECHAMENTO MENSAL</span><h2>{accessDenied ? 'Acesso não autorizado' : 'Consulta gerencial'}</h2><p>{accessDenied ? 'A consulta está restrita aos perfis municipais autorizados.' : 'Verificando o perfil e o escopo de acesso municipal…'}</p></div><input type="month" aria-label="Competência" value={period} onChange={(event)=>handlePeriodChange(event.target.value)}/></div>
+      {error&&<div className="fleet-inline-error" role="alert"><CircleAlert size={15}/>{error}</div>}
+      {loading?<div className="fleet-loading"><RefreshCw className="spin" size={18}/> Validando as permissões…</div>:accessDenied?<p className="fleet-closure-v2-readonly-note">Entre com um perfil de Administrador, Gestor de Frotas ou Prefeito, ou solicite a correção do vínculo de perfil ao administrador do sistema.</p>:<button className="fleet-secondary-button" type="button" onClick={handleRefresh}>Tentar novamente</button>}
+    </section>
+  )
   if (readOnly) return <MunicipalReadOnlyClosure period={period} setPeriod={handlePeriodChange} data={municipalSummary} loading={loading} error={error} onRefresh={handleRefresh} />
 
   async function runRpc(name: string, args: Record<string, unknown>, success: string) {
