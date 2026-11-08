@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { AlertTriangle, CalendarCheck, CheckCircle2, CircleAlert, Eye, FileCheck2, FileText, History, MessageSquareText, RefreshCw, Send, Store, Upload, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDateTime, municipalDateStartIso } from '../lib/municipalTime'
 import type { Station } from './FleetResources'
 import './SupplierMonthlyClosuresView.css'
 
@@ -16,7 +17,7 @@ type Fueling = { id: string; vehicle_id: string; status: string; performed_at: s
 
 const money = (value: number | null | undefined) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 const number = (value: number | null | undefined, digits=2) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: digits })
-const dateTime = (value?: string | null) => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'
+const dateTime = (value?: string | null) => formatMunicipalDateTime(value)
 const dateOnly = (value?: string | null) => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(`${value.slice(0,10)}T12:00:00Z`)) : '—'
 const currentPeriod = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0,7)
 const statusInfo = (value: string) => ({ ABERTO:['Aberto','open'], EM_CONFERENCIA:['Em conferência','review'], COM_DIVERGENCIA:['Com divergência','danger'], CONFERIDO:['Conferido','success'], FECHADO:['Fechado','closed'], REABERTO:['Reaberto','warning'] }[value] || [value.replaceAll('_',' '),'neutral']) as [string,string]
@@ -50,9 +51,10 @@ export function SupplierMonthlyClosuresView({ station }: { station: Station }) {
   const loadFuelingPage = useCallback(async (from:number, append:boolean) => {
     if(!supabase)return
     const [year,month]=period.split('-').map(Number)
-    const start=new Date(`${period}-01T00:00:00-03:00`)
-    const end=new Date(month===12?`${year+1}-01-01T00:00:00-03:00`:`${year}-${String(month+1).padStart(2,'0')}-01T00:00:00-03:00`)
-    const result=await supabase.from('fleet_fuelings').select('id,vehicle_id,status,performed_at,submitted_at,liters,unit_price,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,marca,modelo),fuel_type:fleet_fuel_types(nome,sigla),documents:fleet_fueling_documents(id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason)',{count:'exact'}).eq('station_id',station.id).gte('performed_at',start.toISOString()).lt('performed_at',end.toISOString()).order('performed_at',{ascending:false}).range(from,from+499)
+    const start=municipalDateStartIso(`${period}-01`)
+    const endDate=month===12?`${year+1}-01-01`:`${year}-${String(month+1).padStart(2,'0')}-01`
+    const end=municipalDateStartIso(endDate)
+    const result=await supabase.from('fleet_fuelings').select('id,vehicle_id,status,performed_at,submitted_at,liters,unit_price,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,marca,modelo),fuel_type:fleet_fuel_types(nome,sigla),documents:fleet_fueling_documents(id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason)',{count:'exact'}).eq('station_id',station.id).gte('performed_at',start).lt('performed_at',end).order('performed_at',{ascending:false}).range(from,from+499)
     if(result.error)throw result.error
     let vehicleById=new Map<string,{placa:string;marca?:string|null;modelo?:string|null}>()
     try {

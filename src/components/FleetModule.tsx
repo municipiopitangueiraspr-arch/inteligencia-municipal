@@ -5,6 +5,7 @@ import {
   RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X, Eye,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDateTime, municipalDateTimeInputValue, municipalLocalInputToDate, municipalTodayDate } from '../lib/municipalTime'
 import type { FormEvent } from 'react'
 import { DriversView } from './DriverManagementView'
 import { StationManagementView } from './StationManagementView'
@@ -49,8 +50,7 @@ const statusLabel: Record<string, string> = {
 }
 
 function formatDate(value?: string) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
+  return formatMunicipalDateTime(value)
 }
 
 function formatMoney(value?: number) {
@@ -100,10 +100,10 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
 
   const refreshPendingFuelings = useCallback(async () => {
     if (!supabase || accessLevel !== 'manager') return
-    const now = new Date()
+    const [year, month] = municipalTodayDate().slice(0, 7).split('-').map(Number)
     const monthStart = (offset: number) => {
-      const date = new Date(now.getFullYear(), now.getMonth() + offset, 1)
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+      const date = new Date(Date.UTC(year, month - 1 + offset, 1))
+      return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`
     }
     try {
       const { data, error } = await supabase.rpc('fleet_dashboard_overview', {
@@ -347,7 +347,7 @@ type FuelingDriverOption = { id: string; nome: string; matricula: string | null;
 type FuelingAuthorizationOption = { id: string; responsible_unit_id: string; beneficiary_unit_id: string; purpose: string; valid_from: string; valid_until: string }
 
 function localDateTimeInput(now = new Date()) {
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+  return municipalDateTimeInputValue(now)
 }
 
 function emptyFuelingCreateForm(): FuelingCreateForm {
@@ -446,7 +446,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
       setCreateDriversLoading(false)
       return
     }
-    const performedAt = new Date(createForm.performed_at)
+    const performedAt = municipalLocalInputToDate(createForm.performed_at)
     if (!Number.isFinite(performedAt.getTime())) { setCreateDrivers([]); return }
     let cancelled = false
     setCreateDriversLoading(true)
@@ -469,7 +469,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
   useEffect(() => {
     const vehicle = createVehicles.find((item) => item.id === createForm.vehicle_id)
     if (!showCreateForm || !vehicle || !vehicle.responsible_unit_id || !supabase || !createUnits.length) { setCreateUseAuthorizations([]); setCreateAuthorizationsLoading(false); return }
-    const performedAt = new Date(createForm.performed_at)
+    const performedAt = municipalLocalInputToDate(createForm.performed_at)
     if (!Number.isFinite(performedAt.getTime())) { setCreateUseAuthorizations([]); setCreateAuthorizationsLoading(false); return }
     let cancelled = false
     const eventTime = performedAt.toISOString()
@@ -529,7 +529,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
         withTimeout(supabase.rpc('fleet_current_usuario_id')),
       ])
       if (municipalityResult.error || !municipalityResult.data || userResult.error || userResult.data == null) return 'Não foi possível identificar o município e o operador autenticado para registrar o abastecimento.'
-      const performedAt = new Date(createForm.performed_at)
+      const performedAt = municipalLocalInputToDate(createForm.performed_at)
       if (!Number.isFinite(performedAt.getTime())) return 'Informe uma data e hora válidas para o abastecimento.'
       const insertResult = await withTimeout(supabase.from('fleet_fuelings').insert({
         municipio_id: municipalityResult.data,
@@ -581,7 +581,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
     const liters = Number(createForm.liters)
     const unitPrice = Number(createForm.unit_price)
     const odometer = Number(createForm.odometer_km)
-    const performedAt = new Date(createForm.performed_at)
+    const performedAt = municipalLocalInputToDate(createForm.performed_at)
     if (!vehicle || !station || !fuel || !unit) { setCreateFormError('Selecione veículo, posto ativo, combustível e unidade responsável.'); return }
     if (vehicle.responsible_unit_id !== createForm.responsible_unit_id) { setCreateFormError('A unidade responsável deve ser a lotação administrativa do veículo.'); return }
     if (createAuthorizationsLoading) { setCreateFormError('Aguarde a verificação das autorizações de uso vigentes.'); return }
@@ -626,7 +626,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
   const vehicleOptions = Array.from(new Map(fuelings.filter((item) => item.vehicle_id).map((item) => [item.vehicle_id as string, item.vehicles?.placa || 'Veículo sem placa'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
   const fuelOptions = Array.from(new Map(fuelings.filter((item) => item.fuel_type_id).map((item) => [item.fuel_type_id as string, item.fuel_type?.nome || 'Combustível'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
   const stationOptions = Array.from(new Map(fuelings.filter((item) => item.station_id).map((item) => [item.station_id as string, item.stations?.nome_fantasia_snapshot || 'Posto sem identificação'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
-  const localDay = (value: string) => new Intl.DateTimeFormat('en-CA').format(new Date(value))
+  const localDay = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(value))
   const filtered = fuelings.filter((fueling) => {
     const document = currentDocument(fueling)
     const day = localDay(fueling.performed_at)
@@ -822,7 +822,7 @@ export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmatio
           }}><option value="">{createAuthorizationsLoading ? 'Verificando autorizações…' : createVehicles.find((item) => item.id === createForm.vehicle_id)?.operational_status === 'CEDIDO' ? 'Selecione autorização vigente' : 'Uso pela unidade responsável'}</option>{createUseAuthorizations.map((authorization) => <option key={authorization.id} value={authorization.id}>{createUnits.find((unit) => unit.id === authorization.beneficiary_unit_id)?.nome || 'Beneficiária'} · {authorization.purpose} · até {formatDate(authorization.valid_until)}</option>)}</select>{createForm.vehicle_id && !createAuthorizationsLoading && !createUseAuthorizations.length && createVehicles.find((item) => item.id === createForm.vehicle_id)?.operational_status === 'CEDIDO' && <small>Nenhuma autorização aprovada e vigente com comprovante foi encontrada.</small>}</label>
           <label>Unidade beneficiária<input readOnly value={createUnits.find((unit) => unit.id === createForm.beneficiary_unit_id)?.nome || 'Será a unidade responsável, salvo cessão aprovada'} /></label>
           <label>Motorista autorizado<select required value={createForm.driver_id} onChange={(event) => updateCreateForm('driver_id', event.target.value)} disabled={createDriversLoading || !createForm.vehicle_id}><option value="">{createDriversLoading ? 'Verificando autorizações…' : 'Selecione o motorista'}</option>{createDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nome}{driver.matricula ? ` · ${driver.matricula}` : ''}{driver.cnh_category ? ` · Cat. ${driver.cnh_category}` : ''}</option>)}</select>{createForm.vehicle_id && !createDriversLoading && !createDrivers.length && <small>Nenhum motorista com CNH vigente autorizado para este veículo na data escolhida.</small>}</label>
-          <label>Data e hora do abastecimento<input required type="datetime-local" value={createForm.performed_at} onChange={(event) => updateCreateForm('performed_at', event.target.value)} /></label>
+          <label>Data e hora do abastecimento (America/Sao_Paulo)<input required type="datetime-local" value={createForm.performed_at} onChange={(event) => updateCreateForm('performed_at', event.target.value)} /></label>
           <label>Litros<input required type="number" min="0.001" max="9999999.999" step="0.001" value={createForm.liters} onChange={(event) => updateCreateForm('liters', event.target.value)} /></label>
           <label>Preço unitário<input required type="number" min="0" max="99999999.9999" step="0.0001" value={createForm.unit_price} onChange={(event) => updateCreateForm('unit_price', event.target.value)} /></label>
           <label>Odômetro (km)<input required type="number" min="0" max="999999999999.99" step="0.01" value={createForm.odometer_km} onChange={(event) => updateCreateForm('odometer_km', event.target.value)} /></label>
@@ -888,7 +888,7 @@ function callDashboardOverview(period: string, responsibleUnitId: string | null 
 }
 
 function FuelConsumptionDashboard() {
-  const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
+  const initialPeriod = municipalTodayDate().slice(0, 7)
   const [period, setPeriod] = useState(initialPeriod)
   const [overview, setOverview] = useState<CentralDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -965,7 +965,7 @@ function SettingsPanel() {
     setSaving(false)
   }
 
-  const updatedLabel = policy?.updated_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(policy.updated_at)) : ''
+  const updatedLabel = policy?.updated_at ? formatMunicipalDateTime(policy.updated_at) : ''
   return <section className="fleet-section fleet-page-section">
     <div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Valores persistidos no Supabase e aplicados às regras de abastecimento e conferência.</p></div><button className="fleet-secondary-button" type="button" onClick={() => void loadPolicy()} disabled={loading}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Atualizar</button></div>
     <div className="fleet-settings-grid">

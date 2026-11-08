@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { formatMunicipalDateTime, municipalDateTimeInputValue, municipalLocalInputToDate, municipalLocalInputToIso } from "../lib/municipalTime";
 import { StationMembersPanel } from "./FleetResources";
 import type { Station } from "./FleetResources";
 import { SupplierFuelingRecords } from "./SupplierFuelingRecords";
@@ -114,10 +115,7 @@ function money(value: number) {
   }).format(Number(value || 0));
 }
 function date(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatMunicipalDateTime(value);
 }
 function statusTone(status: string) {
   if (["CONFERIDO", "INCLUIDO_NO_FECHAMENTO"].includes(status)) return "success";
@@ -294,7 +292,7 @@ export function SupplierPortal({
         p_idempotency_key: crypto.randomUUID(), p_station_id: station.id, p_vehicle_id: data.get("vehicle_id"),
         p_fuel_type_id: data.get("fuel_type_id"), p_driver_id: data.get("driver_id"),
         p_responsible_unit_id: data.get("responsible_unit_id"), p_beneficiary_unit_id: data.get("beneficiary_unit_id") || null,
-        p_authorization_id: data.get("authorization_id") || null, p_performed_at: new Date(String(data.get("performed_at"))).toISOString(),
+        p_authorization_id: data.get("authorization_id") || null, p_performed_at: municipalLocalInputToIso(String(data.get("performed_at"))),
         p_liters: Number(data.get("liters")), p_unit_price: Number(data.get("unit_price")), p_odometer_km: Number(data.get("odometer_km")),
         p_station_receipt_number: data.get("receipt") || null, p_notes: data.get("notes") || null,
         p_late_entry_reason: data.get("late_entry_reason") || null,
@@ -596,7 +594,7 @@ function FuelingForm({
   const [useAuthorizations, setUseAuthorizations] = useState<UseAuthorizationOption[]>([]);
   const [loadingUseAuthorizations, setLoadingUseAuthorizations] = useState(false);
   const [authorizationError, setAuthorizationError] = useState("");
-  const [performedAt, setPerformedAt] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
+  const [performedAt, setPerformedAt] = useState(() => municipalDateTimeInputValue(new Date(Date.now() - 60_000)));
   const [authorizedDrivers, setAuthorizedDrivers] = useState<Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [driverLookupError, setDriverLookupError] = useState("");
@@ -614,7 +612,7 @@ function FuelingForm({
   const selectedAuthorization = useAuthorizations.find((item) => item.id === authorizationId);
   const tankExceeded = Boolean(vehicle?.tank_capacity_l && Number(liters) > vehicle.tank_capacity_l);
   const estimatedTotal = Number(liters || 0) * Number(unitPrice || 0);
-  const performedMillis = Date.parse(performedAt);
+  const performedMillis = municipalLocalInputToDate(performedAt).getTime();
   const lateEntryRequired = Boolean(policy.require_late_reason && Number.isFinite(performedMillis) && Date.now() - performedMillis > policy.normal_entry_window_minutes * 60_000);
   const formBusy = loadingFuelTypes || loadingUnit || loadingDrivers || loadingUseAuthorizations;
   useEffect(() => {
@@ -636,7 +634,7 @@ function FuelingForm({
     if (!vehicleId || !supabase || !performedAt) { setAuthorizedFuelTypes([]); setLoadingFuelTypes(false); return; }
     let cancelled = false;
     setLoadingFuelTypes(true);
-    void supabase.rpc("fleet_supplier_fuel_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: fuelError }) => {
+    void supabase.rpc("fleet_supplier_fuel_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: municipalLocalInputToIso(performedAt) }).then(({ data, error: fuelError }) => {
       if (cancelled) return;
       setAuthorizedFuelTypes(fuelError ? [] : (data || []) as FuelOption[]);
       if (fuelError) setAuthorizationError("Não foi possível consultar os combustíveis habilitados para este posto.");
@@ -648,7 +646,7 @@ function FuelingForm({
     if (!vehicle || !supabase || !performedAt) { setLoadingUnit(false); return; }
     let cancelled = false;
     setLoadingUnit(true);
-    void supabase.rpc("fleet_supplier_vehicle_unit_at", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: unitError }) => {
+    void supabase.rpc("fleet_supplier_vehicle_unit_at", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: municipalLocalInputToIso(performedAt) }).then(({ data, error: unitError }) => {
       if (cancelled) return;
       const result = Array.isArray(data) ? data[0] : data;
       const effectiveUnit = unitError ? null : result?.responsible_unit_id;
@@ -669,7 +667,7 @@ function FuelingForm({
     setLoadingDrivers(true);
     void (async () => {
       try {
-        const { data, error: driverError } = await supabase.rpc("fleet_supplier_driver_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() });
+        const { data, error: driverError } = await supabase.rpc("fleet_supplier_driver_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: municipalLocalInputToIso(performedAt) });
         if (cancelled) return;
         setAuthorizedDrivers(driverError ? [] : (data || []) as Array<{ id: string; nome: string; matricula: string | null; cnh_valid_until: string | null; cnh_category?: string | null }>);
         setDriverLookupError(driverError ? "Não foi possível consultar os motoristas autorizados. Revise o veículo e a data e tente novamente." : "");
@@ -685,7 +683,7 @@ function FuelingForm({
   }, [stationId, vehicleId, performedAt]);
   useEffect(() => {
     if (!vehicle || !supabase || !performedAt) { setUseAuthorizations([]); setAuthorizationId(""); setLoadingUseAuthorizations(false); setAuthorizationError(""); return; }
-    const eventTime = new Date(performedAt);
+    const eventTime = municipalLocalInputToDate(performedAt);
     if (!Number.isFinite(eventTime.getTime())) { setUseAuthorizations([]); setLoadingUseAuthorizations(false); return; }
     let cancelled = false;
     setLoadingUseAuthorizations(true);
@@ -794,7 +792,7 @@ function FuelingForm({
               value={performedAt}
               onChange={(event) => setPerformedAt(event.target.value)}
             />
-            <small className="supplier-upload-note">Janela normal: {policy.normal_entry_window_minutes} min. Lançamentos posteriores exigem justificativa.</small>
+            <small className="supplier-upload-note">Horário municipal: America/Sao_Paulo. Janela normal: {policy.normal_entry_window_minutes} min. Lançamentos posteriores exigem justificativa.</small>
           </label>
           <label>
             Litros
@@ -882,7 +880,7 @@ function FuelingForm({
             <div><dt>Veículo</dt><dd>{vehicle?.placa || "—"} · {vehicle?.marca || ""} {vehicle?.modelo || ""}</dd></div>
             <div><dt>Motorista</dt><dd>{selectedDriver?.nome || "—"}</dd></div>
             <div><dt>Combustível</dt><dd>{availableFuelTypes.find((item) => item.id === fuelTypeId)?.nome || "—"}</dd></div>
-            <div><dt>Data/hora real</dt><dd>{performedAt ? new Date(performedAt).toLocaleString("pt-BR") : "—"}</dd></div>
+            <div><dt>Data/hora real (America/Sao_Paulo)</dt><dd>{formatMunicipalDateTime(municipalLocalInputToDate(performedAt))}</dd></div>
             <div><dt>Odômetro</dt><dd>{Number(odometer || 0).toLocaleString("pt-BR")} km</dd></div>
             <div><dt>Volume</dt><dd>{Number(liters || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} L</dd></div>
             <div><dt>Preço por litro</dt><dd>{money(Number(unitPrice || 0))}/L</dd></div>

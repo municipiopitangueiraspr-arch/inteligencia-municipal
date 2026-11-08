@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { formatMunicipalDate, municipalTodayDate } from "../lib/municipalTime";
 import { FleetOperationConfirmation, type FleetConfirmationRequest } from "./FleetOperationConfirmation";
 import { StationFuelTypesPanel } from "./StationFuelTypesPanel";
 import { StationDetailsPanel } from "./StationDetailsPanel";
@@ -134,7 +135,7 @@ const stationStatusLabel: Record<StationStatus, string> = {
 };
 
 function brazilToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return municipalTodayDate();
 }
 function effectiveStationStatus(station: Station): StationStatus {
   if (station.status !== "ATIVO") return station.status;
@@ -169,14 +170,14 @@ function driverCnhDaysUntil(value: string | null | undefined): number | null {
   if (!value) return null;
   const [year, month, day] = value.slice(0, 10).split("-").map(Number);
   if (!year || !month || !day) return null;
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const [todayYear, todayMonth, todayDay] = municipalTodayDate().split("-").map(Number);
+  const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
   const expiryUtc = Date.UTC(year, month - 1, day);
   if (!Number.isFinite(expiryUtc)) return null;
   return Math.round((expiryUtc - todayUtc) / 86_400_000);
 }
 function formatDriverCnhDate(value: string | null | undefined) {
-  return value ? new Intl.DateTimeFormat("pt-BR").format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "Não informada";
+  return value ? formatMunicipalDate(value) : "Não informada";
 }
 function driverCnhState(value: string | null | undefined): "missing" | "expired" | "soon" | "valid" {
   const days = driverCnhDaysUntil(value);

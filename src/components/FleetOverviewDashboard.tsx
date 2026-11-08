@@ -4,10 +4,11 @@ import {
   CircleDollarSign, ClipboardCheck, Clock3, Download, Droplets, FileSpreadsheet, FileText, Filter,
   Fuel, Gauge, RefreshCw, ShieldAlert, Store, Truck, Users, X,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
+import { addMunicipalExcelWorksheet, addMunicipalPdfFooters, drawMunicipalPdfHeader, loadMunicipalCrestDataUrl, REPORT_TABLE_START_Y } from '../lib/reportStandards'
+import { MUNICIPAL_TIME_ZONE } from '../lib/municipalTime'
 
 type FleetRoute = 'fuelings' | 'closure' | 'drivers' | 'vehicles'
 type Props = { userEmail?: string; onNavigate: (view: FleetRoute) => void; onPendingCount: (count: number) => void; readOnly: boolean; scopeRole: 'manager' | 'mayor' | 'fiscal' | 'secretary'; scopeLabel: string }
@@ -221,7 +222,7 @@ export function FleetOverviewDashboard({ userEmail, onNavigate, onPendingCount, 
     const rows: unknown[][] = [
       ['Relatório gerencial de abastecimentos'], ['Período', `${monthLabel(fromMonth)}${fromMonth !== toMonth ? ` a ${monthLabel(toMonth)}` : ''}`],
       ['Perfil', scopeRole], ['Escopo', scopeLabel || 'Municipal'], ['Filtros aplicados', selectedFilterLabels.join(' | ')],
-      ['Gerado em', formatDate(data.updated_at)], ['Usuário', userEmail || 'Usuário autenticado'], [],
+      ['Gerado em', formatDate(data.updated_at)], ['Usuário', userEmail || 'Usuário autenticado'], ['Fuso horário oficial', MUNICIPAL_TIME_ZONE], [],
       ['Indicador', 'Valor'], ['Hoje', number(data.summary.today_amount)], ['Mês atual', number(data.summary.current_month_amount)],
       ['Período selecionado', number(data.summary.registered_amount)], ['Valor conferido', number(data.summary.confirmed_amount)],
       ['Acumulado no exercício', number(data.summary.year_to_date_amount)], ['Acumulado no mesmo período do exercício anterior', number(data.summary.previous_year_to_date_amount)],
@@ -244,67 +245,102 @@ export function FleetOverviewDashboard({ userEmail, onNavigate, onPendingCount, 
     const a = document.createElement('a'); a.href = url; a.download = `painel-frotas-${fromMonth}-${toMonth}.csv`; a.click(); URL.revokeObjectURL(url)
   }
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!data) return
-    const workbook = XLSX.utils.book_new()
-    const summary = [
-      ['INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS'], ['Painel gerencial de abastecimentos'],
-      ['Período de referência', `${monthLabel(fromMonth)}${fromMonth !== toMonth ? ` a ${monthLabel(toMonth)}` : ''}`],
-      ['Perfil', scopeRole], ['Escopo', scopeLabel || 'Municipal'], ['Filtros aplicados', selectedFilterLabels.join(' | ')], ['Gerado em', formatDate(data.updated_at)], ['Usuário', userEmail || 'Usuário autenticado'], [],
-      ['Indicador', 'Valor'], ['Abastecimentos', number(data.summary.fueling_count)], ['Litros registrados', number(data.summary.liters)],
-      ['Valor registrado (R$)', number(data.summary.registered_amount)], ['Valor conferido (R$)', number(data.summary.confirmed_amount)],
-      ['Valor registrado hoje (R$)', number(data.summary.today_amount)], ['Valor registrado no mês atual (R$)', number(data.summary.current_month_amount)],
-      ['Acumulado no exercício (R$)', number(data.summary.year_to_date_amount)], ['Acumulado no mesmo período do exercício anterior (R$)', number(data.summary.previous_year_to_date_amount)],
-      ['Variação anual (%)', annualVariation], ['Pendentes de conferência', number(data.summary.pending_confirmation_count)],
-      ['Pendências documentais', number(data.summary.pending_document_count)], ['Base operacional', 'Exclui status CANCELADO, canceled_at preenchido e RASCUNHO.'],
-      ['Nota metodológica', 'Litros são volume abastecido, não consumo efetivo do veículo. Valores fiscais aparecem separadamente nos fechamentos. Consumo médio efetivo não é calculado sem sequência de hodômetros validada.'],
-    ]
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Resumo')
-    const monthlyRows = [['Mês de referência', 'Abastecimentos', 'Litros', 'Valor registrado (R$)'], ...data.monthly.map((row) => [monthLabel(row.month), row.fueling_count, number(row.liters), number(row.amount)])]
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(monthlyRows), 'Evolução mensal')
-    for (const [sheet, group] of [['Secretarias responsáveis', data.by_responsible_unit], ['Secretarias beneficiárias', data.by_beneficiary_unit], ['Veículos', data.by_vehicle], ['Motoristas', data.by_driver], ['Postos', data.by_station], ['Combustíveis', data.by_fuel_type]] as [string, MetricRow[]][]) {
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Identificação', 'Abastecimentos', 'Litros', 'Valor registrado (R$)', 'Preço médio ponderado (R$/L)'], ...group.map((row) => [row.label, row.fueling_count, number(row.liters), number(row.amount), row.weighted_price_per_liter ?? ''])]), sheet.slice(0, 31))
+    try {
+      const [{ default: ExcelJS }, crest] = await Promise.all([import('exceljs'), loadMunicipalCrestDataUrl()])
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Prefeitura Municipal de Pitangueiras – PR'
+      workbook.subject = 'Relatório gerencial oficial de abastecimentos e frota'
+      workbook.title = `Painel de Frotas ${fromMonth} a ${toMonth}`
+      workbook.created = new Date()
+      const metadata: Array<[string, string]> = [
+        ['Período', `${monthLabel(fromMonth)}${fromMonth !== toMonth ? ` a ${monthLabel(toMonth)}` : ''}`],
+        ['Perfil / escopo', `${scopeRole} · ${scopeLabel || 'Municipal'}`],
+        ['Filtros', selectedFilterLabels.join(' | ') || 'Sem filtros adicionais'],
+        ['Gerado em', formatDate(data.updated_at)],
+        ['Usuário responsável', userEmail || 'Usuário autenticado'],
+        ['Fuso horário', MUNICIPAL_TIME_ZONE],
+      ]
+      const addSheet = (name: string, title: string, headers: string[], rows: unknown[][], widths?: number[]) => addMunicipalExcelWorksheet(workbook, crest, { name, title, metadata, headers, rows, widths })
+      addSheet('Resumo', 'Painel gerencial de abastecimentos', ['Indicador', 'Valor'], [
+        ['Abastecimentos válidos', number(data.summary.fueling_count)], ['Litros registrados', number(data.summary.liters)],
+        ['Valor registrado (R$)', number(data.summary.registered_amount)], ['Valor conferido (R$)', number(data.summary.confirmed_amount)],
+        ['Valor registrado hoje (R$)', number(data.summary.today_amount)], ['Valor registrado no mês atual (R$)', number(data.summary.current_month_amount)],
+        ['Acumulado no exercício (R$)', number(data.summary.year_to_date_amount)], ['Acumulado no mesmo período do exercício anterior (R$)', number(data.summary.previous_year_to_date_amount)],
+        ['Variação anual (%)', annualVariation == null ? 'Sem base anterior' : annualVariation / 100],
+        ['Pendentes de conferência', number(data.summary.pending_confirmation_count)], ['Pendências documentais', number(data.summary.pending_document_count)],
+        ['Inconsistências abertas', number(data.summary.open_inconsistency_count)], ['Fechamentos pendentes', number(data.summary.open_closure_count)],
+        ['Metodologia', 'Litros são volume abastecido, não consumo efetivo. Valores fiscais aparecem separadamente; consumo efetivo não é estimado sem hodômetros e metodologia validados.'],
+      ], [42, 80])
+      addSheet('Evolução mensal', 'Evolução mensal', ['Mês de referência', 'Abastecimentos', 'Litros', 'Valor registrado (R$)'], data.monthly.map((row) => [monthLabel(row.month), row.fueling_count, number(row.liters), number(row.amount)]))
+      const groups: [string, MetricRow[]][] = [['Secretarias responsáveis', data.by_responsible_unit], ['Secretarias beneficiárias', data.by_beneficiary_unit], ['Veículos', data.by_vehicle], ['Motoristas', data.by_driver], ['Postos', data.by_station], ['Combustíveis', data.by_fuel_type]]
+      for (const [name, group] of groups) addSheet(name, name, ['Identificação', 'Descrição', 'Abastecimentos', 'Litros', 'Valor registrado (R$)', 'Preço médio ponderado (R$/L)'], group.map((row) => [row.label, row.description || row.acronym || '', row.fueling_count, number(row.liters), number(row.amount), row.weighted_price_per_liter ?? '']))
+      addSheet('Alertas', 'Alertas e divergências', ['Tipo', 'Alerta', 'Situação', 'Descrição', 'Data / competência', 'Placa'], [
+        ...data.alerts.map((row) => [row.kind, row.label, statusLabels[row.status] || row.status, row.description, formatDate(row.created_at), row.placa || '—']),
+        ...data.financial_alerts.map((row) => ['Divergência fiscal', row.label, row.station_check_status, row.station_name, `${row.reference_month}/${row.reference_year}`, '—']),
+      ])
+      addSheet('Recentes', 'Abastecimentos recentes', ['Data e hora (America/Sao_Paulo)', 'Placa', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor (R$)', 'Situação', 'Comprovante'], data.recent.map((row) => [formatDate(row.performed_at), row.placa || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', number(row.liters), number(row.amount), statusLabels[row.status] || row.status, statusLabels[row.document_status || 'SEM_COMPROVANTE'] || 'Sem comprovante']))
+      addSheet('Fechamentos', 'Fechamentos mensais e conciliação fiscal', ['Competência', 'Posto', 'Situação', 'Registros', 'Litros', 'Valor operacional (R$)', 'Valor fiscal (R$)', 'Diferença (R$)', 'Documentos pendentes'], data.closures.map((row) => [`${String(row.reference_month).padStart(2, '0')}/${row.reference_year}`, row.station_name, row.closure_status, row.registered_fueling_count, number(row.registered_liters), number(row.registered_amount), row.invoiced_amount, row.divergence_amount, row.documents_pending_count]))
+      addSheet('Movimentações', 'Movimentações autorizadas', ['Placa', 'Responsável', 'Beneficiária', 'Finalidade', 'Início', 'Fim', 'Situação'], data.approved_movements.map((row) => [row.placa || '—', row.responsible_unit_name, row.beneficiary_unit_name, row.purpose, formatDay(row.valid_from), formatDay(row.valid_until), row.status]))
+      addSheet('CNH', 'Alertas de validade de CNH', ['Motorista', 'Validade', 'Situação', 'Dias até vencimento'], data.cnh_alerts.map((row) => [row.driver_name, formatDay(row.cnh_valid_until), row.alert_status, row.days_until_expiry]))
+      addSheet('Situação da frota', 'Situação cadastral da frota', ['Situação', 'Veículos'], data.vehicle_status.map((row) => [statusLabels[row.status] || row.status, row.vehicle_count]))
+      addSheet('Metodologia', 'Metodologia e abrangência', ['Tema', 'Descrição'], [
+        ['Totais', 'Totais integrais ao escopo autorizado; dimensões exibidas como Top 12, alertas limitados a 60 e recentes conforme o seletor.'],
+        ['Consumo efetivo', 'Não calculado sem sequência confiável de hodômetros e metodologia de abastecimento validada.'],
+        ['Fuso', `Datas operacionais e geração apresentadas em ${MUNICIPAL_TIME_ZONE}.`],
+        ['Escopos', 'Filtros de abastecimento não se aplicam automaticamente a dados de fechamento, CNH ou movimentação.'],
+      ])
+      const buffer = await workbook.xlsx.writeBuffer()
+      const url = URL.createObjectURL(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `painel-frotas-${fromMonth}-${toMonth}.xlsx`; anchor.click(); URL.revokeObjectURL(url)
+    } catch {
+      setError('Não foi possível gerar o Excel oficial com brasão. Atualize a tela e tente novamente.')
     }
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Tipo', 'Alerta', 'Situação', 'Descrição', 'Data'], ...data.alerts.map((row) => [row.kind, row.label, row.status, row.description, formatDate(row.created_at)]), ...data.financial_alerts.map((row) => ['DIVERGÊNCIA FISCAL', row.label, row.station_check_status, row.station_name, `${row.reference_month}/${row.reference_year}`])]), 'Alertas')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Data', 'Placa', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação', 'Comprovante'], ...data.recent.map((row) => [formatDate(row.performed_at), row.placa, row.driver_name, row.station_name, row.fuel_type_name, number(row.liters), number(row.amount), statusLabels[row.status] || row.status, statusLabels[row.document_status || 'SEM_COMPROVANTE'] || 'Sem comprovante'])]), 'Recentes')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Competência', 'Posto', 'Situação', 'Registros', 'Litros', 'Valor operacional', 'Valor fiscal', 'Diferença', 'Docs. pendentes'], ...data.closures.map((row) => [`${String(row.reference_month).padStart(2,'0')}/${row.reference_year}`, row.station_name, row.closure_status, row.registered_fueling_count, number(row.registered_liters), number(row.registered_amount), row.invoiced_amount, row.divergence_amount, row.documents_pending_count])]), 'Fechamentos')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Placa', 'Responsável', 'Beneficiária', 'Finalidade', 'Início', 'Fim', 'Situação'], ...data.approved_movements.map((row) => [row.placa, row.responsible_unit_name, row.beneficiary_unit_name, row.purpose, formatDay(row.valid_from), formatDay(row.valid_until), row.status])]), 'Movimentações')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Motorista', 'Validade', 'Situação', 'Dias'], ...data.cnh_alerts.map((row) => [row.driver_name, formatDay(row.cnh_valid_until), row.alert_status, row.days_until_expiry])]), 'CNH')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Situação', 'Veículos'], ...data.vehicle_status.map((row) => [statusLabels[row.status] || row.status, row.vehicle_count])]), 'Situação da frota')
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['Observação'], ['Totais são integrais no escopo autorizado. Dimensões exibidas e exportadas como Top 12; alertas limitados a 60; recentes respeitam o seletor de 10/20/50.'], ['Consumo médio efetivo não calculado sem sequência de hodômetros validada.'], ['Filtros dimensionais de abastecimento não se aplicam a todos os dados de fechamento, CNH ou movimentação.']]), 'Metodologia')
-    XLSX.writeFile(workbook, `painel-frotas-${fromMonth}-${toMonth}.xlsx`)
   }
 
-  const exportPdf = () => {
+  const exportPdf = async () => {
     if (!data) return
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const title = 'Painel gerencial de abastecimentos'
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(11, 41, 64); doc.text('INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS', 14, 14)
-    doc.setFontSize(13); doc.text(title, 14, 23); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(91, 112, 123)
-    doc.text(`Referência: ${monthLabel(fromMonth)}${fromMonth !== toMonth ? ` a ${monthLabel(toMonth)}` : ''}`, 14, 29)
-    doc.text(`Filtros: ${selectedFilterLabels.join(' · ')}`, 14, 34, { maxWidth: 265 })
-    doc.text(`Perfil: ${scopeRole} · escopo: ${scopeLabel || 'Municipal'} · gerado em ${formatDate(data.updated_at)}`, 14, 39)
-    autoTable(doc, { startY: 45, head: [['Abastecimentos', 'Litros registrados', 'Valor registrado', 'Valor conferido', 'Acumulado no exercício', 'Pend. conferência', 'Pend. comprovante']], body: [[integer(data.summary.fueling_count), liters(data.summary.liters), money(data.summary.registered_amount), money(data.summary.confirmed_amount), money(data.summary.year_to_date_amount), integer(data.summary.pending_confirmation_count), integer(data.summary.pending_document_count)]], styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] } })
-    autoTable(doc, { startY: (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ? (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable!.finalY + 5 : 55, head: [['Hoje', 'Mês atual', 'Exercício atual', 'Mesmo período, exercício anterior', 'Variação anual']], body: [[money(data.summary.today_amount), money(data.summary.current_month_amount), money(data.summary.year_to_date_amount), money(data.summary.previous_year_to_date_amount), annualVariation == null ? 'Sem base' : `${annualVariation.toLocaleString('pt-BR',{maximumFractionDigits:1})}%`]], styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [31, 111, 92] } })
-    const pageGroups: [string, MetricRow[]][] = [['Secretaria responsável', data.by_responsible_unit], ['Secretaria beneficiária', data.by_beneficiary_unit], ['Veículos — maiores despesas', data.by_vehicle], ['Motoristas', data.by_driver], ['Postos credenciados', data.by_station], ['Combustíveis', data.by_fuel_type]]
-    for (const [label, rows] of pageGroups) {
-      doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text(label, 14, 17)
-      autoTable(doc, { startY: 23, head: [['Identificação', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio ponderado/L']], body: rows.map((row) => [row.label, integer(row.fueling_count), liters(row.liters), money(row.amount), row.weighted_price_per_liter == null ? '—' : money(row.weighted_price_per_liter)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] } })
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const title = 'Painel gerencial de abastecimentos'
+      const crest = await loadMunicipalCrestDataUrl()
+      const contextLine = `Referência: ${monthLabel(fromMonth)}${fromMonth !== toMonth ? ` a ${monthLabel(toMonth)}` : ''} · Perfil: ${scopeRole} · Escopo: ${scopeLabel || 'Municipal'} · Fuso: ${MUNICIPAL_TIME_ZONE} · Gerado em: ${formatDate(data.updated_at)}`
+      const drawHeader = () => drawMunicipalPdfHeader(doc, title, crest, contextLine)
+      const table = (options: Parameters<typeof autoTable>[1]) => autoTable(doc, {
+        margin: { top: REPORT_TABLE_START_Y, bottom: 16, left: 13, right: 13 },
+        styles: { fontSize: 8, cellPadding: 2.6, textColor: [41, 71, 87], lineColor: [224, 234, 237], lineWidth: 0.15, overflow: 'linebreak' },
+        headStyles: { fillColor: [11, 60, 89], textColor: [255, 255, 255], fontStyle: 'bold', lineColor: [213, 167, 74], lineWidth: 0.5 },
+        alternateRowStyles: { fillColor: [245, 248, 250] },
+        didDrawPage: drawHeader,
+        ...options,
+      })
+      table({ startY: REPORT_TABLE_START_Y + 4, head: [['Parâmetro', 'Informação']], body: [
+        ['Filtros aplicados', selectedFilterLabels.join(' · ') || 'Nenhum filtro adicional'],
+        ['Escopo de dados', scopeLabel || 'Municipal; sujeito às permissões do perfil'],
+        ['Nota metodológica', 'Totais integrais no escopo autorizado; rankings Top 12 e alertas limitados a 60 itens. Litros abastecidos não equivalem necessariamente a consumo efetivo.'],
+      ], styles: { fontSize: 7, cellPadding: 2.2, textColor: [41, 71, 87], lineColor: [224, 234, 237], lineWidth: 0.15, overflow: 'linebreak' } })
+      table({ startY: (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ? (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable!.finalY + 4 : 55, head: [['Abastecimentos', 'Litros registrados', 'Valor registrado', 'Valor conferido', 'Acumulado no exercício', 'Pend. conferência', 'Pend. comprovante']], body: [[integer(data.summary.fueling_count), liters(data.summary.liters), money(data.summary.registered_amount), money(data.summary.confirmed_amount), money(data.summary.year_to_date_amount), integer(data.summary.pending_confirmation_count), integer(data.summary.pending_document_count)]] })
+      table({ startY: (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ? (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable!.finalY + 5 : 55, head: [['Hoje', 'Mês atual', 'Exercício atual', 'Mesmo período, exercício anterior', 'Variação anual']], body: [[money(data.summary.today_amount), money(data.summary.current_month_amount), money(data.summary.year_to_date_amount), money(data.summary.previous_year_to_date_amount), annualVariation == null ? 'Sem base' : `${annualVariation.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`]] })
+      const section = (label: string, head: string[], body: unknown[][], fontSize = 8) => {
+        doc.addPage()
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(11, 41, 64); doc.text(label, 13, 47)
+        table({ startY: 52, head: [head], body: body as (string | number)[][], styles: { fontSize, cellPadding: 2.2, textColor: [41, 71, 87], lineColor: [224, 234, 237], lineWidth: 0.15, overflow: 'linebreak' } })
+      }
+      const pageGroups: [string, MetricRow[]][] = [['Secretaria responsável', data.by_responsible_unit], ['Secretaria beneficiária', data.by_beneficiary_unit], ['Veículos — maiores despesas', data.by_vehicle], ['Motoristas', data.by_driver], ['Postos credenciados', data.by_station], ['Combustíveis', data.by_fuel_type]]
+      for (const [label, rows] of pageGroups) section(label, ['Identificação', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio ponderado/L'], rows.map((row) => [row.label, integer(row.fueling_count), liters(row.liters), money(row.amount), row.weighted_price_per_liter == null ? '—' : money(row.weighted_price_per_liter)]))
+      section('Evolução mensal', ['Mês', 'Abastecimentos', 'Litros registrados', 'Valor registrado'], data.monthly.map((row) => [monthLabel(row.month), integer(row.fueling_count), liters(row.liters), money(row.amount)]))
+      section('Alertas e divergências registradas', ['Tipo', 'Alerta', 'Situação', 'Descrição', 'Data'], [...data.alerts.map((row) => [row.kind, row.label, row.status, row.description, formatDate(row.created_at)]), ...data.financial_alerts.map((row) => ['Divergência fiscal', row.label, row.station_check_status, row.station_name, `${row.reference_month}/${row.reference_year}`])], 7)
+      section(`Abastecimentos recentes · até ${recentLimit} registros`, ['Data/hora (America/Sao_Paulo)', 'Placa', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação'], data.recent.map((row) => [formatDate(row.performed_at), row.placa || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', liters(row.liters), money(row.amount), statusLabels[row.status] || row.status]), 7)
+      section('Fechamentos mensais e conciliação fiscal', ['Competência', 'Posto', 'Situação', 'Registros', 'Valor operacional', 'Valor fiscal', 'Diferença', 'Docs. pendentes'], data.closures.map((row) => [`${String(row.reference_month).padStart(2, '0')}/${row.reference_year}`, row.station_name, row.closure_status, integer(row.registered_fueling_count), money(row.registered_amount), row.invoiced_amount == null ? 'Não informado' : money(row.invoiced_amount), row.divergence_amount == null ? '—' : money(row.divergence_amount), integer(row.documents_pending_count)]), 7)
+      section('Movimentações autorizadas e alertas de CNH', ['Placa', 'Responsável', 'Beneficiária', 'Finalidade', 'Vigência'], data.approved_movements.map((row) => [row.placa || '—', row.responsible_unit_name || '—', row.beneficiary_unit_name || '—', row.purpose, `${formatDay(row.valid_from)} a ${formatDay(row.valid_until)}`]), 7)
+      const movementBottom = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 52
+      table({ startY: movementBottom + 8, head: [['Motorista', 'Validade CNH', 'Situação', 'Dias']], body: data.cnh_alerts.map((row) => [row.driver_name, formatDay(row.cnh_valid_until), row.alert_status, row.days_until_expiry]), styles: { fontSize: 7, cellPadding: 2 } })
+      addMunicipalPdfFooters(doc)
+      doc.save(`painel-frotas-${fromMonth}-${toMonth}.pdf`)
+    } catch {
+      setError('Não foi possível gerar o PDF oficial com brasão. Atualize a tela e tente novamente.')
     }
-    doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text('Evolução mensal', 14, 17)
-    autoTable(doc, { startY: 23, head: [['Mês', 'Abastecimentos', 'Litros registrados', 'Valor registrado']], body: data.monthly.map((row) => [monthLabel(row.month), integer(row.fueling_count), liters(row.liters), money(row.amount)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] } })
-    doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text('Alertas e divergências registradas', 14, 17)
-    autoTable(doc, { startY: 23, head: [['Tipo', 'Alerta', 'Situação', 'Descrição', 'Data']], body: [...data.alerts.map((row) => [row.kind, row.label, row.status, row.description, formatDate(row.created_at)]), ...data.financial_alerts.map((row) => ['Divergência fiscal', row.label, row.station_check_status, row.station_name, `${row.reference_month}/${row.reference_year}`])], styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] } })
-    doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text(`Abastecimentos recentes · até ${recentLimit} registros`, 14, 17)
-    autoTable(doc, { startY: 23, head: [['Data', 'Placa', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação']], body: data.recent.map((row) => [formatDate(row.performed_at), row.placa || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', liters(row.liters), money(row.amount), statusLabels[row.status] || row.status]), styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] } })
-    doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text('Fechamentos mensais e conciliação fiscal', 14, 17)
-    autoTable(doc, { startY: 23, head: [['Competência', 'Posto', 'Situação', 'Registros', 'Valor operacional', 'Valor fiscal', 'Diferença', 'Docs. pendentes']], body: data.closures.map((row) => [`${String(row.reference_month).padStart(2,'0')}/${row.reference_year}`, row.station_name, row.closure_status, integer(row.registered_fueling_count), money(row.registered_amount), row.invoiced_amount == null ? 'Não informado' : money(row.invoiced_amount), row.divergence_amount == null ? '—' : money(row.divergence_amount), integer(row.documents_pending_count)]), styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] } })
-    doc.addPage(); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 41, 64); doc.text('Movimentações autorizadas e alertas de CNH', 14, 17)
-    autoTable(doc, { startY: 23, head: [['Placa', 'Responsável', 'Beneficiária', 'Finalidade', 'Vigência']], body: data.approved_movements.map((row) => [row.placa || '—', row.responsible_unit_name || '—', row.beneficiary_unit_name || '—', row.purpose, `${formatDay(row.valid_from)} a ${formatDay(row.valid_until)}`]), styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] } })
-    const movementBottom = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 30
-    autoTable(doc, { startY: movementBottom + 8, head: [['Motorista', 'Validade CNH', 'Situação', 'Dias']], body: data.cnh_alerts.map((row) => [row.driver_name, formatDay(row.cnh_valid_until), row.alert_status, row.days_until_expiry]), styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] } })
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text('Consumo médio efetivo não calculado: exige sequência de hodômetros e metodologia validada. Rankings: Top 12; alertas limitados a 60; totais integrais no escopo autorizado.', 14, 200, { maxWidth: 265 })
-    doc.save(`painel-frotas-${fromMonth}-${toMonth}.pdf`)
   }
 
   const metricGroups: { key: string; label: string; rows: MetricRow[]; dimension: string; icon: typeof Store; help: string }[] = data ? [

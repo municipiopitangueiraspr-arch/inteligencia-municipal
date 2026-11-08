@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, CalendarDays, Download, FileSpreadsheet, FileText, Filter, Fuel, Gauge, RefreshCw, Store, Truck } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
+import { addMunicipalExcelWorksheet, addMunicipalPdfFooters, drawMunicipalPdfHeader, loadMunicipalCrestDataUrl, REPORT_TABLE_START_Y } from '../lib/reportStandards'
+import { MUNICIPAL_TIME_ZONE } from '../lib/municipalTime'
 import './FleetFuelReports.css'
 
 type Props = { userEmail?: string }
@@ -197,6 +198,7 @@ export function FleetFuelReports({ userEmail }: Props) {
     { Campo: 'Município', Valor: context?.municipality_name || '—' },
     { Campo: 'Período analisado', Valor: period },
     { Campo: 'Critério de data', Valor: 'Data/hora real da operação (performed_at), apresentada no fuso America/Sao_Paulo; submitted_at é informada separadamente.' },
+    { Campo: 'Fuso horário oficial', Valor: MUNICIPAL_TIME_ZONE },
     { Campo: 'Filtros utilizados', Valor: filterLabels.join(' | ') },
     { Campo: 'Data/hora da geração no servidor', Valor: timestamp(context?.generated_at) },
     { Campo: 'Usuário responsável', Valor: context?.user_email || userEmail || 'Usuário autenticado' },
@@ -246,56 +248,89 @@ export function FleetFuelReports({ userEmail }: Props) {
   }
   const exportExcel = () => {
     if (!data || !context) return
-    const workbook = XLSX.utils.book_new()
-    const addSheet = (name: string, rows: object[]) => {
-      const safeRows = (rows.length ? rows : [{ Informação: 'Sem dados para os filtros selecionados' }]).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' && /^\s*[=+\-@]/.test(value) ? `'${value}` : value])))
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(safeRows), name)
-    }
-    addSheet('Metadados', metadataRows())
-    addSheet('Resumo', summaryRows())
-    addSheet('Evolução mensal', monthRows())
-    addSheet('Dimensões', dimensionRows())
-    addSheet('Abastecimentos recentes', recentRows())
-    addSheet(`Detalhe página ${detailPage + 1}`, detailExportRows().length ? detailExportRows() : [{ Informação: 'Sem registros nesta página' }])
-    addSheet('Alertas', alertRows())
-    addSheet('Fechamentos por posto', closureRows())
-    addSheet('Divergências fiscais', financialRows())
-    XLSX.writeFile(workbook, `relatorio-abastecimentos-postos-${applied.fromMonth}-${applied.toMonth}.xlsx`)
+    setError('')
+    void (async () => {
+      try {
+        const [{ default: ExcelJS }, crest] = await Promise.all([import('exceljs'), loadMunicipalCrestDataUrl()])
+        const workbook = new ExcelJS.Workbook()
+        workbook.creator = 'Prefeitura Municipal de Pitangueiras – PR'
+        workbook.subject = 'Relatório oficial de abastecimentos e postos credenciados'
+        workbook.title = `Abastecimentos e postos ${applied.fromMonth} a ${applied.toMonth}`
+        workbook.created = new Date()
+        const metadata: Array<[string, string]> = [
+          ...metadataRows().map((row) => [row.Campo, String(row.Valor)] as [string, string]),
+        ]
+        const addSheet = (name: string, title: string, rows: Record<string, unknown>[]) => {
+          const headers = rows.length ? Object.keys(rows[0]) : ['Informação']
+          const values = rows.map((row) => headers.map((header) => row[header]))
+          addMunicipalExcelWorksheet(workbook, crest, { name, title, metadata, headers, rows: values })
+        }
+        addSheet('Metadados', 'Metadados do relatório', metadataRows().map((row) => ({ Campo: row.Campo, Valor: row.Valor })))
+        addSheet('Resumo', 'Indicadores consolidados', summaryRows().map((row) => ({ Indicador: row.Indicador, Valor: row.Valor })))
+        addSheet('Evolução mensal', 'Evolução mensal', monthRows())
+        addSheet('Dimensões', 'Rankings por dimensão', dimensionRows())
+        addSheet('Abastecimentos recentes', 'Abastecimentos recentes', recentRows())
+        addSheet(`Detalhe página ${detailPage + 1}`, `Abastecimentos detalhados · página ${detailPage + 1} de ${detailPageCount}`, detailExportRows())
+        addSheet('Alertas', 'Alertas e comprovantes', alertRows())
+        addSheet('Fechamentos por posto', 'Fechamentos por posto', closureRows())
+        addSheet('Divergências fiscais', 'Divergências fiscais', financialRows())
+        const buffer = await workbook.xlsx.writeBuffer()
+        const url = URL.createObjectURL(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+        const anchor = document.createElement('a'); anchor.href = url; anchor.download = `relatorio-abastecimentos-postos-${applied.fromMonth}-${applied.toMonth}.xlsx`; anchor.click(); URL.revokeObjectURL(url)
+      } catch {
+        setError('Não foi possível gerar o Excel oficial com brasão. Atualize a tela e tente novamente.')
+      }
+    })()
   }
-  const exportPdf = () => {
+  const exportPdf = async () => {
     if (!data || !context) return
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    doc.setTextColor(11, 41, 64); doc.setFontSize(16); doc.text('Relatório gerencial de abastecimentos e postos', 14, 16)
-    doc.setFontSize(9); doc.setTextColor(75, 96, 108)
-    const closureScope = context.scope === 'UNIDADES' ? 'Fechamentos e valores fiscais não disponíveis para este perfil.' : 'Fechamentos filtrados por competência e posto; demais filtros aplicam-se aos abastecimentos, não aos fechamentos.'
-    const meta = [context.municipality_name, `Período: ${period}`, 'Critério de data: ocorrência real do abastecimento; o lançamento é informado separadamente.', `Gerado: ${timestamp(context.generated_at)}`, `Usuário: ${context.user_email || userEmail || 'Usuário autenticado'}`, `Perfil: ${context.role}`, `Filtros: ${filterLabels.join(' · ')}`, closureScope]
-    let y = 23
-    for (const text of meta) { const lines = doc.splitTextToSize(text, pageWidth - 28); doc.text(lines, 14, y); y += lines.length * 4.5 }
-    const methodNotes = [
-      'Método: preço médio ponderado = valor registrado ÷ litros abastecidos. Litros não equivalem necessariamente a combustível efetivamente consumido.',
-      'Ressalva: alertas são sinalizadores para análise e não comprovam, por si sós, irregularidade.'
-    ]
-    for (const note of methodNotes) { const lines = doc.splitTextToSize(note, pageWidth - 28); doc.text(lines, 14, y + 1); y += lines.length * 4.2 }
-    y += 4
-    const addTable = (title: string, head: string[], body: (string | number)[][]) => {
-      if (y > 175) { doc.addPage(); y = 16 }
-      doc.setTextColor(11, 41, 64); doc.setFontSize(11); doc.text(title, 14, y)
-      autoTable(doc, { startY: y + 3, head: [head], body: body.length ? body : [['Sem dados para os filtros selecionados']], styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] }, margin: { left: 14, right: 14 } })
-      y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ? (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable!.finalY + 9 : y + 30
+    setError('')
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const title = 'Relatório gerencial de abastecimentos e postos'
+      const crest = await loadMunicipalCrestDataUrl()
+      const closureScope = context.scope === 'UNIDADES' ? 'Fechamentos e valores fiscais não disponíveis para este perfil.' : 'Fechamentos filtrados por competência e posto; demais filtros aplicam-se aos abastecimentos, não aos fechamentos.'
+      const contextLine = `${context.municipality_name} · Período: ${period} · Perfil: ${context.role} · Fuso: ${MUNICIPAL_TIME_ZONE} · Gerado: ${timestamp(context.generated_at)}`
+      const drawHeader = () => drawMunicipalPdfHeader(doc, title, crest, contextLine)
+      let y = REPORT_TABLE_START_Y + 7
+      const addTable = (heading: string, head: string[], body: unknown[][], fontSize = 7) => {
+        if (y > doc.internal.pageSize.getHeight() - 42) { doc.addPage(); y = REPORT_TABLE_START_Y + 5 }
+        doc.setTextColor(11, 41, 64); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(heading, 13, y)
+        autoTable(doc, {
+          startY: y + 4,
+          head: [head],
+          body: (body.length ? body : [['Sem dados para os filtros selecionados']]) as (string | number)[][],
+          styles: { font: 'helvetica', fontSize, cellPadding: 2.1, textColor: [41, 71, 87], lineColor: [224, 234, 237], lineWidth: 0.15, overflow: 'linebreak' },
+          headStyles: { fillColor: [11, 60, 89], textColor: [255, 255, 255], fontStyle: 'bold', lineColor: [213, 167, 74], lineWidth: 0.5 },
+          alternateRowStyles: { fillColor: [245, 248, 250] },
+          margin: { top: REPORT_TABLE_START_Y, bottom: 16, left: 13, right: 13 },
+          didDrawPage: drawHeader,
+        })
+        y = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || y + 25) + 8
+      }
+      addTable('Metadados e metodologia', ['Campo', 'Informação'], [
+        ['Filtros utilizados', filterLabels.join(' · ') || 'Nenhum filtro adicional'],
+        ['Usuário responsável', context.user_email || userEmail || 'Usuário autenticado'],
+        ['Escopo', context.scope === 'UNIDADES' ? (context.units || []).map((unit) => unit.acronym || unit.name).join(', ') : 'Municipal'],
+        ['Critério de data', 'Ocorrência real do abastecimento; a data/hora de lançamento é informada separadamente.'],
+        ['Escopo de fechamentos', closureScope],
+        ['Metodologia', 'Preço médio ponderado = valor registrado ÷ litros abastecidos; litros não equivalem necessariamente a combustível efetivamente consumido.'],
+        ['Ressalva', 'Alertas são sinalizadores para análise e não comprovam, por si sós, irregularidade.'],
+      ], 8)
+      addTable('Indicadores consolidados', ['Indicador', 'Valor'], summaryRows().map((row) => [row.Indicador, typeof row.Valor === 'number' ? quantity(row.Valor) : row.Valor]))
+      addTable(`Quebra por dimensão: ${selectedRowsLabel}`, [selectedRowsLabel, 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio ponderado'], selectedRows.map((row) => [row.label, number(row.fueling_count), quantity(row.liters), money(row.amount), row.weighted_price_per_liter == null && !number(row.liters) ? '—' : money(row.weighted_price_per_liter == null ? number(row.amount) / number(row.liters) : row.weighted_price_per_liter)]))
+      addTable('Preço médio ponderado por posto', ['Posto', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio/L'], (data.by_station || []).map((row) => [row.label, number(row.fueling_count), quantity(row.liters), money(row.amount), row.weighted_price_per_liter == null ? '—' : money(row.weighted_price_per_liter)]))
+      addTable('Evolução mensal', ['Competência', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio/L'], (data.monthly || []).map((row) => [formatMonth(row.month), number(row.fueling_count), quantity(row.liters), money(row.amount), number(row.liters) ? money(number(row.amount) / number(row.liters)) : '—']))
+      addTable(`Abastecimentos detalhados · página ${detailPage + 1} de ${detailPageCount}`, ['Data da operação (America/Sao_Paulo)', 'Data do lançamento (America/Sao_Paulo)', 'Veículo', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação'], detailRows.map((row) => [timestamp(row.performed_at), timestamp(row.submitted_at), row.plate || row.vehicle_description || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', quantity(row.liters), money(row.amount), statusName(row.status)]))
+      addTable('Abastecimentos recentes', ['Data da operação (America/Sao_Paulo)', 'Data do lançamento (America/Sao_Paulo)', 'Veículo', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação', 'Lançado depois?'], (data.recent || []).map((row) => [timestamp(row.performed_at), timestamp(row.submitted_at), row.plate || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', quantity(row.liters), money(row.amount), statusName(row.status), row.entered_later ? 'Sim' : 'Não']))
+      addTable('Alertas de abastecimento e comprovantes', ['Tipo', 'Prioridade', 'Alerta', 'Descrição', 'Veículo', 'Situação', 'Identificado em (America/Sao_Paulo)'], (data.alerts || []).map((row) => [row.kind, row.severity, row.label, row.description, row.plate || '—', statusName(row.status), timestamp(row.created_at)]))
+      addTable('Fechamentos e divergências por posto', ['Posto', 'Competência', 'Registrado', 'Fiscal', 'Diferença', 'Docs pendentes', 'Última movimentação (America/Sao_Paulo)', 'Situação'], (data.closures || []).map((row) => [row.station_name, `${row.reference_year}-${String(row.reference_month).padStart(2, '0')}`, money(row.registered_amount), row.invoiced_amount == null ? '—' : money(row.invoiced_amount), row.divergence_amount == null ? '—' : money(row.divergence_amount), number(row.documents_pending_count), timestamp(row.last_updated_at), statusName(row.station_check_status)]))
+      addTable('Divergências financeiras por posto', ['Posto', 'Competência', 'Valor registrado', 'Valor fiscal', 'Diferença', 'Alerta'], (data.financial_alerts || []).map((row) => [row.station_name, `${row.reference_year}-${String(row.reference_month).padStart(2, '0')}`, money(row.registered_amount), row.invoiced_amount == null ? '—' : money(row.invoiced_amount), money(row.divergence_amount), row.label]))
+      addMunicipalPdfFooters(doc)
+      doc.save(`relatorio-abastecimentos-postos-${applied.fromMonth}-${applied.toMonth}.pdf`)
+    } catch {
+      setError('Não foi possível gerar o PDF oficial com brasão. Atualize a tela e tente novamente.')
     }
-    addTable('Indicadores consolidados', ['Indicador', 'Valor'], summaryRows().map((row) => [row.Indicador, typeof row.Valor === 'number' ? quantity(row.Valor) : row.Valor]))
-    addTable(`Quebra por dimensão: ${selectedRowsLabel}`, [selectedRowsLabel, 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio ponderado'], selectedRows.map((row) => [row.label, number(row.fueling_count), quantity(row.liters), money(row.amount), row.weighted_price_per_liter == null && !number(row.liters) ? '—' : money(row.weighted_price_per_liter == null ? number(row.amount) / number(row.liters) : row.weighted_price_per_liter)]))
-    addTable('Preço médio ponderado por posto', ['Posto', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio/L'], (data.by_station || []).map((row) => [row.label, number(row.fueling_count), quantity(row.liters), money(row.amount), row.weighted_price_per_liter == null ? '—' : money(row.weighted_price_per_liter)]))
-    addTable('Evolução mensal', ['Competência', 'Abastecimentos', 'Litros', 'Valor registrado', 'Preço médio/L'], (data.monthly || []).map((row) => [formatMonth(row.month), number(row.fueling_count), quantity(row.liters), money(row.amount), number(row.liters) ? money(number(row.amount) / number(row.liters)) : '—']))
-    addTable(`Abastecimentos detalhados · página ${detailPage + 1} de ${detailPageCount}`, ['Data da operação', 'Data do lançamento', 'Veículo', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação'], detailRows.map((row) => [timestamp(row.performed_at), timestamp(row.submitted_at), row.plate || row.vehicle_description || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', quantity(row.liters), money(row.amount), statusName(row.status)]))
-    addTable('Abastecimentos recentes', ['Data da operação', 'Data do lançamento', 'Veículo', 'Motorista', 'Posto', 'Combustível', 'Litros', 'Valor', 'Situação', 'Lançado depois?'], (data.recent || []).map((row) => [timestamp(row.performed_at), timestamp(row.submitted_at), row.plate || '—', row.driver_name || '—', row.station_name || '—', row.fuel_type_name || '—', quantity(row.liters), money(row.amount), statusName(row.status), row.entered_later ? 'Sim' : 'Não']))
-    addTable('Alertas de abastecimento e comprovantes', ['Tipo', 'Prioridade', 'Alerta', 'Descrição', 'Veículo', 'Situação', 'Identificado em'], (data.alerts || []).map((row) => [row.kind, row.severity, row.label, row.description, row.plate || '—', statusName(row.status), timestamp(row.created_at)]))
-    addTable('Fechamentos e divergências por posto', ['Posto', 'Competência', 'Registrado', 'Fiscal', 'Diferença', 'Docs pendentes', 'Última movimentação', 'Situação'], (data.closures || []).map((row) => [row.station_name, `${row.reference_year}-${String(row.reference_month).padStart(2, '0')}`, money(row.registered_amount), row.invoiced_amount == null ? '—' : money(row.invoiced_amount), row.divergence_amount == null ? '—' : money(row.divergence_amount), number(row.documents_pending_count), timestamp(row.last_updated_at), statusName(row.station_check_status)]))
-    addTable('Divergências financeiras por posto', ['Posto', 'Competência', 'Valor registrado', 'Valor fiscal', 'Diferença', 'Alerta'], (data.financial_alerts || []).map((row) => [row.station_name, `${row.reference_year}-${String(row.reference_month).padStart(2, '0')}`, money(row.registered_amount), row.invoiced_amount == null ? '—' : money(row.invoiced_amount), row.divergence_amount == null ? '—' : money(row.divergence_amount), row.label]))
-    const pages = doc.getNumberOfPages()
-    for (let page = 1; page <= pages; page += 1) { doc.setPage(page); doc.setFontSize(8); doc.setTextColor(100, 112, 120); doc.text(`Página ${page} de ${pages}`, pageWidth - 31, doc.internal.pageSize.getHeight() - 7) }
-    doc.save(`relatorio-abastecimentos-postos-${applied.fromMonth}-${applied.toMonth}.pdf`)
   }
 
   const setPresetAndApply = (preset: 'last3' | 'last6' | 'last12' | 'year') => {

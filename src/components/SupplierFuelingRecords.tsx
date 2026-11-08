@@ -3,6 +3,7 @@ import { ArrowDown, ArrowDownUp, ArrowUp, Download, Eye, FileSpreadsheet, FileTe
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Station } from "./FleetResources";
+import { formatMunicipalDateTime, MUNICIPAL_TIME_ZONE } from "../lib/municipalTime";
 
 const municipalCrest = `${import.meta.env.BASE_URL}assets/brasao-pref.png`;
 
@@ -70,7 +71,7 @@ const statusTone = (status: string) => {
 };
 const operationalLabels: Record<string, string> = { REGISTRADO: "Registrado", AGUARDANDO_COMPLEMENTACAO: "Aguardando complemento", SINALIZADO: "Sinalizado", CANCELADO: "Cancelado", RASCUNHO: "Rascunho" };
 const reviewLabels: Record<string, string> = { PENDENTE_DE_CONFERENCIA: "Pendente de conferência", COM_PENDENCIA: "Com pendência", CONTESTADO: "Contestação", REGULARIZADO: "Regularizado", CONFERIDO: "Conferido", ENCERRADO_NO_FECHAMENTO: "Encerrado no fechamento", EM_ANALISE: "Em análise" };
-const dateTime = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+const dateTime = (value: string | Date) => formatMunicipalDateTime(value);
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 const liters = (value: number) => `${Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} L`;
 function documentStatusText(document: DocumentOption | undefined, deadline: number) {
@@ -262,12 +263,12 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
       sheet.mergeCells("A10:G10");
       sheet.getCell("A10").value = filterSummary;
       sheet.addRow([]);
-      const tableHeader = sheet.addRow(["Data e hora do abastecimento", "Placa", "Veículo", "Combustível", "Quantidade (L)", "Valor total (R$)", "Situação"]);
+      const tableHeader = sheet.addRow(["Data e hora do abastecimento (America/Sao_Paulo)", "Placa", "Veículo", "Combustível", "Quantidade (L)", "Valor total (R$)", "Situação"]);
       tableHeader.height = 28;
       const tableHeaderRow = tableHeader.number;
       for (const item of filteredFuelings) {
         const row = sheet.addRow([
-          new Date(item.performed_at),
+          dateTime(item.performed_at),
           item.vehicles?.placa || "Não informado",
           item.vehicles?.modelo || "Não informado",
           item.fuel_type?.nome || fuelTypes.find((fuel) => fuel.id === item.fuel_type_id)?.nome || "Não informado",
@@ -275,7 +276,6 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
           Number(item.total_amount || 0),
           statusLabels[item.status] || item.status,
         ]);
-        row.getCell(1).numFmt = "dd/mm/yyyy hh:mm";
         row.getCell(5).numFmt = "#,##0.000";
         row.getCell(6).numFmt = '"R$" #,##0.00';
         row.eachCell((cell, column) => {
@@ -285,9 +285,11 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
         });
       }
       sheet.autoFilter = { from: { row: tableHeaderRow, column: 1 }, to: { row: tableHeaderRow, column: 7 } };
+      sheet.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `${tableHeaderRow}:${tableHeaderRow}`, margins: { left: 0.25, right: 0.25, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.2 }, horizontalCentered: true };
+      sheet.headerFooter.oddFooter = `&L${municipalName}&CFuso ${MUNICIPAL_TIME_ZONE}&RPágina &P de &N`;
       const footerRow = sheet.rowCount + 2;
       sheet.mergeCells(`A${footerRow}:G${footerRow}`);
-      sheet.getCell(`A${footerRow}`).value = `Documento gerado em ${dateTime(new Date().toISOString())} pelo Portal do Posto · ${municipalName}.`;
+      sheet.getCell(`A${footerRow}`).value = `Documento gerado em ${dateTime(new Date())} · Fuso ${MUNICIPAL_TIME_ZONE} · Portal do Posto · ${municipalName}.`;
       sheet.getCell(`A${footerRow}`).font = { name: "Aptos", size: 9, italic: true, color: { argb: "FF647985" } };
       sheet.getCell(`A${footerRow}`).alignment = { horizontal: "center" };
       sheet.getRow(1).height = 24;
@@ -355,7 +357,7 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(91, 112, 123);
-        doc.text(`Resultados: ${filteredFuelings.length} · ${filterSummary}`, 13, 45, { maxWidth: 270 });
+        doc.text(`Resultados: ${filteredFuelings.length} · Fuso ${MUNICIPAL_TIME_ZONE} · ${filterSummary}`, 13, 45, { maxWidth: 270 });
         doc.setFillColor(246, 249, 250);
         doc.setDrawColor(218, 230, 233);
         doc.roundedRect(13, 49, 271, 29, 2, 2, "FD");
@@ -379,7 +381,7 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
       autoTable(doc, {
         startY: 82,
         margin: { top: 82, bottom: 16, left: 13, right: 13 },
-        head: [["Data e hora do abastecimento", "Placa", "Veículo", "Combustível", "Quantidade", "Valor total", "Situação"]],
+        head: [["Data e hora do abastecimento (America/Sao_Paulo)", "Placa", "Veículo", "Combustível", "Quantidade", "Valor total", "Situação"]],
         body: filteredFuelings.map((item) => [
           dateTime(item.performed_at),
           item.vehicles?.placa || "Não informado",
@@ -411,7 +413,7 @@ export function SupplierFuelingRecords({ station, fuelings, vehicles, fuelTypes,
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(105, 125, 133);
-        doc.text(`${municipalName} · Documento gerado em ${dateTime(new Date().toISOString())}`, 13, 200);
+        doc.text(`${municipalName} · Gerado em ${dateTime(new Date())} · Fuso ${MUNICIPAL_TIME_ZONE}`, 13, 200);
         doc.text(`Página ${page} de ${pages}`, 284, 200, { align: "right" });
       }
       doc.save(`abastecimentos-${slug(stationName(station))}.pdf`);

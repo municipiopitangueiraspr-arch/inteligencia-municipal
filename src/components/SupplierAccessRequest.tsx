@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowLeft, CheckCircle2, LockKeyhole, Mail, ShieldCheck, Store, UserRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDateTime } from '../lib/municipalTime'
 
 type Props = { onBack: () => void; authenticatedEmail?: string }
 type FirstAccessStatus = { request_id: string; status: string; station_id: string | null; razao_social: string; cnpj: string; requested_at: string; review_notes: string | null }
 type FormState = { cnpj: string; razao_social: string; representante_nome: string; representante_documento: string; telefone: string; email: string; password: string; confirmPassword: string }
 const emptyForm: FormState = { cnpj: '', razao_social: '', representante_nome: '', representante_documento: '', telefone: '', email: '', password: '', confirmPassword: '' }
 const accessStatusLabel: Record<string, string> = { PENDENTE: 'Em análise', EM_ANALISE: 'Em análise', APROVADO: 'Aprovado', NEGADO: 'Revisado — acesso não aprovado', REJEITADO: 'Revisado — acesso não aprovado' }
-function formatDate(value: string) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(parsed) }
+function formatDate(value: string) { const formatted = formatMunicipalDateTime(value); return formatted === '—' ? value : formatted }
 function normalizedCnpj(value: string) { return value.toLocaleUpperCase('pt-BR').replace(/[^0-9A-Z]/g, '') }
 function validCnpj(value: string) {
   const cnpj = normalizedCnpj(value)

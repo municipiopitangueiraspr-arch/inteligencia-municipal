@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BadgeCheck, ChevronLeft, ChevronRight, History, Pencil, Plus, Search, ShieldCheck, UserRound, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDate, formatMunicipalDateTime, municipalTodayDate } from '../lib/municipalTime'
 import './DriverManagementView.css'
 
 type DriverRow = {
@@ -40,8 +41,8 @@ type DriverForm = { nome: string; matricula: string; cpf: string; telefone: stri
 const pageSize = 50
 const cnhCategories = ['ACC', 'A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE']
 const emptyForm = (): DriverForm => ({ nome: '', matricula: '', cpf: '', telefone: '', cnh_number: '', cnh_category: '', cnh_valid_until: '', unidade_id: '', ativo: true, reason: '' })
-const dateLabel = (value?: string | null) => value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—'
-const dateTimeLabel = (value?: string | null) => value ? new Date(value).toLocaleString('pt-BR') : '—'
+const dateLabel = (value?: string | null) => formatMunicipalDate(value)
+const dateTimeLabel = (value?: string | null) => formatMunicipalDateTime(value)
 
 export function DriversView({ onSaved }: { onSaved?: () => Promise<void> | void }) {
   const [rows, setRows] = useState<DriverRow[]>([])
@@ -198,7 +199,7 @@ export function DriversView({ onSaved }: { onSaved?: () => Promise<void> | void 
       <span className="drivers-result-count">{loading ? 'Consultando…' : `${total.toLocaleString('pt-BR')} motorista(s)`}</span>
     </div>
     <div className="drivers-table-wrap"><table className="drivers-table"><thead><tr><th>Motorista</th><th>Matrícula</th><th>CPF</th><th>CNH / categoria</th><th>Validade</th><th>Unidade</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
-      {loading ? <tr><td colSpan={8} className="drivers-empty">Carregando motoristas…</td></tr> : rows.length ? rows.map((row) => <tr key={row.id}><td><strong>{row.nome}</strong><small>{row.authorization_count.toLocaleString('pt-BR')} autorização(ões) registrada(s)</small></td><td>{row.matricula || '—'}</td><td>{row.cpf_masked || '—'}</td><td>{row.cnh_masked || '—'}{row.cnh_category && <small>Categoria {row.cnh_category}</small>}</td><td><span className={row.cnh_valid_until && row.cnh_valid_until < new Date().toISOString().slice(0, 10) ? 'drivers-expired' : ''}>{dateLabel(row.cnh_valid_until)}</span></td><td>{row.unidade_nome || '—'}</td><td><span className={`drivers-status ${row.ativo ? 'active' : 'inactive'}`}>{row.ativo ? 'Ativo' : 'Inativo'}</span></td><td><div className="drivers-actions"><button className="fleet-row-action" aria-label={`Histórico de ${row.nome}`} onClick={() => void openHistory(row)}><History size={15}/></button>{canManage && <button className="fleet-row-action" aria-label={`Editar ${row.nome}`} onClick={() => void openEdit(row)}><Pencil size={15}/></button>}</div></td></tr>) : <tr><td colSpan={8} className="drivers-empty">{total ? 'Nenhum motorista corresponde aos filtros.' : 'Nenhum motorista cadastrado.'}</td></tr>}
+      {loading ? <tr><td colSpan={8} className="drivers-empty">Carregando motoristas…</td></tr> : rows.length ? rows.map((row) => <tr key={row.id}><td><strong>{row.nome}</strong><small>{row.authorization_count.toLocaleString('pt-BR')} autorização(ões) registrada(s)</small></td><td>{row.matricula || '—'}</td><td>{row.cpf_masked || '—'}</td><td>{row.cnh_masked || '—'}{row.cnh_category && <small>Categoria {row.cnh_category}</small>}</td><td><span className={row.cnh_valid_until && row.cnh_valid_until < municipalTodayDate() ? 'drivers-expired' : ''}>{dateLabel(row.cnh_valid_until)}</span></td><td>{row.unidade_nome || '—'}</td><td><span className={`drivers-status ${row.ativo ? 'active' : 'inactive'}`}>{row.ativo ? 'Ativo' : 'Inativo'}</span></td><td><div className="drivers-actions"><button className="fleet-row-action" aria-label={`Histórico de ${row.nome}`} onClick={() => void openHistory(row)}><History size={15}/></button>{canManage && <button className="fleet-row-action" aria-label={`Editar ${row.nome}`} onClick={() => void openEdit(row)}><Pencil size={15}/></button>}</div></td></tr>) : <tr><td colSpan={8} className="drivers-empty">{total ? 'Nenhum motorista corresponde aos filtros.' : 'Nenhum motorista cadastrado.'}</td></tr>}
     </tbody></table></div>
     <div className="drivers-pagination"><span>Página {page + 1} de {pageCount} · {rows.length} exibido(s)</span><div><button className="fleet-secondary-button" disabled={page <= 0 || loading} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft size={15}/> Anterior</button><button className="fleet-secondary-button" disabled={page + 1 >= pageCount || loading} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}>Próxima <ChevronRight size={15}/></button></div></div>
 

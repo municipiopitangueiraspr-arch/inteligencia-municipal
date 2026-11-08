@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, BadgeCheck, CalendarDays, Check, Clock3, Eye, FileCheck2, FileText, Filter, RotateCcw, ShieldCheck, Upload, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { formatMunicipalDateTime } from "../lib/municipalTime";
 
 type Fueling = {
   id: string;
@@ -46,7 +47,7 @@ const statusMeta: Record<string, { label: string; tone: string }> = {
   REJEITADO: { label: "Rejeitado", tone: "danger" },
   SUBSTITUIDO: { label: "Substituído", tone: "neutral" },
 };
-const dateTime = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+const dateTime = (value: string) => formatMunicipalDateTime(value);
 const localDay = (value: string) => {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
   const part = (type: string) => parts.find((item) => item.type === type)?.value || "";

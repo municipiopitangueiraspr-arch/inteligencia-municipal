@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ExternalLink, FileCheck2, History, Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDateTime, municipalDateTimeInputValue, municipalLocalInputToDate } from '../lib/municipalTime'
 import type { Vehicle } from './FleetVehicleDetails'
 
 type Unit = { id: string; nome: string; sigla?: string | null }
@@ -24,8 +25,8 @@ type UseAuthorization = {
   beneficiary?: { nome?: string; sigla?: string | null } | null
 }
 type AuthorizationHistory = { id: string; event_type: string; previous_data: Record<string, unknown> | null; new_data: Record<string, unknown> | null; reason: string | null; changed_at: string; authorization_id: string }
-const asLocalInput = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-const dateTime = (v: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(v))
+const asLocalInput = (d = new Date()) => municipalDateTimeInputValue(d)
+const dateTime = (v: string) => formatMunicipalDateTime(v)
 const allowedMime = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 
 export function FleetVehicleUseAuthorizations({ vehicle, units, canManage }: { vehicle: Vehicle; units: Unit[]; canManage: boolean }) {
@@ -97,8 +98,8 @@ export function FleetVehicleUseAuthorizations({ vehicle, units, canManage }: { v
     if (!beneficiaryId || beneficiaryId === vehicle.responsible_unit_id) { setError('Selecione uma secretaria beneficiária diferente da responsável.'); return }
     if (!purpose.trim() || purpose.trim().length < 5) { setError('Informe a finalidade administrativa da cessão.'); return }
     if (!file || !allowedMime.has(file.type) || file.size < 1 || file.size > 10 * 1024 * 1024) { setError('Anexe o documento de autorização em PDF/JPG/PNG/WEBP, com tamanho máximo de 10 MB.'); return }
-    const start = new Date(validFrom)
-    const end = new Date(validUntil)
+    const start = municipalLocalInputToDate(validFrom)
+    const end = municipalLocalInputToDate(validUntil)
     if (!validFrom || !validUntil || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) { setError('A data final da autorização deve ser posterior à data inicial.'); return }
     setSaving(true); setError('')
     let storagePath = ''
@@ -137,7 +138,7 @@ export function FleetVehicleUseAuthorizations({ vehicle, units, canManage }: { v
     const reason = window.prompt('Informe o motivo do cancelamento da autorização (mínimo 5 caracteres):')?.trim()
     if (!reason || reason.length < 5) { setError('Cancelamento não realizado: informe um motivo com pelo menos 5 caracteres.'); return }
     setSaving(true); setError('')
-    const note = [record.approval_notes, `Cancelada em ${new Date().toLocaleString('pt-BR')}: ${reason}`].filter(Boolean).join('\n')
+    const note = [record.approval_notes, `Cancelada em ${formatMunicipalDateTime(new Date())} (America/Sao_Paulo): ${reason}`].filter(Boolean).join('\n')
     const result = await supabase.from('fleet_vehicle_authorizations').update({ status: 'CANCELADA', approval_notes: note, updated_at: new Date().toISOString() }).eq('id', record.id).eq('status', 'APROVADA').select('id').maybeSingle()
     if (result.error || !result.data) setError('Não foi possível cancelar. A autorização pode ter sido alterada por outro gestor; atualize a ficha.')
     else await load()
@@ -165,8 +166,8 @@ export function FleetVehicleUseAuthorizations({ vehicle, units, canManage }: { v
     {showForm && canManage && <form className="fv-inline-form fv-form-grid" onSubmit={createAuthorization}>
       <label>Secretaria responsável<input value={units.find((u) => u.id === vehicle.responsible_unit_id)?.nome || 'Não definida'} readOnly /></label>
       <label>Secretaria beneficiária *<select required value={beneficiaryId} onChange={(e) => setBeneficiaryId(e.target.value)}><option value="">Selecione outra secretaria</option>{units.filter((u) => u.id !== vehicle.responsible_unit_id).map((u) => <option key={u.id} value={u.id}>{u.nome}{u.sigla ? ` (${u.sigla})` : ''}</option>)}</select></label>
-      <label>Válida desde *<input type="datetime-local" required value={validFrom} onChange={(e) => setValidFrom(e.target.value)} /></label>
-      <label>Válida até *<input type="datetime-local" required value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></label>
+      <label>Válida desde * (America/Sao_Paulo)<input type="datetime-local" required value={validFrom} onChange={(e) => setValidFrom(e.target.value)} /></label>
+      <label>Válida até * (America/Sao_Paulo)<input type="datetime-local" required value={validUntil} onChange={(e) => setValidUntil(e.target.value)} /></label>
       <label className="fleet-form-wide">Finalidade *<textarea required minLength={5} maxLength={1000} rows={2} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Finalidade administrativa do uso temporário" /></label>
       <label className="fleet-form-wide">Observações da aprovação<textarea maxLength={1000} rows={2} value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} /></label>
       <label className="fv-file-label fleet-form-wide"><FileCheck2 size={14} /> Comprovante oficial obrigatório<input required type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] || null)} /><small>PDF/JPG/PNG/WEBP; até 10 MB. O arquivo será privado, acessível a gestores.</small></label>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Clock3, Download, Eye, FilePlus2, Filter, Fuel, LoaderCircle, Plus, RefreshCw, Search, Settings2, ShieldCheck, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatMunicipalDateTime, municipalDateEndExclusiveIso, municipalDateStartIso, municipalDateTimeInputValue, municipalLocalInputToDate, municipalLocalInputToIso } from '../lib/municipalTime'
 import './FleetFuelingsView.css'
 
 type Station = { id: string; nome_fantasia_snapshot: string | null; razao_social_snapshot: string }
@@ -39,14 +40,14 @@ const labels: Record<string, string> = {
 }
 const pageSize = 50
 const emptyFilters: Filters = { search: '', from: '', to: '', station: '', responsible: '', beneficiary: '', vehicle: '', driver: '', fuel: '', status: '', review: '', document: '', missingDocument: false, alert: false, late: false }
-const newForm = (): FormState => ({ stationId: '', vehicleId: '', fuelTypeId: '', driverId: '', performedAt: new Date(Date.now() - 60_000).toISOString().slice(0, 16), liters: '', unitPrice: '', odometerKm: '', receipt: '', notes: '', lateReason: '', responsibleUnitId: '', beneficiaryId: '', authorizationId: '', files: [] })
+const newForm = (): FormState => ({ stationId: '', vehicleId: '', fuelTypeId: '', driverId: '', performedAt: municipalDateTimeInputValue(new Date(Date.now() - 60_000)), liters: '', unitPrice: '', odometerKm: '', receipt: '', notes: '', lateReason: '', responsibleUnitId: '', beneficiaryId: '', authorizationId: '', files: [] })
 
 function money(value: number | string | null | undefined) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0)) }
 function quantity(value: number | string | null | undefined, digits = 2) { return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(Number(value || 0)) }
-function dateTime(value?: string | null) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—' }
+function dateTime(value?: string | null) { return formatMunicipalDateTime(value) }
 function errorText(error: unknown) { return error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String((error as { message: unknown }).message) : 'A operação não pôde ser concluída.' }
-function localDateStart(value: string | null) { return value ? new Date(`${value}T00:00:00-03:00`).toISOString() : null }
-function localDateEnd(value: string | null) { if (!value) return null; const d = new Date(`${value}T00:00:00-03:00`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString() }
+function localDateStart(value: string | null) { return value ? municipalDateStartIso(value) || null : null }
+function localDateEnd(value: string | null) { return value ? municipalDateEndExclusiveIso(value) || null : null }
 function safeFileName(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) }
 
 export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRefresh: () => Promise<void> }) {
@@ -87,7 +88,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
   const calculatedTotal = useMemo(() => Number(form.liters || 0) * Number(form.unitPrice || 0), [form.liters, form.unitPrice])
   const needsLateReason = useMemo(() => {
     if (!form.performedAt) return false
-    const mins = (Date.now() - new Date(form.performedAt).getTime()) / 60_000
+    const mins = (Date.now() - municipalLocalInputToDate(form.performedAt).getTime()) / 60_000
     return mins > (policies?.normal_entry_window_minutes ?? 30)
   }, [form.performedAt, policies])
 
@@ -143,7 +144,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
   async function loadDrivers(vehicleId: string, dateValue: string) {
     if (!supabase || !vehicleId) { setDrivers([]); return }
     setDriversLoading(true)
-    const instant = dateValue ? new Date(dateValue) : new Date()
+    const instant = dateValue ? municipalLocalInputToDate(dateValue) : new Date()
     if (!Number.isFinite(instant.getTime())) { setDrivers([]); setDriversLoading(false); return }
     const { data, error: driverError } = await supabase.rpc('fleet_manager_vehicle_driver_options', { p_vehicle_id: vehicleId, p_performed_at: instant.toISOString(), p_require_authorization: true })
     if (driverError) { setDrivers([]); setFormError('Não foi possível verificar autorização, CNH e categoria do motorista para a data escolhida.'); }
@@ -153,7 +154,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
 
   async function loadAuthorizations(vehicleId: string, dateValue: string) {
     if (!supabase || !vehicleId) { setAuthorizations([]); return }
-    const timestamp = dateValue ? new Date(dateValue).toISOString() : new Date().toISOString()
+    const timestamp = dateValue ? municipalLocalInputToIso(dateValue) : new Date().toISOString()
     const { data, error: resultError } = await supabase.from('fleet_vehicle_authorizations').select('id,beneficiary_unit_id,valid_from,valid_until,purpose,supporting_document_path,authorized_by').eq('vehicle_id', vehicleId).eq('status', 'APROVADA').lte('valid_from', timestamp).gte('valid_until', timestamp).not('authorized_by', 'is', null).not('supporting_document_path', 'is', null).order('valid_until').limit(100)
     if (resultError) { setAuthorizations([]); setFormError('Não foi possível verificar autorizações de cessão vigentes.'); return }
     setAuthorizations((data || []) as Authorization[])
@@ -162,7 +163,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
   async function loadAuthorizedFuels(stationId: string, vehicleId: string, dateValue = form.performedAt) {
     if (!supabase || !stationId) { setAuthorizedFuelIds([]); return }
     setFuelOptionsLoading(true)
-    const eventTime = dateValue ? new Date(dateValue) : new Date()
+    const eventTime = dateValue ? municipalLocalInputToDate(dateValue) : new Date()
     const { data, error: resultError } = await supabase.rpc('fleet_supplier_fuel_options', { p_station_id: stationId, p_vehicle_id: vehicleId || null, p_performed_at: eventTime.toISOString() })
     if (resultError) { setAuthorizedFuelIds([]); setFormError('Não foi possível consultar os combustíveis habilitados para o posto.'); }
     else setAuthorizedFuelIds(((data || []) as { id: string }[]).map((item) => item.id))
@@ -172,7 +173,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
   async function resolveVehicleUnit(vehicleId: string, dateValue: string) {
     if (!supabase || !vehicleId) return
     const vehicle = vehicles.find((item) => item.id === vehicleId)
-    const at = dateValue ? new Date(dateValue).toISOString() : new Date().toISOString()
+    const at = dateValue ? municipalLocalInputToIso(dateValue) : new Date().toISOString()
     const { data } = await supabase.from('fleet_vehicle_department_history').select('to_unit_id,started_at,ended_at').eq('vehicle_id', vehicleId).order('started_at', { ascending: false }).limit(200)
     const match = ((data || []) as { to_unit_id: string; started_at: string; ended_at: string | null }[]).find((item) => new Date(item.started_at) <= new Date(at) && (!item.ended_at || new Date(item.ended_at) > new Date(at)))
     const responsible = match?.to_unit_id || vehicle?.responsible_unit_id || ''
@@ -223,7 +224,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
         p_idempotency_key: idempotencyKey, p_station_id: form.stationId, p_vehicle_id: form.vehicleId,
         p_fuel_type_id: form.fuelTypeId, p_driver_id: form.driverId, p_responsible_unit_id: responsible,
         p_beneficiary_unit_id: beneficiary, p_authorization_id: form.authorizationId || null,
-        p_performed_at: new Date(form.performedAt).toISOString(), p_liters: Number(form.liters),
+        p_performed_at: municipalLocalInputToIso(form.performedAt), p_liters: Number(form.liters),
         p_unit_price: Number(form.unitPrice), p_odometer_km: Number(form.odometerKm),
         p_station_receipt_number: form.receipt.trim() || null, p_notes: form.notes.trim() || null,
         p_late_entry_reason: form.lateReason.trim() || null, p_source: 'MUNICIPIO',
@@ -376,7 +377,7 @@ export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRef
         <label><span>Veículo *</span><select required value={form.vehicleId} onChange={(e) => { const id = e.target.value; const vehicle = vehicles.find((item) => item.id === id); setForm((current) => ({ ...current, vehicleId: id, fuelTypeId: '', driverId: '', responsibleUnitId: vehicle?.responsible_unit_id || '', beneficiaryId: vehicle?.responsible_unit_id || '', authorizationId: '', odometerKm: vehicle?.current_odometer_km == null ? '' : String(vehicle.current_odometer_km) })); setFormError(''); if (id) { void loadDrivers(id, form.performedAt); void loadAuthorizations(id, form.performedAt); void resolveVehicleUnit(id, form.performedAt); if (form.stationId) void loadAuthorizedFuels(form.stationId, id, form.performedAt) } else { setDrivers([]); setAuthorizations([]); setAuthorizedFuelIds([]) } }}><option value="">Selecione</option>{vehicles.map((item) => <option key={item.id} value={item.id}>{item.placa} · {item.modelo || 'Veículo'}{item.operational_status === 'CEDIDO' ? ' · CEDIDO' : ''}</option>)}</select>{selectedVehicle && <small>Lotação na data: {units.find((u) => u.id === form.responsibleUnitId)?.nome || 'consultando…'} · Capacidade: {quantity(selectedVehicle.tank_capacity_l)} L</small>}</label>
         <label><span>Combustível autorizado no posto *</span><select required value={form.fuelTypeId} onChange={(e) => updateForm('fuelTypeId', e.target.value)} disabled={fuelOptionsLoading || !form.stationId || !form.vehicleId}><option value="">{fuelOptionsLoading ? 'Validando autorização…' : 'Selecione'}</option>{fuels.filter((fuel) => authorizedFuelIds.includes(fuel.id) && (!selectedVehicle?.fuel_type_id || fuel.id === selectedVehicle.fuel_type_id)).map((item) => <option key={item.id} value={item.id}>{item.nome}{item.sigla ? ` (${item.sigla})` : ''}</option>)}</select><small>O servidor verifica autorização do posto e compatibilidade do veículo.</small></label>
         <label><span>Motorista autorizado *</span><select required value={form.driverId} onChange={(e) => updateForm('driverId', e.target.value)} disabled={!form.vehicleId || driversLoading}><option value="">{driversLoading ? 'Validando…' : form.vehicleId ? 'Selecione motorista' : 'Selecione o veículo primeiro'}</option>{drivers.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.matricula ? ` · ${item.matricula}` : ''}{item.cnh_category ? ` · Cat. ${item.cnh_category}` : ''}</option>)}</select>{form.vehicleId && !driversLoading && !drivers.length && <small className="fueling-danger-text">Não há autorização vigente com CNH válida para a data.</small>}</label>
-        <label><span>Data e hora efetivas *</span><input type="datetime-local" required value={form.performedAt} onChange={(e) => { const value = e.target.value; updateForm('performedAt', value); if (form.vehicleId) { void loadDrivers(form.vehicleId, value); void loadAuthorizations(form.vehicleId, value); void resolveVehicleUnit(form.vehicleId, value); if (form.stationId) void loadAuthorizedFuels(form.stationId, form.vehicleId, value) } }} /></label>
+        <label><span>Data e hora efetivas * (America/Sao_Paulo)</span><input type="datetime-local" required value={form.performedAt} onChange={(e) => { const value = e.target.value; updateForm('performedAt', value); if (form.vehicleId) { void loadDrivers(form.vehicleId, value); void loadAuthorizations(form.vehicleId, value); void resolveVehicleUnit(form.vehicleId, value); if (form.stationId) void loadAuthorizedFuels(form.stationId, form.vehicleId, value) } }} /></label>
         <label><span>Hodômetro (km) *</span><input type="number" required min="0" step="0.1" value={form.odometerKm} onChange={(e) => updateForm('odometerKm', e.target.value)} /></label>
         <label><span>Quantidade (L) *</span><input type="number" required min="0.01" step="0.001" value={form.liters} onChange={(e) => updateForm('liters', e.target.value)} /></label>
         <label><span>Preço por litro (R$) *</span><input type="number" required min="0.001" step="0.001" value={form.unitPrice} onChange={(e) => updateForm('unitPrice', e.target.value)} /></label>
