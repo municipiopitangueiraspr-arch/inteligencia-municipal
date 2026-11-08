@@ -1,4 +1,5 @@
-import { Bell, ChevronDown, ClipboardList, FileText, Fuel, LayoutDashboard, LogOut, MapPinned, Package, Settings2, ShieldCheck, Truck, Users, Wrench } from 'lucide-react'
+import { useState } from 'react'
+import { Bell, ChevronDown, ClipboardList, FileText, Fuel, LayoutDashboard, LogOut, MapPinned, Menu, Package, Settings2, ShieldCheck, Truck, Users, Wrench, X } from 'lucide-react'
 import './Dashboard.css'
 
 const assetBase = import.meta.env.BASE_URL
@@ -20,9 +21,15 @@ const modules = [
 ]
 
 export function Dashboard({ userEmail, onOpenFleet, onLogout }: DashboardProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   return <div className="dashboard-shell">
     <aside className="dashboard-sidebar">
-      <div className="dashboard-brand"><div className="dashboard-brand-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão municipal" /></div><div><strong>Inteligência</strong><span>Municipal</span></div></div>
+      <div className="dashboard-brand"><div className="dashboard-brand-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão municipal" /></div><div><strong>Inteligência</strong><span>Municipal</span></div><button type="button" className="dashboard-mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Fechar menu principal' : 'Abrir menu principal'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-mobile-nav" onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}<span>{mobileMenuOpen ? 'Fechar' : 'Menu'}</span></button></div>
+      <nav id="dashboard-mobile-nav" className={`dashboard-mobile-nav${mobileMenuOpen ? ' is-open' : ''}`} aria-label="Navegação principal móvel">
+        <div className="dashboard-mobile-nav-group"><span>MENU PRINCIPAL</span><button type="button" className="dashboard-mobile-nav-item active" aria-current="page" onClick={() => setMobileMenuOpen(false)}><LayoutDashboard size={18} />Visão geral</button><button type="button" className="dashboard-mobile-nav-item" onClick={() => { setMobileMenuOpen(false); onOpenFleet() }}><Truck size={18} />Gestão de Frotas</button><button type="button" className="dashboard-mobile-nav-item"><FileText size={18} />Atas e Pedidos</button><button type="button" className="dashboard-mobile-nav-item"><Package size={18} />Compras Públicas</button><button type="button" className="dashboard-mobile-nav-item"><MapPinned size={18} />Atos Oficiais</button></div>
+        <div className="dashboard-mobile-nav-group"><span>ADMINISTRAÇÃO</span><button type="button" className="dashboard-mobile-nav-item"><Users size={18} />Usuários e unidades</button><button type="button" className="dashboard-mobile-nav-item"><Settings2 size={18} />Configurações</button></div>
+        <button type="button" className="dashboard-mobile-logout" onClick={() => { setMobileMenuOpen(false); onLogout() }}><LogOut size={18} />Sair do sistema</button>
+      </nav>
       <div className="sidebar-label">MENU PRINCIPAL</div>
       <nav className="dashboard-nav"><button className="nav-item active"><LayoutDashboard size={18} /> Visão geral</button><button className="nav-item" onClick={onOpenFleet}><Truck size={18} /> Gestão de Frotas <span className="nav-dot" /></button><button className="nav-item"><FileText size={18} /> Atas e Pedidos</button><button className="nav-item"><Package size={18} /> Compras Públicas</button><button className="nav-item"><MapPinned size={18} /> Atos Oficiais</button></nav>
       <div className="sidebar-label sidebar-label-lower">ADMINISTRAÇÃO</div><nav className="dashboard-nav"><button className="nav-item"><Users size={18} /> Usuários e unidades</button><button className="nav-item"><Settings2 size={18} /> Configurações</button></nav>

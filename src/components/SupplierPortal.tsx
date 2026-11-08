@@ -369,6 +369,9 @@ export function SupplierPortal({
               Usuários do posto
             </button>
           )}
+          <button type="button" className="supplier-mobile-logout" onClick={onLogout}>
+            <LogOut size={17} /> Sair
+          </button>
         </nav>
         <div className="supplier-sidebar-bottom">
           <div className="supplier-user">

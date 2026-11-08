@@ -1,0 +1,201 @@
+/* Shared mobile/tablet accessibility and layout refinements. Loaded after page styles. */
+.dashboard-mobile-menu-toggle, .dashboard-mobile-nav { display: none; }
+:where(button, a, [role="button"]) { touch-action: manipulation; }
+:where(button, a, input, select, textarea):focus-visible { outline: 3px solid #4b9cb0; outline-offset: 2px; }
+
+@supports (min-height: 100dvh) {
+  html, body, #root,
+  .login-shell, .dashboard-shell, .fleet-shell, .supplier-shell { min-height: 100dvh; }
+}
+
+:is(.dashboard-main, .fleet-main, .supplier-main, .dashboard-content, .fleet-content, .supplier-content,
+  .access-inner, .supplier-access-inner, .metric-data, .fleet-panel, .supplier-panel) { min-width: 0; }
+
+@media (max-width: 900px) {
+  .dashboard-shell { display: block; }
+  .login-shell, .dashboard-shell, .fleet-shell, .supplier-shell { min-height: 100vh; min-height: 100dvh; }
+
+  /* The municipal hall replaces its desktop-only sidebar with an accessible menu. */
+  .dashboard-sidebar {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-height: 0;
+    padding: calc(13px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 13px calc(16px + env(safe-area-inset-left, 0px));
+  }
+  .dashboard-brand { width: 100%; justify-content: space-between; padding: 0 0 13px; }
+  .sidebar-label, .dashboard-nav, .sidebar-bottom { display: none; }
+  .dashboard-mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 88px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid rgba(255,255,255,.24);
+    border-radius: 8px;
+    color: #fff;
+    background: rgba(255,255,255,.08);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .dashboard-mobile-nav { display: none; margin: 0 -2px; padding: 8px 0 4px; }
+  .dashboard-mobile-nav.is-open { display: grid; gap: 10px; }
+  .dashboard-mobile-nav-group { display: grid; gap: 4px; }
+  .dashboard-mobile-nav-group > span { padding: 4px 9px; color: #91aab5; font-size: 10px; font-weight: 700; letter-spacing: 1.3px; }
+  .dashboard-mobile-nav-item, .dashboard-mobile-logout {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    color: #dceaf0;
+    background: transparent;
+    text-align: left;
+    font: 500 13px 'DM Sans', sans-serif;
+    cursor: pointer;
+  }
+  .dashboard-mobile-nav-item.active, .dashboard-mobile-nav-item:hover { color: #fff; background: rgba(255,255,255,.11); }
+  .dashboard-mobile-nav-item.active { box-shadow: inset 3px 0 #d5a74a; }
+  .dashboard-mobile-logout { border-top: 1px solid rgba(255,255,255,.12); border-radius: 0; color: #f0d28a; }
+  .dashboard-main, .fleet-main, .supplier-main { width: 100%; margin: 0; }
+  .dashboard-header { padding-right: calc(24px + env(safe-area-inset-right, 0px)); padding-left: calc(24px + env(safe-area-inset-left, 0px)); }
+  .dashboard-content { padding-right: calc(24px + env(safe-area-inset-right, 0px)); padding-left: calc(24px + env(safe-area-inset-left, 0px)); }
+  .dashboard-footer { padding-right: calc(24px + env(safe-area-inset-right, 0px)); padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); padding-left: calc(24px + env(safe-area-inset-left, 0px)); }
+
+  /* Tablet portrait/landscape uses the same compact top navigation before the desktop rail becomes cramped. */
+  .fleet-shell, .supplier-shell { display: block; }
+  .fleet-sidebar, .supplier-sidebar {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-height: 0;
+    padding: calc(13px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 10px calc(16px + env(safe-area-inset-left, 0px));
+  }
+  .fleet-section-label, .fleet-sidebar-bottom, .supplier-sidebar-label, .supplier-sidebar-bottom { display: none; }
+  .fleet-nav, .supplier-nav { display: flex; gap: 5px; overflow-x: auto; overscroll-behavior-x: contain; padding: 8px 0 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .fleet-nav-item, .supplier-nav button { flex: 0 0 auto; width: auto; min-height: 44px; padding: 0 12px; font-size: 12px; }
+  .fleet-main, .supplier-main { min-width: 0; }
+  .fleet-header, .supplier-header { height: auto; min-height: 76px; flex-wrap: wrap; gap: 12px; padding: 17px calc(24px + env(safe-area-inset-right, 0px)) 17px calc(24px + env(safe-area-inset-left, 0px)); }
+  .fleet-content, .supplier-content { padding: 24px calc(24px + env(safe-area-inset-right, 0px)) 30px calc(24px + env(safe-area-inset-left, 0px)); }
+  .fleet-page-heading, .fleet-section-heading, .supplier-page-heading, .supplier-panel-heading { flex-wrap: wrap; gap: 12px; }
+  .fleet-overview-actions, .fleet-report-actions, .supplier-records-actions { flex-wrap: wrap; }
+
+  /* Keep wide data tables usable without allowing them to widen the document. */
+  :is(.fleet-table-panel, .fleet-history-row, .supplier-table-wrap, .supplier-record-table-panel,
+      .station-detail-table-wrap, .fleet-closure-table-wrap, .supplier-closure-table-wrap) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  [class*="backdrop"] { padding: max(16px, calc(16px + env(safe-area-inset-top, 0px))) max(16px, calc(16px + env(safe-area-inset-right, 0px))) max(16px, calc(16px + env(safe-area-inset-bottom, 0px))) max(16px, calc(16px + env(safe-area-inset-left, 0px))); }
+
+  /* Practical touch targets for the core flows, including compact toolbar/table actions. */
+  :is(.login-shell, .dashboard-shell, .fleet-shell, .supplier-shell) button { min-height: 44px; }
+  .login-shell .text-button, .login-shell .access-back, .login-shell .portal-switch button { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; }
+  .login-shell .icon-button, .dashboard-shell .notification-button, .fleet-shell .fleet-icon-button,
+  .fleet-shell .fleet-close, .fleet-shell .fleet-row-action, .supplier-shell .supplier-preview-close,
+  .supplier-shell .supplier-sort-button, .supplier-shell .supplier-reset-filters { min-width: 44px; min-height: 44px; padding: 8px; }
+  .fleet-primary-button, .fleet-secondary-button, .supplier-primary, .supplier-secondary, .supplier-upload,
+  .supplier-upload-modern, .fleet-members-button, .fleet-nav-item, .supplier-nav button { min-height: 44px; }
+  .supplier-closure-form-grid button, .supplier-closure-form-grid input[type="file"] + label,
+  .supplier-closure-submit, .supplier-closure-doc > button { min-height: 44px; }
+
+  /* Prevent iOS focus zoom and leave enough room for native date/time controls. */
+  :is(.login-shell, .dashboard-shell, .fleet-shell, .supplier-shell) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+    select, textarea
+  ) { min-width: 0; min-height: 44px; font-size: 16px !important; line-height: 1.35; }
+
+  .fleet-modal-backdrop, .fleet-overview-modal-backdrop, .fleet-confirm-backdrop, .fleet-proof-preview-backdrop,
+  .fleet-closure-review-backdrop, .fueling-modal-backdrop, .fv-detail-backdrop, .fv-nested-backdrop,
+  .station-detail-backdrop, .supplier-closure-preview-backdrop, .supplier-preview-backdrop, .supplier-review-backdrop {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 800px) {
+  .login-shell .access-panel { padding-top: calc(32px + env(safe-area-inset-top, 0px)); padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); padding-left: calc(24px + env(safe-area-inset-left, 0px)); padding-right: calc(24px + env(safe-area-inset-right, 0px)); }
+  .login-shell .supplier-access-section input, .login-shell .supplier-access-section .input-wrap { min-height: 44px; }
+}
+
+@media (max-width: 760px) {
+  .dashboard-content, .fleet-content, .supplier-content { padding-right: calc(17px + env(safe-area-inset-right, 0px)); padding-left: calc(17px + env(safe-area-inset-left, 0px)); }
+  .dashboard-header, .fleet-header, .supplier-header { padding-right: calc(18px + env(safe-area-inset-right, 0px)); padding-left: calc(18px + env(safe-area-inset-left, 0px)); }
+  .dashboard-footer { padding-right: calc(17px + env(safe-area-inset-right, 0px)); padding-left: calc(17px + env(safe-area-inset-left, 0px)); }
+  .fleet-content, .supplier-content { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .fleet-header, .supplier-header { align-items: flex-start; }
+  .fleet-overview-filter-grid, .supplier-record-filter-grid, .supplier-document-filter-grid { min-width: 0; }
+  .fleet-report-actions button, .fleet-closure-actions button, .supplier-form-actions button { min-height: 44px; }
+}
+
+@media (max-width: 420px) {
+  .login-shell .access-panel { padding-top: calc(25px + env(safe-area-inset-top, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); padding-left: calc(18px + env(safe-area-inset-left, 0px)); padding-right: calc(18px + env(safe-area-inset-right, 0px)); }
+  .dashboard-content, .fleet-content, .supplier-content { padding-right: calc(14px + env(safe-area-inset-right, 0px)); padding-left: calc(14px + env(safe-area-inset-left, 0px)); }
+  .dashboard-header, .fleet-header, .supplier-header { padding-right: calc(14px + env(safe-area-inset-right, 0px)); padding-left: calc(14px + env(safe-area-inset-left, 0px)); }
+  .dashboard-brand { gap: 8px; }
+  .dashboard-mobile-menu-toggle { min-width: 80px; padding: 0 9px; }
+}
+
+
+@media (max-width: 900px) {
+  :is(
+    .fleet-modal, .fleet-resource-modal, .fleet-members-modal, .fleet-vehicle-modal,
+    .fleet-fueling-create-modal, .fleet-overview-detail-modal, .fleet-overview-record-modal,
+    .drivers-form-modal, .drivers-history-modal, .fueling-modal, .fv-detail-modal,
+    .fv-modal, .fv-small-modal, .station-detail-modal, .supplier-review-dialog,
+    .supplier-preview-dialog, .supplier-record-detail-dialog, .fleet-closure-review-dialog,
+    .fleet-closure-v2-dialog, .fleet-closure-v2-review-dialog, .fleet-confirm-dialog,
+    .fleet-correction-dialog
+  ) { max-height: calc(100dvh - 32px); overscroll-behavior: contain; }
+}
+
+@media (max-width: 900px) and (orientation: landscape) {
+  :is(
+    .fleet-modal, .fleet-resource-modal, .fleet-members-modal, .fleet-vehicle-modal,
+    .fleet-fueling-create-modal, .fleet-overview-detail-modal, .fleet-overview-record-modal,
+    .drivers-form-modal, .drivers-history-modal, .fueling-modal, .fv-detail-modal,
+    .fv-modal, .fv-small-modal, .station-detail-modal, .supplier-review-dialog,
+    .supplier-preview-dialog, .supplier-record-detail-dialog, .fleet-closure-review-dialog,
+    .fleet-closure-v2-dialog, .fleet-closure-v2-review-dialog, .fleet-confirm-dialog,
+    .fleet-correction-dialog
+  ) { max-height: calc(100dvh - 20px); overflow-y: auto; }
+}
+
+
+@media (max-width: 900px) {
+  .supplier-records-actions :is(.supplier-primary, .supplier-secondary),
+  .supplier-load-more .supplier-secondary,
+  .supplier-document-card-actions .supplier-secondary,
+  .supplier-document-card-actions .supplier-upload-modern { min-height: 44px; }
+}
+
+
+.fleet-nav .fleet-mobile-logout, .supplier-nav .supplier-mobile-logout { display: none; }
+@media (max-width: 900px) {
+  .fleet-nav .fleet-mobile-logout, .supplier-nav .supplier-mobile-logout {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: auto;
+    min-height: 44px;
+    margin-left: 4px;
+    padding: 0 12px;
+    border: 1px solid rgba(229,198,116,.45);
+    border-radius: 8px;
+    color: #f0d28a;
+    background: rgba(255,255,255,.06);
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
