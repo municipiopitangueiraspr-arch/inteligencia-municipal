@@ -252,9 +252,9 @@ export function SupplierPortal({
       fuelings.filter((item) =>
         ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO"].includes(
           item.status,
-        ),
+        ) || documents.some((document) => document.fueling_id === item.id && document.is_current && document.document_status === "REJEITADO"),
       ),
-    [fuelings],
+    [fuelings, documents],
   );
   async function uploadDocument(fuelingId: string, file: File) {
     if (!supabase) return { error: new Error("Supabase indisponível") };

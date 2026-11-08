@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert, Filter,
   ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
-  RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X,
+  RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X, Eye,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -16,7 +16,8 @@ type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' 
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type Vehicle = { id: string; placa: string; marca: string | null; modelo: string | null; ano_fabricacao: number | null; ano_modelo: number | null; chassi: string | null; renavam: string | null; fuel_type_id: string | null; tank_capacity_l: number; responsible_unit_id: string | null; operational_status: string; current_odometer_km: number | null; notes: string | null }
 type FleetOption = { id: string; nome?: string; sigla?: string; ativo?: boolean; unidade_medida?: string }
-type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null; fuel_type?: { nome?: string } | null }
+type FuelingDocument = { id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null; reviewed_by?: number | null; reviewed_at?: string | null }
+type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicle_id?: string; station_id?: string; fuel_type_id?: string; registered_officially_by?: number | null; registered_officially_at?: string | null; inconsistency_code?: string | null; inconsistency_notes?: string | null; vehicles?: { id?: string; placa?: string; modelo?: string } | null; stations?: { id?: string; nome_fantasia_snapshot?: string } | null; fuel_type?: { id?: string; nome?: string } | null; documents?: FuelingDocument[] | null }
 type ConfirmationRequest = { eyebrow: string; title: string; message: string; details: string[]; confirmLabel: string; tone?: 'danger'; onConfirm: () => Promise<string | null> }
 
 const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
@@ -35,8 +36,10 @@ const navItems: { id: FleetView; label: string; icon: typeof Truck }[] = [
 
 const statusLabel: Record<string, string> = {
   ATIVO: 'Ativo', INATIVO: 'Inativo', EM_MANUTENCAO: 'Em manutenção', BAIXADO: 'Baixado', CEDIDO: 'Cedido',
-  ENVIADO_PELO_POSTO: 'Enviado pelo posto', PENDENTE_DE_CONFERENCIA: 'Pendente de conferência',
-  CONFERIDO: 'Conferido', COM_INCONSISTENCIA: 'Com inconsistência', INCLUIDO_NO_FECHAMENTO: 'No fechamento',
+  RASCUNHO: 'Rascunho', ENVIADO_PELO_POSTO: 'Enviado pelo posto', PENDENTE_DE_COMPROVANTE: 'Pendente de comprovante',
+  PENDENTE_DE_CONFERENCIA: 'Pendente de conferência', EM_ANALISE: 'Em análise', COM_INCONSISTENCIA: 'Com inconsistência',
+  SOLICITADA_CORRECAO: 'Correção solicitada', CORRIGIDO: 'Corrigido', CONFERIDO: 'Conferido', INCLUIDO_NO_FECHAMENTO: 'No fechamento', CANCELADO: 'Cancelado',
+  PENDENTE: 'Pendente', ENVIADO: 'Enviado', ACEITO: 'Aceito', REJEITADO: 'Rejeitado', SUBSTITUIDO: 'Substituído',
 }
 
 function formatDate(value?: string) {
@@ -162,7 +165,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'overview' && <Overview activeVehicles={activeVehicles} pendingFuelings={pendingFuelings} monthFuelings={monthFuelings} monthTotal={monthTotal} fuelings={fuelings} onNavigate={setView} />}
         {view === 'vehicles' && <Vehicles vehicles={vehicles} units={units} fuelTypes={fuelTypes} loading={loading} onAdd={openNewVehicle} onEdit={openEditVehicle} />}
         {view === 'fuelTypes' && <FuelTypesView onChanged={loadData} onRequestConfirmation={setConfirmation} />}
-        {view === 'fuelings' && <Fuelings fuelings={fuelings} loading={loading} />}
+        {view === 'fuelings' && <Fuelings onRequestConfirmation={setConfirmation} />}
         {view === 'closure' && <MonthlyClosure />}
         {view === 'analytics' && <FuelConsumptionDashboard />}
         {view === 'reports' && <FuelCostReports />}
@@ -419,8 +422,270 @@ function FuelTypesView({ onChanged, onRequestConfirmation }: { onChanged: () => 
     {showForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setShowForm(false)}><form className="fleet-modal fleet-fueltype-modal" onSubmit={requestSave}><div className="fleet-modal-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO OPERACIONAL</span><h2>{editing ? 'Editar combustível' : 'Novo combustível'}</h2></div><button type="button" className="fleet-close" onClick={() => setShowForm(false)} aria-label="Fechar"><X size={18} /></button></div><p className="fleet-modal-note"><BadgeCheck size={16} /> Gestor de Frotas ou Administrador pode cadastrar e alterar esta referência.</p><div className="fleet-form-grid"><label>Nome do combustível<input required maxLength={80} value={form.nome} onChange={(event) => setForm({ ...form, nome: event.target.value })} placeholder="Ex.: Diesel S-10" /></label><label>Sigla<input maxLength={12} value={form.sigla} onChange={(event) => setForm({ ...form, sigla: event.target.value })} placeholder="Ex.: S10" /></label><label>Unidade de medida<input required maxLength={10} value={form.unidade_medida} onChange={(event) => setForm({ ...form, unidade_medida: event.target.value })} placeholder="L" /></label><label>Situação<select value={form.ativo} onChange={(event) => setForm({ ...form, ativo: event.target.value })}><option value="true">Ativo</option><option value="false">Inativo</option></select></label></div><div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowForm(false)}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={saving}>{saving ? 'Salvando…' : editing ? 'Salvar alterações' : 'Cadastrar combustível'}</button></div></form></div>}
   </section>
 }
-function Fuelings({ fuelings, loading }: { fuelings: Fueling[]; loading: boolean }) { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFERÊNCIA</span><h2>Abastecimentos</h2><p>Revise os registros enviados pelos postos e acompanhe a documentação.</p></div><div className="fleet-filter-pill"><ClipboardCheck size={15} /> Fila operacional</div></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : fuelings.length ? <FuelingTable fuelings={fuelings} /> : <EmptyState icon={Fuel} title="Nenhum abastecimento encontrado" text="Os registros enviados pelos postos aparecerão aqui." />}</div></section> }
+type FuelingSortKey = 'date' | 'vehicle' | 'station' | 'fuel' | 'volume' | 'amount' | 'document' | 'status'
+const fuelingStatuses = ['RASCUNHO', 'ENVIADO_PELO_POSTO', 'PENDENTE_DE_COMPROVANTE', 'PENDENTE_DE_CONFERENCIA', 'EM_ANALISE', 'COM_INCONSISTENCIA', 'SOLICITADA_CORRECAO', 'CORRIGIDO', 'CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO']
+const proofStatuses = ['PENDENTE', 'ENVIADO', 'EM_ANALISE', 'ACEITO', 'REJEITADO', 'SUBSTITUIDO']
+const completedFuelingStatuses = ['CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO']
 
+function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: ConfirmationRequest) => void }) {
+  const [fuelings, setFuelings] = useState<Fueling[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [workingId, setWorkingId] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [search, setSearch] = useState('')
+  const [dateStart, setDateStart] = useState('')
+  const [dateEnd, setDateEnd] = useState('')
+  const [vehicleFilter, setVehicleFilter] = useState('')
+  const [fuelFilter, setFuelFilter] = useState('')
+  const [stationFilter, setStationFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [documentFilter, setDocumentFilter] = useState('')
+  const [sortKey, setSortKey] = useState<FuelingSortKey>('date')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [correctionTarget, setCorrectionTarget] = useState<{ fueling: Fueling; document: FuelingDocument } | null>(null)
+  const [preview, setPreview] = useState<{ title: string; url: string; mimeType: string } | null>(null)
+  const collator = useMemo(() => new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }), [])
+
+  async function loadPage(offset: number, replace: boolean) {
+    if (!supabase) { setError('O serviço de dados está indisponível.'); return }
+    try {
+      const { data, error: queryError } = await supabase.from('fleet_fuelings')
+        .select('id,status,performed_at,submitted_at,liters,total_amount,odometer_km,station_receipt_number,vehicle_id,station_id,fuel_type_id,registered_officially_by,registered_officially_at,inconsistency_code,inconsistency_notes,vehicles:fleet_vehicles(id,placa,modelo),stations:fleet_fuel_stations(id,nome_fantasia_snapshot),fuel_type:fleet_fuel_types(id,nome),documents:fleet_fueling_documents(id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason,reviewed_by,reviewed_at)')
+        .order('performed_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 99)
+      if (queryError) { setError('Não foi possível carregar a fila de abastecimentos autorizada para este perfil.'); return }
+      const page = (data || []) as unknown as Fueling[]
+      setFuelings((current) => replace ? page : [...current, ...page])
+      setHasMore(page.length === 100)
+      setError('')
+    } catch {
+      setError('Falha de conexão ao carregar os abastecimentos. Tente novamente.')
+    }
+  }
+
+  async function refresh() {
+    setLoading(true); setError(''); setNotice('')
+    await loadPage(0, true)
+    setLoading(false)
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true); setError('')
+    await loadPage(fuelings.length, false)
+    setLoadingMore(false)
+  }
+
+  useEffect(() => { void refresh() }, [])
+
+  const currentDocument = (fueling: Fueling) => (fueling.documents || []).filter((document) => document.is_current).sort((a, b) => Date.parse(b.uploaded_at) - Date.parse(a.uploaded_at))[0]
+  const activeFilters = Number(Boolean(search.trim())) + Number(Boolean(dateStart)) + Number(Boolean(dateEnd)) + Number(Boolean(vehicleFilter)) + Number(Boolean(fuelFilter)) + Number(Boolean(stationFilter)) + Number(Boolean(statusFilter)) + Number(Boolean(documentFilter))
+  function clearFilters() { setSearch(''); setDateStart(''); setDateEnd(''); setVehicleFilter(''); setFuelFilter(''); setStationFilter(''); setStatusFilter(''); setDocumentFilter('') }
+  const vehicleOptions = Array.from(new Map(fuelings.filter((item) => item.vehicle_id).map((item) => [item.vehicle_id as string, item.vehicles?.placa || 'Veículo sem placa'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
+  const fuelOptions = Array.from(new Map(fuelings.filter((item) => item.fuel_type_id).map((item) => [item.fuel_type_id as string, item.fuel_type?.nome || 'Combustível'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
+  const stationOptions = Array.from(new Map(fuelings.filter((item) => item.station_id).map((item) => [item.station_id as string, item.stations?.nome_fantasia_snapshot || 'Posto sem identificação'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
+  const localDay = (value: string) => new Intl.DateTimeFormat('en-CA').format(new Date(value))
+  const filtered = fuelings.filter((fueling) => {
+    const document = currentDocument(fueling)
+    const day = localDay(fueling.performed_at)
+    const text = [fueling.vehicles?.placa, fueling.vehicles?.modelo, fueling.fuel_type?.nome, fueling.stations?.nome_fantasia_snapshot, fueling.station_receipt_number, document?.file_name].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR')
+    return (!search.trim() || text.includes(search.trim().toLocaleLowerCase('pt-BR')))
+      && (!dateStart || day >= dateStart)
+      && (!dateEnd || day <= dateEnd)
+      && (!vehicleFilter || fueling.vehicle_id === vehicleFilter)
+      && (!fuelFilter || fueling.fuel_type_id === fuelFilter)
+      && (!stationFilter || fueling.station_id === stationFilter)
+      && (!statusFilter || fueling.status === statusFilter)
+      && (!documentFilter || (document ? document.document_status === documentFilter : documentFilter === 'SEM_COMPROVANTE'))
+  })
+  const sorted = (() => {
+    const compare = (a: Fueling, b: Fueling) => {
+      switch (sortKey) {
+        case 'date': return Date.parse(a.performed_at) - Date.parse(b.performed_at)
+        case 'vehicle': return collator.compare(a.vehicles?.placa || '', b.vehicles?.placa || '')
+        case 'station': return collator.compare(a.stations?.nome_fantasia_snapshot || '', b.stations?.nome_fantasia_snapshot || '')
+        case 'fuel': return collator.compare(a.fuel_type?.nome || '', b.fuel_type?.nome || '')
+        case 'volume': return Number(a.liters || 0) - Number(b.liters || 0)
+        case 'amount': return Number(a.total_amount || 0) - Number(b.total_amount || 0)
+        case 'document': return collator.compare(currentDocument(a)?.file_name || currentDocument(a)?.document_status || '', currentDocument(b)?.file_name || currentDocument(b)?.document_status || '')
+        case 'status': return collator.compare(statusLabel[a.status] || a.status, statusLabel[b.status] || b.status)
+      }
+    }
+    return [...filtered].sort((a, b) => compare(a, b) * (sortDirection === 'asc' ? 1 : -1))
+  })()
+  function sortBy(key: FuelingSortKey) {
+    if (sortKey === key) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection(key === 'date' ? 'desc' : 'asc') }
+  }
+  function sortHeading(key: FuelingSortKey, label: string) {
+    const Icon = sortKey === key ? sortDirection === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
+    return <button type="button" className="fleet-sort-button" onClick={() => sortBy(key)} aria-label={`Ordenar por ${label}${sortKey === key ? sortDirection === 'asc' ? ', crescente' : ', decrescente' : ''}`}><span>{label}</span><Icon size={13} aria-hidden="true" /></button>
+  }
+  const sortAria = (key: FuelingSortKey) => sortKey === key ? sortDirection === 'asc' ? 'ascending' as const : 'descending' as const : 'none' as const
+
+  async function openDocument(document: FuelingDocument) {
+    if (!supabase) return
+    setError('')
+    const result = await supabase.storage.from('fleet-documents').createSignedUrl(document.storage_path, 300)
+    if (result.error || !result.data?.signedUrl) { setError('Não foi possível abrir o comprovante. Verifique o acesso ao documento e tente novamente.'); return }
+    setPreview({ title: document.file_name, url: result.data.signedUrl, mimeType: document.mime_type })
+  }
+
+  function requestDocumentAcceptance(fueling: Fueling, document: FuelingDocument) {
+    onRequestConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: 'Aceitar comprovante e conferir abastecimento',
+      message: 'Confirme que o documento foi revisado e corresponde aos dados do abastecimento. Esta ação marcará o comprovante como aceito e o registro como conferido.',
+      details: [`Veículo: ${fueling.vehicles?.placa || 'Não informado'}`, `Data: ${formatDate(fueling.performed_at)}`, `Posto: ${fueling.stations?.nome_fantasia_snapshot || 'Não informado'}`, `Comprovante: ${document.file_name}`],
+      confirmLabel: 'Aceitar e marcar como conferido',
+      onConfirm: () => reviewDocument(fueling, document, 'ACEITO'),
+    })
+  }
+
+  async function reviewDocument(fueling: Fueling, document: FuelingDocument, decision: 'ACEITO' | 'REJEITADO', reason = ''): Promise<string | null> {
+    if (!supabase) return 'O serviço de dados está indisponível. Tente novamente.'
+    setWorkingId(fueling.id); setError(''); setNotice('')
+    try {
+      const { data: currentUser, error: userError } = await supabase.rpc('fleet_current_usuario_id')
+      if (userError || currentUser == null) return 'Não foi possível identificar o operador autenticado para registrar a conferência.'
+      const reviewedAt = new Date().toISOString()
+      const nextDocumentStatus = decision
+      const nextFuelingStatus = decision === 'ACEITO' ? 'CONFERIDO' : 'SOLICITADA_CORRECAO'
+      const documentUpdate = await supabase.from('fleet_fueling_documents').update({ document_status: nextDocumentStatus, reviewed_by: currentUser, reviewed_at: reviewedAt, rejection_reason: decision === 'REJEITADO' ? reason : null }).eq('id', document.id).eq('fueling_id', fueling.id).eq('is_current', true).eq('document_status', document.document_status).select('id').maybeSingle()
+      if (documentUpdate.error || !documentUpdate.data) return 'O comprovante mudou desde que a fila foi carregada ou não pode ser atualizado. Atualize a lista e tente novamente.'
+      const fuelingPayload = decision === 'ACEITO'
+        ? { status: nextFuelingStatus, registered_officially_by: currentUser, registered_officially_at: reviewedAt, updated_at: reviewedAt }
+        : { status: nextFuelingStatus, inconsistency_notes: reason, updated_at: reviewedAt }
+      const fuelingUpdate = await supabase.from('fleet_fuelings').update(fuelingPayload).eq('id', fueling.id).eq('status', fueling.status).select('id,status,registered_officially_by,registered_officially_at,inconsistency_notes,inconsistency_code').maybeSingle()
+      if (fuelingUpdate.error || !fuelingUpdate.data) {
+        const rollback = await supabase.from('fleet_fueling_documents').update({ document_status: document.document_status, reviewed_by: document.reviewed_by ?? null, reviewed_at: document.reviewed_at ?? null, rejection_reason: document.rejection_reason }).eq('id', document.id).eq('fueling_id', fueling.id)
+        return rollback.error
+          ? `O status do abastecimento não foi atualizado e o comprovante não pôde ser revertido. Atualize a fila e procure o administrador. ${fuelingUpdate.error?.message || ''}`
+          : 'Não foi possível atualizar o status do abastecimento. A revisão do comprovante foi revertida; atualize a fila e tente novamente.'
+      }
+      const updatedFueling = fuelingUpdate.data
+      const persistedStatus = String(updatedFueling.status)
+      setFuelings((current) => current.map((item) => item.id !== fueling.id ? item : {
+        ...item,
+        status: persistedStatus,
+        registered_officially_by: updatedFueling.registered_officially_by,
+        registered_officially_at: updatedFueling.registered_officially_at,
+        inconsistency_notes: updatedFueling.inconsistency_notes,
+        inconsistency_code: updatedFueling.inconsistency_code,
+        documents: (item.documents || []).map((itemDocument) => itemDocument.id === document.id ? { ...itemDocument, document_status: nextDocumentStatus, reviewed_by: currentUser, reviewed_at: reviewedAt, rejection_reason: decision === 'REJEITADO' ? reason : null } : itemDocument),
+      }))
+      if (persistedStatus !== nextFuelingStatus) setError(decision === 'ACEITO'
+        ? `Comprovante aceito, mas a validação automática manteve o abastecimento como “${statusLabel[persistedStatus] || persistedStatus}”. Resolva a inconsistência antes do fechamento.`
+        : `Comprovante rejeitado e motivo registrado; a validação automática manteve o abastecimento como “${statusLabel[persistedStatus] || persistedStatus}”.`)
+      else setNotice(decision === 'ACEITO' ? 'Comprovante aceito e abastecimento marcado como conferido.' : 'Comprovante rejeitado. Correção solicitada ao posto; a justificativa foi registrada.')
+      return null
+    } catch {
+      return 'Falha de conexão durante a conferência. Atualize a fila antes de tentar novamente.'
+    } finally { setWorkingId('') }
+  }
+
+  async function confirmWithoutPendingDocument(fueling: Fueling): Promise<string | null> {
+    if (!supabase) return 'O serviço de dados está indisponível. Tente novamente.'
+    setWorkingId(fueling.id); setError(''); setNotice('')
+    try {
+      const { data: currentUser, error: userError } = await supabase.rpc('fleet_current_usuario_id')
+      if (userError || currentUser == null) return 'Não foi possível identificar o operador autenticado para registrar a conferência.'
+      const checkedAt = new Date().toISOString()
+      const result = await supabase.from('fleet_fuelings').update({ status: 'CONFERIDO', registered_officially_by: currentUser, registered_officially_at: checkedAt, updated_at: checkedAt }).eq('id', fueling.id).eq('status', fueling.status).select('id,status,registered_officially_by,registered_officially_at').maybeSingle()
+      if (result.error || !result.data) return 'O abastecimento não pôde ser conferido. Ele pode ter sido alterado por outro operador; atualize a lista.'
+      const updatedFueling = result.data
+      const persistedStatus = String(updatedFueling.status)
+      setFuelings((current) => current.map((item) => item.id === fueling.id ? { ...item, status: persistedStatus, registered_officially_by: updatedFueling.registered_officially_by, registered_officially_at: updatedFueling.registered_officially_at } : item))
+      if (persistedStatus === 'CONFERIDO') setNotice('Abastecimento conferido e operador responsável registrado.')
+      else setError(`A validação automática manteve o abastecimento como “${statusLabel[persistedStatus] || persistedStatus}”. Resolva a inconsistência antes do fechamento.`)
+      return null
+    } catch {
+      return 'Falha de conexão ao conferir o abastecimento. Atualize a fila e tente novamente.'
+    } finally { setWorkingId('') }
+  }
+
+  function requestFuelingConfirmation(fueling: Fueling) {
+    const document = currentDocument(fueling)
+    onRequestConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: 'Confirmar conferência do abastecimento',
+      message: document ? 'O comprovante já foi aceito, mas o registro ainda não está marcado como conferido.' : 'Você está conferindo este abastecimento sem um comprovante anexado. Prossiga apenas se isso estiver de acordo com a análise administrativa.',
+      details: [`Veículo: ${fueling.vehicles?.placa || 'Não informado'}`, `Data: ${formatDate(fueling.performed_at)}`, `Posto: ${fueling.stations?.nome_fantasia_snapshot || 'Não informado'}`, `${Number(fueling.liters).toLocaleString('pt-BR')} L · ${formatMoney(fueling.total_amount)}`, `Comprovante: ${document?.file_name || 'Não anexado'}`],
+      confirmLabel: 'Confirmar conferência',
+      onConfirm: () => confirmWithoutPendingDocument(fueling),
+    })
+  }
+
+  async function submitCorrection(reason: string): Promise<string | null> {
+    if (!correctionTarget) return 'Selecione novamente o abastecimento que precisa de retificação.'
+    const result = await reviewDocument(correctionTarget.fueling, correctionTarget.document, 'REJEITADO', reason)
+    if (!result) setCorrectionTarget(null)
+    return result
+  }
+
+  const renderRows = () => sorted.map((fueling) => {
+    const document = currentDocument(fueling)
+    const completed = completedFuelingStatuses.includes(fueling.status)
+    const needsCorrection = ['SOLICITADA_CORRECAO', 'PENDENTE_DE_COMPROVANTE'].includes(fueling.status) || document?.document_status === 'REJEITADO'
+    const validationIssue = fueling.status === 'COM_INCONSISTENCIA'
+    const documentAwaitingReview = Boolean(document && ['PENDENTE', 'ENVIADO', 'EM_ANALISE'].includes(document.document_status))
+    const canConfirm = !completed && !needsCorrection && !validationIssue && (!document || document.document_status === 'ACEITO')
+    return <tr key={fueling.id}>
+      <td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td>
+      <td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td>
+      <td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td>
+      <td>{fueling.fuel_type?.nome || '—'}</td>
+      <td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td>
+      <td>{formatMoney(fueling.total_amount)}</td>
+      <td className="fleet-fueling-proof-cell">{document ? <><button type="button" className="fleet-link-button" onClick={() => void openDocument(document)} title={`Visualizar ${document.file_name}`}><Eye size={14} /> Visualizar</button><small title={document.file_name}>{document.file_name}</small><StatusChip value={document.document_status} />{document.rejection_reason && document.document_status === 'REJEITADO' && <small className="fleet-rejection-note" title={document.rejection_reason}>Motivo: {document.rejection_reason}</small>}</> : <span className="fleet-status warning">Não anexado</span>}</td>
+      <td><StatusChip value={fueling.status} /></td>
+      <td><div className="fleet-fueling-review-actions">{documentAwaitingReview && !completed && <><button type="button" className="fleet-review-accept" onClick={() => requestDocumentAcceptance(fueling, document as FuelingDocument)} disabled={Boolean(workingId)}><CheckCircle2 size={14} /> Aceitar</button><button type="button" className="fleet-review-correction" onClick={() => setCorrectionTarget({ fueling, document: document as FuelingDocument })} disabled={Boolean(workingId)}><RotateCcw size={14} /> Solicitar retificação</button></>}{canConfirm && <button type="button" className="fleet-secondary-button fleet-confirm-button" onClick={() => requestFuelingConfirmation(fueling)} disabled={Boolean(workingId)}><ClipboardCheck size={14} /> Conferir</button>}{completed && <span className="fleet-row-confirmed"><CheckCircle2 size={14} /> Finalizado</span>}{(needsCorrection || validationIssue) && !documentAwaitingReview && <span className="fleet-fueling-waiting">{validationIssue ? 'Resolver inconsistência' : 'Aguardando comprovante'}</span>}</div></td>
+    </tr>
+  })
+
+  return <section className="fleet-section fleet-page-section">
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">FILA OPERACIONAL</span><h2>Abastecimentos</h2><p>Consulte, confira dados e analise os comprovantes enviados pelos postos.</p></div><button type="button" className="fleet-secondary-button fleet-fuelings-refresh" onClick={() => void refresh()} disabled={loading || Boolean(workingId)}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Atualizar</button></div>
+    {error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}{notice && <div className="fleet-inline-success" role="status"><CheckCircle2 size={15} /> {notice}</div>}
+    <div className="fleet-vehicle-filters fleet-fueling-filters"><div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros</strong><span>{loading ? 'Carregando…' : `${filtered.length.toLocaleString('pt-BR')} de ${fuelings.length.toLocaleString('pt-BR')} carregado(s)`}</span></div><button type="button" onClick={clearFilters} disabled={!activeFilters}><RotateCcw size={13} /> Limpar filtros</button></div>
+      <div className="fleet-vehicle-filter-grid fleet-fueling-filter-grid">
+        <label className="fleet-vehicle-search">Buscar<div><Search size={14} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Placa, posto, recibo…" /></div></label>
+        <label className="fleet-fueling-date-filter">Data do abastecimento<span><input type="date" aria-label="Data inicial" value={dateStart} onChange={(event) => setDateStart(event.target.value)} /><input type="date" aria-label="Data final" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} /></span></label>
+        <label>Veículo<select value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value)}><option value="">Todos os veículos</option>{vehicleOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+        <label>Combustível<select value={fuelFilter} onChange={(event) => setFuelFilter(event.target.value)}><option value="">Todos os combustíveis</option>{fuelOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+        <label>Posto<select value={stationFilter} onChange={(event) => setStationFilter(event.target.value)}><option value="">Todos os postos</option>{stationOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+        <label>Situação do abastecimento<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todas</option>{fuelingStatuses.map((status) => <option key={status} value={status}>{statusLabel[status]}</option>)}</select></label>
+        <label>Situação do comprovante<select value={documentFilter} onChange={(event) => setDocumentFilter(event.target.value)}><option value="">Todas</option><option value="SEM_COMPROVANTE">Sem comprovante</option>{proofStatuses.map((status) => <option key={status} value={status}>{statusLabel[status]}</option>)}</select></label>
+      </div>
+    </div>
+    <div className="fleet-fueling-page-hint"><ShieldCheck size={14} /> A lista começa pelos 100 abastecimentos mais recentes. “Carregar mais” acrescenta os próximos 100.</div>
+    <div className="fleet-table-panel">{loading ? <LoadingRows /> : sorted.length ? <table className="fleet-table fleet-fuelings-table"><thead><tr><th aria-sort={sortAria('date')}>{sortHeading('date', 'Data real')}</th><th aria-sort={sortAria('vehicle')}>{sortHeading('vehicle', 'Veículo')}</th><th aria-sort={sortAria('station')}>{sortHeading('station', 'Posto')}</th><th aria-sort={sortAria('fuel')}>{sortHeading('fuel', 'Combustível')}</th><th aria-sort={sortAria('volume')}>{sortHeading('volume', 'Volume')}</th><th aria-sort={sortAria('amount')}>{sortHeading('amount', 'Valor')}</th><th aria-sort={sortAria('document')}>{sortHeading('document', 'Comprovante')}</th><th aria-sort={sortAria('status')}>{sortHeading('status', 'Situação')}</th><th><span className="fleet-sr-only">Ações</span></th></tr></thead><tbody>{renderRows()}</tbody></table> : <EmptyState icon={Fuel} title={fuelings.length ? 'Nenhum abastecimento encontrado' : 'Nenhum abastecimento cadastrado'} text={fuelings.length ? 'Nenhum registro corresponde aos filtros. Ajuste ou limpe os filtros.' : 'Os registros enviados pelos postos aparecerão aqui.'} action={fuelings.length && activeFilters ? 'Limpar filtros' : undefined} onAction={clearFilters} />}</div>
+    {!loading && <div className="fleet-fueling-load-more"><span>{fuelings.length.toLocaleString('pt-BR')} abastecimento(s) carregado(s){hasMore ? ' · há mais registros disponíveis' : ' · fim da lista disponível'}</span>{hasMore && <button type="button" className="fleet-secondary-button" onClick={() => void loadMore()} disabled={loadingMore || Boolean(workingId)}>{loadingMore ? <><RefreshCw size={14} className="spin" /> Carregando…</> : 'Carregar mais 100'}</button>}</div>}
+    {correctionTarget && <FuelingCorrectionDialog fueling={correctionTarget.fueling} document={correctionTarget.document} onCancel={() => setCorrectionTarget(null)} onConfirm={submitCorrection} />}
+    {preview && <div className="fleet-proof-preview-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="fleet-proof-preview" role="dialog" aria-modal="true" aria-labelledby="fleet-proof-preview-title"><header><div><span className="fleet-kicker">COMPROVANTE DO ABASTECIMENTO</span><h2 id="fleet-proof-preview-title">{preview.title}</h2></div><button type="button" className="fleet-close" onClick={() => setPreview(null)} aria-label="Fechar pré-visualização"><X size={18} /></button></header><div className="fleet-proof-preview-body">{preview.mimeType.startsWith('image/') ? <img src={preview.url} alt={`Comprovante ${preview.title}`} /> : preview.mimeType === 'application/pdf' ? <iframe src={preview.url} title={`Pré-visualização de ${preview.title}`} /> : <p>Este formato não pode ser exibido aqui. <a href={preview.url} target="_blank" rel="noreferrer">Abrir comprovante em nova aba</a></p>}</div><footer><span>Link temporário e protegido, válido por 5 minutos.</span><a className="fleet-secondary-button" href={preview.url} target="_blank" rel="noreferrer">Abrir em nova aba</a></footer></section></div>}
+  </section>
+}
+
+function FuelingCorrectionDialog({ fueling, document, onCancel, onConfirm }: { fueling: Fueling; document: FuelingDocument; onCancel: () => void; onConfirm: (reason: string) => Promise<string | null> }) {
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (reason.trim().length < 8) { setError('Informe um motivo objetivo com pelo menos 8 caracteres.'); return }
+    setSaving(true); setError('')
+    try {
+      const result = await onConfirm(reason.trim())
+      if (result) { setError(result); setSaving(false); return }
+      onCancel()
+    } catch {
+      setError('Não foi possível registrar a solicitação. Tente novamente.')
+      setSaving(false)
+    }
+  }
+  return <div className="fleet-confirm-backdrop fleet-correction-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel() }}><form className="fleet-confirm-dialog fleet-correction-dialog" role="dialog" aria-modal="true" aria-labelledby="fleet-correction-title" onSubmit={submit}><header className="fleet-confirm-heading"><span className="fleet-confirm-emblem danger"><RotateCcw size={19} /></span><div><span className="fleet-kicker">INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS</span><h2 id="fleet-correction-title">Solicitar retificação</h2></div></header><p className="fleet-confirm-message">O comprovante será marcado como rejeitado e o abastecimento como “Correção solicitada”. O posto verá o motivo e poderá enviar um novo arquivo.</p><div className="fleet-confirm-details"><div><CheckCircle2 size={14} /><span>Veículo: {fueling.vehicles?.placa || 'Não informado'} · {formatDate(fueling.performed_at)}</span></div><div><CheckCircle2 size={14} /><span>Comprovante: {document.file_name}</span></div></div><label className="fleet-correction-reason">Motivo e orientação para o posto<textarea required minLength={8} maxLength={1000} rows={4} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex.: O recibo está ilegível. Envie uma imagem completa em que seja possível ler data, litros e valor." /></label>{error && <div className="fleet-confirm-error" role="alert"><CircleAlert size={15} />{error}</div>}<footer className="fleet-confirm-actions"><button className="fleet-secondary-button" type="button" onClick={onCancel} disabled={saving}>Cancelar</button><button className="fleet-primary-button fleet-confirm-danger" type="submit" disabled={saving || reason.trim().length < 8}><RotateCcw size={15} />{saving ? 'Registrando…' : 'Rejeitar e solicitar retificação'}</button></footer></form></div>
+}
 function FuelingTable({ fuelings, compact = false }: { fuelings: Fueling[]; compact?: boolean }) { return <table className={`fleet-table ${compact ? 'fleet-table-compact' : ''}`}><thead><tr><th>Data real</th><th>Veículo</th><th>Posto</th><th>Quantidade</th><th>Total</th><th>Situação</th></tr></thead><tbody>{fuelings.map((fueling) => <tr key={fueling.id}><td><strong>{formatDate(fueling.performed_at)}</strong><small>Enviado {formatDate(fueling.submitted_at)}</small></td><td><strong>{fueling.vehicles?.placa || '—'}</strong><small>{fueling.vehicles?.modelo || 'Veículo'}</small></td><td>{fueling.stations?.nome_fantasia_snapshot || 'Posto não informado'}</td><td>{Number(fueling.liters).toLocaleString('pt-BR')} L</td><td>{formatMoney(fueling.total_amount)}</td><td><StatusChip value={fueling.status} /></td></tr>)}</tbody></table> }
 
 type ReportFueling = { liters: number; total_amount: number; status: string; performed_at: string; responsible_unit_id: string; units?: { nome?: string; sigla?: string } | null }
@@ -617,6 +882,6 @@ function MonthlyClosure() {
 
 function SettingsPanel() { return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO DO MÓDULO</span><h2>Parâmetros operacionais</h2><p>Regras que orientam a operação de abastecimentos e conferência.</p></div></div><div className="fleet-settings-grid"><article><span><Gauge size={18} /></span><div><strong>Capacidade do tanque</strong><p>O abastecimento acima da capacidade cadastrada gera inconsistência para análise.</p></div></article><article><span><ClipboardCheck size={18} /></span><div><strong>Comprovantes</strong><p>O prazo operacional para envio do comprovante é de 24 horas após o abastecimento.</p></div></article><article><span><MapPin size={18} /></span><div><strong>Cessão temporária</strong><p>A secretaria responsável e a secretaria beneficiária são mantidas separadamente.</p></div></article><article><span><ShieldCheck size={18} /></span><div><strong>Perfis autorizados</strong><p>Gestor de Frotas e Administrador validam cadastros oficiais e fechamentos.</p></div></article></div></section> }
 
-function StatusChip({ value }: { value: string }) { const tone = value.includes('INCONSISTENCIA') ? 'danger' : value.includes('PENDENTE') || value.includes('ENVIADO') || value === 'EM_ANALISE' ? 'warning' : value === 'ATIVO' || value === 'CONFERIDO' ? 'success' : 'neutral'; return <span className={`fleet-status ${tone}`}>{statusLabel[value] || value.replaceAll('_', ' ')}</span> }
+function StatusChip({ value }: { value: string }) { const tone = value.includes('INCONSISTENCIA') || value === 'SOLICITADA_CORRECAO' || value === 'REJEITADO' ? 'danger' : value.includes('PENDENTE') || value.includes('ENVIADO') || value === 'EM_ANALISE' ? 'warning' : value === 'ATIVO' || value === 'CONFERIDO' || value === 'ACEITO' ? 'success' : 'neutral'; return <span className={`fleet-status ${tone}`}>{statusLabel[value] || value.replaceAll('_', ' ')}</span> }
 function EmptyState({ icon: Icon, title, text, action, onAction }: { icon: typeof Truck; title: string; text: string; action?: string; onAction?: () => void }) { return <div className="fleet-empty"><span><Icon size={24} /></span><strong>{title}</strong><p>{text}</p>{action && <button className="fleet-primary-button" onClick={onAction}><Plus size={15} /> {action}</button>}</div> }
 function LoadingRows() { return <div className="fleet-loading"><RefreshCw className="spin" size={19} /> Carregando dados permitidos…</div> }
