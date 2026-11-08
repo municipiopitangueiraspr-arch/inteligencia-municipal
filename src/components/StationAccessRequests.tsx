@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { FleetOperationConfirmation, type FleetConfirmationRequest } from './FleetOperationConfirmation'
 
 type RequestItem = { id: string; cnpj: string; razao_social: string; representante_nome: string; representante_documento: string | null; representante_email: string; representante_telefone: string | null; status: string; requested_at: string; review_notes: string | null }
-type StationOption = { id: string; cnpj_snapshot: string }
+type StationOption = { id: string; cnpj_snapshot: string; status: string; credenciamento_started_at: string | null; credenciamento_ends_at: string | null }
 type RequestSortKey = 'requester' | 'company' | 'contact' | 'requested_at' | 'status'
 type SortDirection = 'asc' | 'desc'
 type CnpjFilter = '' | 'CADASTRADO' | 'NAO_CADASTRADO' | 'INVALIDO' | 'INDISPONIVEL'
@@ -30,7 +30,7 @@ function isValidCnpj(value: string | null | undefined) {
 function localDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 function validateRequestCnpj(item: RequestItem, stations: StationOption[], lookupReady: boolean): CnpjValidation {
   if (!lookupReady) return 'INDISPONIVEL'
@@ -64,9 +64,23 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
     const values: StationOption[] = []
     const pageSize = 1000
     for (let offset = 0; ; offset += pageSize) {
-      const result = await supabase.from('fleet_fuel_stations').select('id,cnpj_snapshot').order('id').range(offset, offset + pageSize - 1)
+      const result = await supabase.from('fleet_fuel_stations').select('id,cnpj_snapshot,status,credenciamento_started_at,credenciamento_ends_at').order('id').range(offset, offset + pageSize - 1)
       if (result.error) return { values, error: true }
       const rows = (result.data || []) as StationOption[]
+      values.push(...rows)
+      if (rows.length < pageSize) break
+    }
+    return { values, error: false }
+  }
+
+  async function loadAllRequests() {
+    if (!supabase) return { values: [] as RequestItem[], error: false }
+    const values: RequestItem[] = []
+    const pageSize = 500
+    for (let offset = 0; ; offset += pageSize) {
+      const result = await supabase.from('fleet_station_access_requests').select('id,cnpj,razao_social,representante_nome,representante_documento,representante_email,representante_telefone,status,requested_at,review_notes').order('requested_at', { ascending: false }).order('id').range(offset, offset + pageSize - 1)
+      if (result.error) return { values, error: true }
+      const rows = (result.data || []) as RequestItem[]
       values.push(...rows)
       if (rows.length < pageSize) break
     }
@@ -80,14 +94,14 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
     setCnpjLookupReady(false)
     try {
       const [requests, stationResult] = await Promise.all([
-        supabase.from('fleet_station_access_requests').select('id,cnpj,razao_social,representante_nome,representante_documento,representante_email,representante_telefone,status,requested_at,review_notes').order('requested_at', { ascending: false }).limit(100),
+        loadAllRequests(),
         loadAllStations(),
       ])
       if (requests.error) {
         setItems([])
         setError('Não foi possível carregar as solicitações de primeiro acesso.')
       } else {
-        setItems((requests.data || []) as RequestItem[])
+        setItems(requests.values)
         if (stationResult.error) {
           setStations([])
           setCnpjLookupReady(false)
@@ -171,9 +185,9 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
     const station = selectedStation()
     setConfirmation({
       eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
-      title: decision === 'APROVAR' ? 'Confirmar liberação de acesso' : 'Confirmar negativa de acesso',
+      title: decision === 'APROVAR' ? 'Confirmar aprovação do vínculo' : 'Confirmar negativa de acesso',
       message: decision === 'APROVAR'
-        ? 'O representante será vinculado automaticamente ao único posto credenciado com CNPJ válido correspondente.'
+        ? 'O representante será vinculado ao único posto com CNPJ válido correspondente. Se o posto ainda estiver em análise, o acesso operacional só ficará disponível após a ativação municipal.'
         : 'O pedido de primeiro acesso será negado e a decisão ficará registrada para este solicitante.',
       details: [
         `Solicitante: ${selected.representante_nome}`,
@@ -182,7 +196,7 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
         ...(decision === 'APROVAR' && station ? ['Vínculo automático validado pelo CNPJ do pedido.'] : []),
         ...(notes.trim() ? [`Observação: ${notes.trim()}`] : []),
       ],
-      confirmLabel: decision === 'APROVAR' ? 'Aprovar e liberar' : 'Negar pedido',
+      confirmLabel: decision === 'APROVAR' ? 'Aprovar vínculo' : 'Negar pedido',
       tone: decision === 'NEGAR' ? 'danger' : undefined,
       onConfirm: () => review(decision),
     })
@@ -204,10 +218,9 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
       setSaving('')
       return result.error.message || 'Não foi possível concluir a decisão.'
     }
-    const notificationType = decision === 'APROVAR' ? 'ACESSO_LIBERADO' : 'PRIMEIRO_ACESSO_NEGADO'
     let emailFailed = false
     try {
-      const emailResult = await supabase.functions.invoke('notify-station-access-request', { body: { request_id: requestId, notification_type: notificationType } })
+      const emailResult = await supabase.functions.invoke('notify-station-access-request', { body: { request_id: requestId } })
       emailFailed = Boolean(emailResult.error)
     } catch { emailFailed = true }
     setSaving('')

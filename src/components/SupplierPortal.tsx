@@ -27,6 +27,7 @@ type SupplierPortalProps = {
   role: string;
   userEmail: string;
   initialVehicleId: string | null;
+  accessReason?: string | null;
   onLogout: () => void;
 };
 type PortalView = "overview" | "fueling" | "records" | "documents" | "closures" | "members";
@@ -108,11 +109,26 @@ function StatusTag({ status }: { status: string }) {
   return <span className={`supplier-status supplier-status-${statusTone(status)}`}><span className="supplier-status-dot" />{statusLabels[status] || status}</span>;
 }
 
+function stationCanOperate(station: Station) {
+  if (station.status !== "ATIVO" || !station.credenciamento_started_at) return false;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const start = station.credenciamento_started_at.slice(0, 10);
+  const end = station.credenciamento_ends_at?.slice(0, 10);
+  return today >= start && (!end || today <= end);
+}
+function stationStatusLabel(station: Station) {
+  if (station.status === "PENDENTE") return "Em análise";
+  if (station.status === "ATIVO" && station.credenciamento_ends_at && station.credenciamento_ends_at.slice(0, 10) < new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())) return "Credenciamento encerrado";
+  if (station.status === "ATIVO" && !stationCanOperate(station)) return "Ativo · fora da vigência";
+  return station.status.replaceAll("_", " ");
+}
+
 export function SupplierPortal({
   station,
   role,
   userEmail,
   initialVehicleId,
+  accessReason,
   onLogout,
 }: SupplierPortalProps) {
   const [view, setView] = useState<PortalView>(initialVehicleId ? "fueling" : "overview");
@@ -128,6 +144,7 @@ export function SupplierPortal({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [showMembers, setShowMembers] = useState(false);
+  const canOperate = stationCanOperate(station);
 
   async function loadPortal() {
     if (!supabase) return;
@@ -147,19 +164,19 @@ export function SupplierPortal({
           .order("performed_at", { ascending: false })
           .order("id", { ascending: true })
           .range(0, 99),
-        supabase.rpc("fleet_supplier_vehicle_options", { p_station_id: station.id }),
-        supabase
+        canOperate ? supabase.rpc("fleet_supplier_vehicle_options", { p_station_id: station.id }) : Promise.resolve({ data: [], error: null }),
+        canOperate ? supabase
           .from("fleet_fuel_types")
           .select("id,nome,sigla")
           .eq("ativo", true)
           .order("nome")
-          .limit(100),
-        supabase
+          .limit(100) : Promise.resolve({ data: [], error: null }),
+        canOperate ? supabase
           .from("unidades_organizacionais")
           .select("id,nome,sigla")
           .eq("ativo", true)
           .order("nome")
-          .limit(200),
+          .limit(200) : Promise.resolve({ data: [], error: null }),
       ]);
     const vehicleOptions = (vehiclesResult.data || []) as VehicleOption[];
     const vehicleById = new Map(vehicleOptions.map((vehicle) => [vehicle.id, vehicle]));
@@ -297,6 +314,7 @@ export function SupplierPortal({
   }
   async function submitFueling(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!stationCanOperate(station)) { setError("Este posto só pode operar com status Ativo e dentro da vigência do credenciamento."); return; }
     if (!supabase) return;
     const form = event.currentTarget;
     const data = new FormData(form);
@@ -363,6 +381,8 @@ export function SupplierPortal({
               key={id}
               className={view === id ? "active" : ""}
               onClick={() => setView(id)}
+              disabled={id === "fueling" && !canOperate}
+              title={id === "fueling" && !canOperate ? "Operação indisponível: posto não ativo ou fora da vigência" : undefined}
             >
               <Icon size={17} />
               {label}
@@ -371,7 +391,7 @@ export function SupplierPortal({
               )}
             </button>
           ))}
-          {role === "REPRESENTANTE_LEGAL" && (
+          {role === "REPRESENTANTE_LEGAL" && station.secondary_users_authorized && canOperate && (
             <button
               className={showMembers ? "active" : ""}
               onClick={() => setShowMembers(true)}
@@ -414,6 +434,7 @@ export function SupplierPortal({
         <div className="supplier-content">
           {error && <div className="supplier-message error">{error}</div>}
           {message && <div className="supplier-message success">{message}</div>}
+          {!canOperate && <div className="supplier-message error" role="status"><strong>Modo de consulta.</strong> {accessReason || "O posto precisa estar Ativo e dentro da vigência informada pela Prefeitura."} Novos abastecimentos e alterações operacionais estão bloqueados; registros e histórico permanecem disponíveis.</div>}
           {view === "overview" && (
             <section>
               <div className="supplier-welcome">
@@ -453,9 +474,7 @@ export function SupplierPortal({
                   <Store size={18} />
                   <span>
                     Status do posto
-                    <strong>
-                      {station.status === "ATIVO" ? "Ativo" : station.status}
-                    </strong>
+                    <strong>{stationStatusLabel(station)}</strong>
                   </span>
                 </article>
               </div>
@@ -477,14 +496,14 @@ export function SupplierPortal({
             </section>
           )}
           {view === "fueling" && (
-            <FuelingForm
+            canOperate ? <FuelingForm
               vehicles={vehicles}
               units={units}
               stationId={station.id}
               initialVehicleId={initialVehicleId}
               saving={saving}
               onSubmit={submitFueling}
-            />
+            /> : <div className="supplier-message error">Este posto não pode registrar abastecimentos fora do status Ativo e da vigência do credenciamento.</div>
           )}
           {view === "records" && (
             <SupplierFuelingRecords

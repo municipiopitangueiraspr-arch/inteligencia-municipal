@@ -25,8 +25,9 @@ import {
 import { supabase } from "../lib/supabase";
 import { FleetOperationConfirmation, type FleetConfirmationRequest } from "./FleetOperationConfirmation";
 import { StationFuelTypesPanel } from "./StationFuelTypesPanel";
+import { StationDetailsPanel } from "./StationDetailsPanel";
 
-type StationStatus = "PENDENTE" | "ATIVO" | "SUSPENSO" | "INATIVO";
+type StationStatus = "PENDENTE" | "ATIVO" | "SUSPENSO" | "INATIVO" | "CREDENCIAMENTO_ENCERRADO";
 type StationSortKey = "establishment" | "cnpj" | "representative" | "contact" | "status";
 type StationSortDirection = "asc" | "desc";
 type DriverSortKey = "name" | "registration" | "cpf" | "cnh" | "cnhExpiry" | "status";
@@ -37,6 +38,16 @@ export type Station = {
   nome_fantasia_snapshot: string | null;
   cnpj_snapshot: string;
   endereco: string | null;
+  inscricao_estadual: string | null;
+  telefone: string | null;
+  email: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  contract_number: string | null;
+  secondary_users_authorized: boolean;
   cidade: string | null;
   uf: string | null;
   representante_nome: string;
@@ -63,6 +74,16 @@ type StationFormState = {
   razao_social_snapshot: string;
   nome_fantasia_snapshot: string;
   cnpj_snapshot: string;
+  inscricao_estadual: string;
+  telefone: string;
+  email: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  contract_number: string;
+  secondary_users_authorized: boolean;
   endereco: string;
   cidade: string;
   uf: string;
@@ -105,11 +126,36 @@ type UserCandidate = {
 };
 
 const stationStatusLabel: Record<StationStatus, string> = {
-  PENDENTE: "Pendente",
+  PENDENTE: "Em análise",
   ATIVO: "Ativo",
   SUSPENSO: "Suspenso",
   INATIVO: "Inativo",
+  CREDENCIAMENTO_ENCERRADO: "Credenciamento encerrado",
 };
+
+function brazilToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+function effectiveStationStatus(station: Station): StationStatus {
+  if (station.status !== "ATIVO") return station.status;
+  const today = brazilToday();
+  if (station.credenciamento_ends_at && station.credenciamento_ends_at.slice(0, 10) < today) return "CREDENCIAMENTO_ENCERRADO";
+  if (!station.credenciamento_started_at || station.credenciamento_started_at.slice(0, 10) > today) return "PENDENTE";
+  return "ATIVO";
+}
+function normalizedCnpj(value: string) { return value.toLocaleUpperCase("pt-BR").replace(/[^0-9A-Z]/g, ""); }
+function validCnpj(value: string) {
+  const cnpj = normalizedCnpj(value);
+  if (!/^[0-9A-Z]{12}[0-9]{2}$/.test(cnpj) || /^(.)\1{13}$/.test(cnpj)) return false;
+  const digit = (base: string, weights: number[]) => {
+    const sum = [...base].reduce((total, char, index) => total + (char.charCodeAt(0) - 48) * weights[index], 0);
+    const remainder = sum % 11;
+    return String(remainder < 2 ? 0 : 11 - remainder);
+  };
+  const first = digit(cnpj.slice(0, 12), [5,4,3,2,9,8,7,6,5,4,3,2]);
+  const second = digit(cnpj.slice(0, 12) + first, [6,5,4,3,2,9,8,7,6,5,4,3,2]);
+  return cnpj.endsWith(first + second);
+}
 
 function normalizeError(code?: string) {
   return code === "23505"
@@ -157,10 +203,21 @@ export function StationsView({ onSaved }: ResourceProps) {
   const [confirmation, setConfirmation] = useState<FleetConfirmationRequest | null>(null);
   const [membersStation, setMembersStation] = useState<Station | null>(null);
   const [fuelTypesStation, setFuelTypesStation] = useState<Station | null>(null);
+  const [detailsStation, setDetailsStation] = useState<Station | null>(null);
   const [form, setForm] = useState<StationFormState>({
     razao_social_snapshot: "",
     nome_fantasia_snapshot: "",
     cnpj_snapshot: "",
+    inscricao_estadual: "",
+    telefone: "",
+    email: "",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    contract_number: "",
+    secondary_users_authorized: false,
     endereco: "",
     cidade: "",
     uf: "",
@@ -178,18 +235,23 @@ export function StationsView({ onSaved }: ResourceProps) {
     if (!supabase) return;
     setLoading(true);
     setError("");
-    const { data, error: resultError } = await supabase
-      .from("fleet_fuel_stations")
-      .select(
-        "id,razao_social_snapshot,nome_fantasia_snapshot,cnpj_snapshot,endereco,cidade,uf,representante_nome,representante_documento,representante_email,representante_telefone,status,credenciamento_started_at,credenciamento_ends_at,notes",
-      )
-      .order("nome_fantasia_snapshot")
-      .limit(100);
-    if (resultError)
-      setError(
-        "Não foi possível carregar os postos permitidos para este usuário.",
-      );
-    else setStations((data || []) as Station[]);
+    const all: Station[] = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const result = await supabase.from("fleet_fuel_stations").select(
+        "id,razao_social_snapshot,nome_fantasia_snapshot,cnpj_snapshot,inscricao_estadual,telefone,email,cep,logradouro,numero,complemento,bairro,contract_number,secondary_users_authorized,endereco,cidade,uf,representante_nome,representante_documento,representante_email,representante_telefone,status,credenciamento_started_at,credenciamento_ends_at,notes",
+      ).order("id").range(offset, offset + pageSize - 1);
+      if (result.error) {
+        setError("Não foi possível carregar todos os postos permitidos para este usuário.");
+        setStations([]);
+        setLoading(false);
+        return;
+      }
+      const rows = (result.data || []) as Station[];
+      all.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    setStations(all);
     setLoading(false);
   }
   useEffect(() => {
@@ -202,6 +264,16 @@ export function StationsView({ onSaved }: ResourceProps) {
       razao_social_snapshot: "",
       nome_fantasia_snapshot: "",
       cnpj_snapshot: "",
+      inscricao_estadual: "",
+      telefone: "",
+      email: "",
+      cep: "",
+      logradouro: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      contract_number: "",
+      secondary_users_authorized: false,
       endereco: "",
       cidade: "",
       uf: "",
@@ -223,6 +295,16 @@ export function StationsView({ onSaved }: ResourceProps) {
       razao_social_snapshot: station.razao_social_snapshot,
       nome_fantasia_snapshot: inputValue(station.nome_fantasia_snapshot),
       cnpj_snapshot: station.cnpj_snapshot,
+      inscricao_estadual: inputValue(station.inscricao_estadual),
+      telefone: inputValue(station.telefone),
+      email: inputValue(station.email),
+      cep: inputValue(station.cep),
+      logradouro: inputValue(station.logradouro),
+      numero: inputValue(station.numero),
+      complemento: inputValue(station.complemento),
+      bairro: inputValue(station.bairro),
+      contract_number: inputValue(station.contract_number),
+      secondary_users_authorized: station.secondary_users_authorized,
       endereco: inputValue(station.endereco),
       cidade: inputValue(station.cidade),
       uf: inputValue(station.uf),
@@ -239,6 +321,17 @@ export function StationsView({ onSaved }: ResourceProps) {
     setShowForm(true);
   }
   function requestSave() {
+    const normalizedCurrentCnpj = normalizedCnpj(form.cnpj_snapshot);
+    const cnpjChanged = !editing || normalizedCurrentCnpj !== normalizedCnpj(editing.cnpj_snapshot);
+    if (form.razao_social_snapshot.trim().length < 2) { setFormError("Informe a razão social do estabelecimento."); return; }
+    if (!normalizedCurrentCnpj) { setFormError("Informe o CNPJ do estabelecimento."); return; }
+    if (cnpjChanged && !validCnpj(form.cnpj_snapshot)) { setFormError("Informe um CNPJ válido. Confira os 14 caracteres e os dígitos verificadores."); return; }
+    if (form.representante_nome.trim().length < 2) { setFormError("Informe o nome completo do representante legal."); return; }
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setFormError("Informe um e-mail válido para o estabelecimento."); return; }
+    if (form.representante_email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.representante_email.trim())) { setFormError("Informe um e-mail válido para o representante legal."); return; }
+    if (form.credenciamento_started_at && form.credenciamento_ends_at && form.credenciamento_ends_at < form.credenciamento_started_at) { setFormError("A data final da vigência não pode anteceder a data inicial."); return; }
+    if (form.status === "ATIVO" && !form.credenciamento_started_at) { setFormError("Informe a data de início da vigência antes de ativar o posto."); return; }
+    setFormError("");
     const name = form.nome_fantasia_snapshot.trim() || form.razao_social_snapshot.trim() || "Posto sem nome";
     setConfirmation({
       eyebrow: "INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS",
@@ -257,7 +350,17 @@ export function StationsView({ onSaved }: ResourceProps) {
       razao_social_snapshot: form.razao_social_snapshot.trim(),
       nome_fantasia_snapshot: form.nome_fantasia_snapshot.trim() || null,
       cnpj_snapshot: form.cnpj_snapshot.trim(),
-      endereco: form.endereco.trim() || null,
+      inscricao_estadual: form.inscricao_estadual.trim() || null,
+      telefone: form.telefone.trim() || null,
+      email: form.email.trim() || null,
+      cep: form.cep.trim() || null,
+      logradouro: form.logradouro.trim() || null,
+      numero: form.numero.trim() || null,
+      complemento: form.complemento.trim() || null,
+      bairro: form.bairro.trim() || null,
+      contract_number: form.contract_number.trim() || null,
+      secondary_users_authorized: form.secondary_users_authorized,
+      endereco: [form.logradouro.trim(), form.numero.trim(), form.complemento.trim(), form.bairro.trim(), form.cidade.trim(), form.uf.trim()].filter(Boolean).join(", ") || null,
       cidade: form.cidade.trim() || null,
       uf: form.uf.trim().toUpperCase() || null,
       representante_nome: form.representante_nome.trim(),
@@ -303,9 +406,9 @@ export function StationsView({ onSaved }: ResourceProps) {
   const cities = useMemo(() => [...new Set(stations.map((station) => station.cidade?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })), [stations]);
   const states = useMemo(() => [...new Set(stations.map((station) => station.uf?.trim().toUpperCase()).filter((value): value is string => Boolean(value)))].sort(), [stations]);
   const filtered = useMemo(() => stations.filter((station) => {
-    const haystack = `${station.nome_fantasia_snapshot || ""} ${station.razao_social_snapshot} ${station.cnpj_snapshot} ${station.representante_nome} ${station.representante_documento || ""} ${station.representante_email || ""} ${station.cidade || ""} ${station.uf || ""}`.toLocaleLowerCase("pt-BR");
+    const haystack = `${station.nome_fantasia_snapshot || ""} ${station.razao_social_snapshot} ${station.cnpj_snapshot}`.toLocaleLowerCase("pt-BR");
     return haystack.includes(query.trim().toLocaleLowerCase("pt-BR"))
-      && (!statusFilter || station.status === statusFilter)
+      && (!statusFilter || effectiveStationStatus(station) === statusFilter)
       && (!cityFilter || station.cidade === cityFilter)
       && (!ufFilter || station.uf?.toUpperCase() === ufFilter);
   }), [stations, query, statusFilter, cityFilter, ufFilter]);
@@ -315,7 +418,7 @@ export function StationsView({ onSaved }: ResourceProps) {
       if (sortKey === "cnpj") return station.cnpj_snapshot;
       if (sortKey === "representative") return station.representante_nome;
       if (sortKey === "contact") return `${station.representante_email || ""} ${station.representante_telefone || ""}`;
-      return stationStatusLabel[station.status];
+      return stationStatusLabel[effectiveStationStatus(station)];
     };
     const comparison = value(a).localeCompare(value(b), "pt-BR", { numeric: true, sensitivity: "base" }) || a.id.localeCompare(b.id);
     return sortDirection === "asc" ? comparison : -comparison;
@@ -349,14 +452,14 @@ export function StationsView({ onSaved }: ResourceProps) {
       </div>
       {error && <div className="fleet-inline-error">{error}</div>}
       <div className="fleet-resource-toolbar">
-        <div className="fleet-resource-summary"><Store size={17} /><strong>{stations.length}</strong><span>postos carregados (máx. 100)</span></div>
+        <div className="fleet-resource-summary"><Store size={17} /><strong>{stations.length}</strong><span>postos carregados · lista completa</span></div>
       </div>
       <section className="fleet-vehicle-filters station-filters">
         <div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros de postos</strong><span>{filtered.length} resultado(s) · {activeFilterCount} filtro(s) ativo(s)</span></div><button type="button" onClick={clearStationFilters} disabled={!activeFilterCount}><RotateCcw size={12} /> Limpar</button></div>
         <div className="fleet-vehicle-filter-grid station-filter-grid">
-          <label className="fleet-vehicle-search"><span>Nome, CNPJ ou representante</span><div><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar estabelecimento, CNPJ, contato…" /></div></label>
+          <label className="fleet-vehicle-search"><span>Razão social, nome fantasia ou CNPJ</span><div><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar razão social, nome fantasia ou CNPJ…" /></div></label>
           <label>Situação<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StationStatus | "")}><option value="">Todas</option>{Object.entries(stationStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label>Cidade<select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">Todas</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select></label>
+          <label>Município / cidade<select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">Todos</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select></label>
           <label>UF<select value={ufFilter} onChange={(event) => setUfFilter(event.target.value)}><option value="">Todas</option>{states.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
         </div>
       </section>
@@ -405,12 +508,15 @@ export function StationsView({ onSaved }: ResourceProps) {
                   </td>
                   <td>
                     <span
-                      className={`fleet-status ${station.status === "ATIVO" ? "success" : station.status === "SUSPENSO" ? "danger" : "warning"}`}
+                      className={`fleet-status ${effectiveStationStatus(station) === "ATIVO" ? "success" : ["SUSPENSO", "INATIVO", "CREDENCIAMENTO_ENCERRADO"].includes(effectiveStationStatus(station)) ? "danger" : "warning"}`}
                     >
-                      {stationStatusLabel[station.status]}
+                      {stationStatusLabel[effectiveStationStatus(station)]}
                     </span>
                   </td>
                   <td>
+                    <button type="button" className="fleet-secondary-button fleet-members-button" onClick={() => setDetailsStation(station)}>
+                      <Building2 size={14} /> Ficha
+                    </button>
                     <button
                       className="fleet-secondary-button fleet-members-button"
                       onClick={() => setMembersStation(station)}
@@ -463,6 +569,7 @@ export function StationsView({ onSaved }: ResourceProps) {
           onSaved={onSaved}
         />
       )}
+      {detailsStation && <StationDetailsPanel station={detailsStation} onClose={() => setDetailsStation(null)} />}
       {showForm && (
         <StationForm
           form={form}
@@ -499,13 +606,11 @@ export function StationMembersPanel({
   const [form, setForm] = useState({
     usuario_id: "",
     role: "OPERADOR" as StationMember["role"],
-    is_primary_contact: "false",
   });
   const [createForm, setCreateForm] = useState({
     nome: "",
     email: "",
     telefone: "",
-    password: "",
     role: "OPERADOR" as Exclude<StationMember["role"], "REPRESENTANTE_LEGAL">,
   });
 
@@ -547,7 +652,7 @@ export function StationMembersPanel({
       eyebrow: "INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS",
       title: "Confirmar vínculo de usuário",
       message: "O usuário selecionado passará a ter acesso operacional vinculado exclusivamente a este posto.",
-      details: [`Posto: ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`, `Usuário: ${candidate?.nome || form.usuario_id}`, `Perfil: ${roleLabel[form.role]}`, `Contato principal: ${form.is_primary_contact === "true" ? "Sim" : "Não"}`],
+      details: [`Posto: ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`, `Usuário: ${candidate?.nome || form.usuario_id}`, `Perfil: ${roleLabel[form.role]}`, "O representante legal permanece como contato principal."],
       confirmLabel: "Vincular usuário",
       onConfirm: addMember,
     });
@@ -560,13 +665,14 @@ export function StationMembersPanel({
       const municipio = await supabase.rpc("fleet_current_municipio_id");
       const granted = await supabase.rpc("fleet_current_usuario_id");
       if (municipio.error || granted.error) return "Não foi possível identificar o município ou o usuário responsável.";
-      const result = await supabase.from("fleet_station_members").insert({ municipio_id: municipio.data, station_id: station.id, usuario_id: Number(form.usuario_id), role: form.role, ativo: true, is_primary_contact: form.is_primary_contact === "true", granted_by: granted.data });
+      if (form.role === "REPRESENTANTE_LEGAL") return "O vínculo administrativo só pode ser criado para usuário secundário.";
+      const result = await supabase.from("fleet_station_members").insert({ municipio_id: municipio.data, station_id: station.id, usuario_id: Number(form.usuario_id), role: form.role, ativo: true, is_primary_contact: false, granted_by: granted.data });
       if (result.error) {
         const message = result.error.code === "23505" ? "Este usuário já está vinculado a este posto." : "Não foi possível vincular o usuário.";
         setError(message);
         return message;
       }
-      setForm({ usuario_id: "", role: "OPERADOR", is_primary_contact: "false" });
+      setForm({ usuario_id: "", role: "OPERADOR" });
       try { await load(); await onSaved(); }
       catch { setError("Usuário vinculado, mas a tela não pôde ser atualizada. Atualize os dados."); }
       return null;
@@ -590,13 +696,13 @@ export function StationMembersPanel({
     setSaving(true);
     setError("");
     try {
-      const result = await supabase.functions.invoke("create-station-user", { body: { station_id: station.id, ...createForm } });
+      const result = await supabase.functions.invoke("create-station-user", { body: { station_id: station.id, nome: createForm.nome.trim(), email: createForm.email.trim(), telefone: createForm.telefone.trim() || null, role: createForm.role } });
       if (result.error || result.data?.error) {
         const message = result.data?.error || "Não foi possível criar o acesso.";
         setError(message);
         return message;
       }
-      setCreateForm({ nome: "", email: "", telefone: "", password: "", role: "OPERADOR" });
+      setCreateForm({ nome: "", email: "", telefone: "", role: "OPERADOR" });
       try { await load(); await onSaved(); }
       catch { setError("Acesso criado, mas a tela não pôde ser atualizada. Atualize os dados."); }
       return null;
@@ -658,20 +764,19 @@ export function StationMembersPanel({
         <div className="fleet-members-note">
           <UserCheck size={16} />
           <span>
-            Cada usuário fica vinculado exclusivamente a este estabelecimento e
-            somente usuários ativos poderão operar.
+            Cada usuário pertence exclusivamente a este estabelecimento. O representante legal é o contato principal; operador, frentista e caixa/conferente são usuários secundários.
           </span>
         </div>
         {error && <div className="fleet-inline-error">{error}</div>}
+        {allowCreateUser && !station.secondary_users_authorized && <div className="fleet-members-note">A Prefeitura ainda não habilitou o representante legal para convidar usuários secundários.</div>}
         {allowCreateUser && (
-          <form className="fleet-member-create-form" onSubmit={requestCreateUser}>
+          station.secondary_users_authorized && <form className="fleet-member-create-form" onSubmit={requestCreateUser}>
             <div className="fleet-form-section-title"><UserPlus size={16} /> Criar novo acesso do posto</div>
-            <p className="fleet-members-help">Somente o representante legal pode criar acessos. O usuário receberá o e-mail e a senha definidos aqui.</p>
+            <p className="fleet-members-help">Somente o representante legal autorizado pela Prefeitura pode convidar usuários secundários. O convite de acesso será enviado por e-mail.</p>
             <div className="fleet-form-grid">
               <label>Nome completo<input required value={createForm.nome} onChange={(event) => setCreateForm({ ...createForm, nome: event.target.value })} /></label>
               <label>E-mail de acesso<input required type="email" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} /></label>
               <label>Telefone<input value={createForm.telefone} onChange={(event) => setCreateForm({ ...createForm, telefone: event.target.value })} /></label>
-              <label>Senha inicial<input required minLength={8} type="password" value={createForm.password} onChange={(event) => setCreateForm({ ...createForm, password: event.target.value })} /></label>
               <label>Papel<select value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value as typeof createForm.role })}><option value="OPERADOR">Operador</option><option value="FRENTISTA">Frentista</option><option value="CAIXA_CONFERENTE">Caixa/conferente</option></select></label>
             </div>
             <button type="submit" className="fleet-primary-button" disabled={saving}><UserPlus size={15} /> {saving ? "Criando acesso…" : "Criar usuário do posto"}</button>
@@ -707,29 +812,11 @@ export function StationMembersPanel({
             Papel
             <select
               value={form.role}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  role: event.target.value as StationMember["role"],
-                })
-              }
+              onChange={(event) => setForm({ ...form, role: event.target.value as StationMember["role"] })}
             >
-              <option value="REPRESENTANTE_LEGAL">Representante legal</option>
               <option value="OPERADOR">Operador</option>
               <option value="FRENTISTA">Frentista</option>
               <option value="CAIXA_CONFERENTE">Caixa/conferente</option>
-            </select>
-          </label>
-          <label>
-            Contato principal
-            <select
-              value={form.is_primary_contact}
-              onChange={(event) =>
-                setForm({ ...form, is_primary_contact: event.target.value })
-              }
-            >
-              <option value="false">Não</option>
-              <option value="true">Sim</option>
             </select>
           </label>
           <button
@@ -779,11 +866,9 @@ export function StationMembersPanel({
                           role: event.target.value as StationMember["role"],
                         })
                       }
-                      disabled={saving}
+                      disabled={saving || member.role === "REPRESENTANTE_LEGAL"}
                     >
-                      <option value="REPRESENTANTE_LEGAL">
-                        Representante legal
-                      </option>
+                      {member.role === "REPRESENTANTE_LEGAL" && <option value="REPRESENTANTE_LEGAL">Representante legal</option>}
                       <option value="OPERADOR">Operador</option>
                       <option value="FRENTISTA">Frentista</option>
                       <option value="CAIXA_CONFERENTE">Caixa/conferente</option>
@@ -802,21 +887,6 @@ export function StationMembersPanel({
                     >
                       <option value="true">Ativo</option>
                       <option value="false">Inativo</option>
-                    </select>
-                  </label>
-                  <label>
-                    Principal
-                    <select
-                      value={String(member.is_primary_contact)}
-                      onChange={(event) =>
-                        requestUpdateMember(member, {
-                          is_primary_contact: event.target.value === "true",
-                        })
-                      }
-                      disabled={saving}
-                    >
-                      <option value="false">Não</option>
-                      <option value="true">Sim</option>
                     </select>
                   </label>
                 </div>
@@ -909,22 +979,21 @@ function StationForm({
             onChange={(value) => update("cnpj_snapshot", value)}
             placeholder="00.000.000/0001-00"
           />
-          <Field
-            label="Cidade"
-            value={form.cidade}
-            onChange={(value) => update("cidade", value)}
-          />
+          <Field label="Inscrição estadual" value={form.inscricao_estadual} onChange={(value) => update("inscricao_estadual", value)} />
+          <Field label="Telefone do estabelecimento" value={form.telefone} onChange={(value) => update("telefone", value)} />
+          <Field label="E-mail do estabelecimento" type="email" value={form.email} onChange={(value) => update("email", value)} />
+          <Field label="CEP" value={form.cep} onChange={(value) => update("cep", value)} />
+          <Field label="Logradouro" value={form.logradouro} onChange={(value) => update("logradouro", value)} />
+          <Field label="Número" value={form.numero} onChange={(value) => update("numero", value)} />
+          <Field label="Complemento" value={form.complemento} onChange={(value) => update("complemento", value)} />
+          <Field label="Bairro" value={form.bairro} onChange={(value) => update("bairro", value)} />
+          <Field label="Cidade / município" value={form.cidade} onChange={(value) => update("cidade", value)} placeholder="Aceita estabelecimento fora de Pitangueiras" />
           <Field
             label="UF"
             maxLength={2}
             value={form.uf}
             onChange={(value) => update("uf", value)}
             placeholder="PR"
-          />
-          <Field
-            label="Endereço"
-            value={form.endereco}
-            onChange={(value) => update("endereco", value)}
           />
         </div>
         <div className="fleet-form-section-title">
@@ -958,6 +1027,7 @@ function StationForm({
           <Save size={16} /> Credenciamento
         </div>
         <div className="fleet-form-grid">
+          <Field label="Número de contrato / instrumento" value={form.contract_number} onChange={(value) => update("contract_number", value)} />
           <Field
             label="Início"
             type="date"
@@ -980,8 +1050,10 @@ function StationForm({
               <option value="ATIVO">Ativo</option>
               <option value="SUSPENSO">Suspenso</option>
               <option value="INATIVO">Inativo</option>
+              <option value="CREDENCIAMENTO_ENCERRADO">Credenciamento encerrado</option>
             </select>
           </label>
+          <label className="fleet-form-wide station-secondary-auth"><input type="checkbox" checked={form.secondary_users_authorized} onChange={(event) => setForm({ ...form, secondary_users_authorized: event.target.checked })} /> Autorizar o representante legal a convidar usuários secundários para este posto</label>
           <label className="fleet-form-wide">
             Observações
             <textarea
