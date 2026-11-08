@@ -12,7 +12,7 @@ type Discrepancy = { id: string; discrepancy_type: string; severity: string; des
 type ClosureMessage = { id: string; discrepancy_id: string | null; sender_scope: string; message_type: string; message: string; created_at: string }
 type AuditEvent = { id: string; entity_table: string; action_type: string; previous_status: string | null; new_status: string | null; reason: string | null; performed_at: string }
 type ClosureVersion = { id: string; version_number: number; total_transactions: number; total_liters: number; total_amount: number; invoice_amount: number | null; difference_amount: number | null; created_at: string; reason: string | null }
-type Fueling = { id: string; status: string; performed_at: string; submitted_at: string; liters: number; unit_price: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; marca?: string | null; modelo?: string | null } | null; fuel_type?: { nome?: string; sigla?: string | null } | null; documents?: Array<{ id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null }> | null }
+type Fueling = { id: string; vehicle_id: string; status: string; performed_at: string; submitted_at: string; liters: number; unit_price: number; total_amount: number; odometer_km: number; station_receipt_number: string | null; vehicles?: { placa?: string; marca?: string | null; modelo?: string | null } | null; fuel_type?: { nome?: string; sigla?: string | null } | null; documents?: Array<{ id: string; file_name: string; storage_path: string; mime_type: string; document_status: string; uploaded_at: string; is_current: boolean; rejection_reason: string | null }> | null }
 
 const money = (value: number | null | undefined) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0))
 const number = (value: number | null | undefined, digits=2) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: digits })
@@ -52,9 +52,19 @@ export function SupplierMonthlyClosuresView({ station }: { station: Station }) {
     const [year,month]=period.split('-').map(Number)
     const start=new Date(`${period}-01T00:00:00-03:00`)
     const end=new Date(month===12?`${year+1}-01-01T00:00:00-03:00`:`${year}-${String(month+1).padStart(2,'0')}-01T00:00:00-03:00`)
-    const result=await supabase.from('fleet_fuelings').select('id,status,performed_at,submitted_at,liters,unit_price,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,marca,modelo),fuel_type:fleet_fuel_types(nome,sigla),documents:fleet_fueling_documents(id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason)',{count:'exact'}).eq('station_id',station.id).gte('performed_at',start.toISOString()).lt('performed_at',end.toISOString()).order('performed_at',{ascending:false}).range(from,from+499)
+    const result=await supabase.from('fleet_fuelings').select('id,vehicle_id,status,performed_at,submitted_at,liters,unit_price,total_amount,odometer_km,station_receipt_number,vehicles:fleet_vehicles(placa,marca,modelo),fuel_type:fleet_fuel_types(nome,sigla),documents:fleet_fueling_documents(id,file_name,storage_path,mime_type,document_status,uploaded_at,is_current,rejection_reason)',{count:'exact'}).eq('station_id',station.id).gte('performed_at',start.toISOString()).lt('performed_at',end.toISOString()).order('performed_at',{ascending:false}).range(from,from+499)
     if(result.error)throw result.error
-    const page=(result.data||[]) as unknown as Fueling[]
+    let vehicleById=new Map<string,{placa:string;marca?:string|null;modelo?:string|null}>()
+    try {
+      const vehicleResult=await supabase.rpc('fleet_supplier_vehicle_options_v2',{p_station_id:station.id})
+      if(!vehicleResult.error){
+        const options=(vehicleResult.data||[]) as Array<{id:string;placa:string;marca?:string|null;modelo?:string|null}>
+        vehicleById=new Map(options.map((vehicle)=>[vehicle.id,vehicle]))
+      }
+    } catch {
+      // Vehicle labels are supplementary; keep the scoped fueling history usable if this lookup is unavailable.
+    }
+    const page=((result.data||[]) as unknown as Fueling[]).map((fueling)=>({...fueling,vehicles:fueling.vehicles||vehicleById.get(fueling.vehicle_id)||null}))
     setFuelings((previous)=>append?[...previous,...page]:page)
     setFuelingCount(result.count??page.length)
     setOffset(from+page.length)
