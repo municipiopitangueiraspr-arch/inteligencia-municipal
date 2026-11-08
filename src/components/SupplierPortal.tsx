@@ -275,74 +275,70 @@ export function SupplierPortal({
     if (!file.type.match(/^image\/(jpeg|png|webp)$/) && file.type !== "application/pdf") return { error: new Error("Selecione PDF, JPG, PNG ou WEBP.") };
     if (file.size > 10 * 1024 * 1024) return { error: new Error("O comprovante deve ter no máximo 10 MB.") };
     const { data: municipalityId } = await supabase.rpc("fleet_current_municipio_id");
-    const { data: currentUser } = await supabase.rpc("fleet_current_usuario_id");
+    if (!municipalityId) return { error: new Error("Não foi possível identificar o município do arquivo.") };
+    const { data: currentDocuments, error: currentDocumentsError } = await supabase.from("fleet_fueling_documents").select("id,document_status,is_current").eq("fueling_id", fuelingId).eq("is_current", true).order("uploaded_at", { ascending: false }).limit(1);
+    if (currentDocumentsError) return { error: new Error(currentDocumentsError.message) };
+    const currentDocument = currentDocuments?.[0];
+    if (currentDocument && currentDocument.document_status !== "REJEITADO") return { error: new Error("Há um comprovante atual em análise ou aceito; somente arquivo rejeitado pode ser substituído.") };
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${municipalityId}/fuelings/${fuelingId}/${crypto.randomUUID()}-${safeName}`;
     const upload = await supabase.storage.from("fleet-documents").upload(path, file, { contentType: file.type, upsert: false });
     if (upload.error) return { error: upload.error };
-    const uploadedAt = new Date();
-    const document = await supabase.from("fleet_fueling_documents").insert({ municipio_id: municipalityId, fueling_id: fuelingId, file_name: file.name, storage_path: path, mime_type: file.type, file_size_bytes: file.size, document_status: "ENVIADO", uploaded_by: currentUser, uploaded_at: uploadedAt.toISOString(), due_at: new Date(uploadedAt.getTime() + 24 * 60 * 60 * 1000).toISOString(), is_current: true }).select("id").single();
-    if (document.error) { await supabase.storage.from("fleet-documents").remove([path]); return { error: document.error }; }
+    const document = await supabase.rpc("fleet_register_fueling_document", {
+      p_fueling_id: fuelingId, p_file_name: file.name, p_storage_path: path, p_mime_type: file.type,
+      p_file_size_bytes: file.size, p_document_type: "COMPROVANTE_DE_ABASTECIMENTO", p_notes: null,
+      p_replaced_document_id: currentDocument?.id || null,
+    });
+    if (document.error) { await supabase.storage.from("fleet-documents").remove([path]); return { error: new Error(document.error.message) }; }
     return { error: null };
   }
   async function submitFueling(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase) return;
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     setSaving(true);
     setError("");
     setMessage("");
-    const municipio = await supabase.rpc("fleet_public_municipio_id");
-    const currentUser = await supabase.rpc("fleet_current_usuario_id");
-    const result = await supabase
-      .from("fleet_fuelings")
-      .insert({
-        municipio_id: municipio.data,
-        vehicle_id: data.get("vehicle_id"),
-        station_id: station.id,
-        fuel_type_id: data.get("fuel_type_id"),
-        responsible_unit_id: data.get("responsible_unit_id"),
-        beneficiary_unit_id: data.get("beneficiary_unit_id") || null,
-        authorization_id: data.get("authorization_id") || null,
-        driver_id: data.get("driver_id") || null,
-        performed_at: data.get("performed_at"),
-        created_by: currentUser.data,
-        liters: Number(data.get("liters")),
-        unit_price: Number(data.get("unit_price")),
-        odometer_km: Number(data.get("odometer_km")),
-        station_receipt_number: data.get("receipt") || null,
-        notes: data.get("notes") || null,
-        status: "ENVIADO_PELO_POSTO",
-      })
-      .select("id")
-      .single();
-    setSaving(false);
-    if (result.error) {
-      const reason = result.error.message.toLocaleLowerCase("pt-BR");
-      setError(reason.includes("capacidade")
-        ? "O volume informado excede a capacidade do tanque do veículo."
-        : reason.includes("bloqueio")
-          ? "O veículo está bloqueado para abastecimento na data informada."
-          : reason.includes("motorista") || reason.includes("cnh")
-            ? "O motorista está inativo, com CNH vencida ou sem autorização válida para este veículo e data."
-            : reason.includes("combustível") || reason.includes("combustivel")
-              ? "O combustível informado não corresponde ao cadastro do veículo."
-              : reason.includes("autorização") || reason.includes("autorizacao") || reason.includes("beneficiária") || reason.includes("beneficiaria") || reason.includes("unidade responsável")
-                ? "Veículo cedido ou usado por outra secretaria exige autorização aprovada, vigente e vinculada à unidade beneficiária."
-              : "Não foi possível enviar o abastecimento. Confira os campos e as permissões do posto.");
-    }
-    else {
+    try {
+      const result = await supabase.rpc("fleet_submit_fueling", {
+        p_idempotency_key: crypto.randomUUID(), p_station_id: station.id, p_vehicle_id: data.get("vehicle_id"),
+        p_fuel_type_id: data.get("fuel_type_id"), p_driver_id: data.get("driver_id"),
+        p_responsible_unit_id: data.get("responsible_unit_id"), p_beneficiary_unit_id: data.get("beneficiary_unit_id") || null,
+        p_authorization_id: data.get("authorization_id") || null, p_performed_at: new Date(String(data.get("performed_at"))).toISOString(),
+        p_liters: Number(data.get("liters")), p_unit_price: Number(data.get("unit_price")), p_odometer_km: Number(data.get("odometer_km")),
+        p_station_receipt_number: data.get("receipt") || null, p_notes: data.get("notes") || null,
+        p_late_entry_reason: data.get("late_entry_reason") || null, p_source: "POSTO",
+      });
+      if (result.error) throw result.error;
+      const record = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!record?.fueling_id) throw new Error("O servidor não retornou o protocolo do abastecimento.");
       const file = data.get("receipt_file");
       let documentMessage = "";
       if (file instanceof File && file.size > 0) {
-        const documentResult = await uploadDocument(result.data.id, file);
-        if (documentResult.error) documentMessage = `Abastecimento enviado, mas o comprovante não foi anexado: ${documentResult.error.message}`;
+        const documentResult = await uploadDocument(record.fueling_id, file);
+        if (documentResult.error) documentMessage = `Abastecimento ${record.protocol_number || ""} enviado, mas o comprovante não foi anexado: ${documentResult.error.message}`;
       }
-      event.currentTarget.reset();
-      setMessage(documentMessage || "Abastecimento enviado para conferência do Gestor de Frotas.");
+      form.reset();
+      setMessage(documentMessage || `Abastecimento ${record.protocol_number || ""} enviado para conferência do Gestor de Frotas.`);
       setView("overview");
       await loadPortal();
-    }
+    } catch (cause) {
+      const reason = (cause instanceof Error ? cause.message : String(cause)).toLocaleLowerCase("pt-BR");
+      setError(reason.includes("capacidade")
+        ? "O volume informado excede a capacidade cadastrada do tanque; a gestão poderá avaliar o registro."
+        : reason.includes("bloqueio") || reason.includes("indisponível")
+          ? "O veículo está bloqueado ou indisponível para abastecimento na data informada."
+          : reason.includes("motorista") || reason.includes("cnh")
+            ? "O motorista está inativo, com CNH vencida ou sem autorização válida para este veículo e data."
+            : reason.includes("combustível") || reason.includes("combustivel")
+              ? "O combustível não está autorizado para esse posto ou não corresponde ao cadastro do veículo."
+              : reason.includes("autorização") || reason.includes("autorizacao") || reason.includes("beneficiária") || reason.includes("beneficiaria") || reason.includes("unidade responsável")
+                ? "Veículo cedido ou uso por outra secretaria exige autorização aprovada, vigente e vinculada à unidade correta."
+                : reason.includes("justificativa") || reason.includes("posterior")
+                  ? "Este lançamento está fora da janela normal. Informe a justificativa de lançamento posterior."
+                  : (cause instanceof Error ? cause.message : "Não foi possível enviar o abastecimento. Confira os campos e o vínculo do posto."));
+    } finally { setSaving(false); }
   }
   const stationForPanel: Station = station;
   return (
@@ -480,7 +476,6 @@ export function SupplierPortal({
           {view === "fueling" && (
             <FuelingForm
               vehicles={vehicles}
-              fuelTypes={fuelTypes}
               units={units}
               stationId={station.id}
               initialVehicleId={initialVehicleId}
@@ -583,7 +578,6 @@ function PortalTable({
 }
 function FuelingForm({
   vehicles,
-  fuelTypes,
   units,
   stationId,
   initialVehicleId,
@@ -591,7 +585,6 @@ function FuelingForm({
   onSubmit,
 }: {
   vehicles: VehicleOption[];
-  fuelTypes: FuelOption[];
   units: UnitOption[];
   stationId: string;
   initialVehicleId: string | null;
@@ -600,7 +593,10 @@ function FuelingForm({
 }) {
   const [vehicleId, setVehicleId] = useState(initialVehicleId || "");
   const [fuelTypeId, setFuelTypeId] = useState("");
+  const [authorizedFuelTypes, setAuthorizedFuelTypes] = useState<FuelOption[]>([]);
+  const [loadingFuelTypes, setLoadingFuelTypes] = useState(false);
   const [unitId, setUnitId] = useState("");
+  const [loadingUnit, setLoadingUnit] = useState(false);
   const [beneficiaryUnitId, setBeneficiaryUnitId] = useState("");
   const [authorizationId, setAuthorizationId] = useState("");
   const [useAuthorizations, setUseAuthorizations] = useState<UseAuthorizationOption[]>([]);
@@ -612,10 +608,38 @@ function FuelingForm({
   const [driverId, setDriverId] = useState("");
   const [odometer, setOdometer] = useState("");
   const vehicle = vehicles.find((item) => item.id === vehicleId);
-  const availableFuelTypes = vehicle?.fuel_type_id ? fuelTypes.filter((item) => item.id === vehicle.fuel_type_id) : fuelTypes;
+  const availableFuelTypes = vehicle?.fuel_type_id ? authorizedFuelTypes.filter((item) => item.id === vehicle.fuel_type_id) : authorizedFuelTypes;
   useEffect(() => {
     if (initialVehicleId && vehicles.length && !vehicles.some((item) => item.id === initialVehicleId)) setVehicleId("");
   }, [initialVehicleId, vehicles]);
+  useEffect(() => {
+    if (!vehicleId || !supabase || !performedAt) { setAuthorizedFuelTypes([]); setLoadingFuelTypes(false); return; }
+    let cancelled = false;
+    setLoadingFuelTypes(true);
+    void supabase.rpc("fleet_supplier_fuel_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: fuelError }) => {
+      if (cancelled) return;
+      setAuthorizedFuelTypes(fuelError ? [] : (data || []) as FuelOption[]);
+      if (fuelError) setAuthorizationError("Não foi possível consultar os combustíveis habilitados para este posto.");
+      setLoadingFuelTypes(false);
+    });
+    return () => { cancelled = true; };
+  }, [stationId, vehicleId, performedAt]);
+  useEffect(() => {
+    if (!vehicle || !supabase || !performedAt) { setLoadingUnit(false); return; }
+    let cancelled = false;
+    setLoadingUnit(true);
+    void supabase.rpc("fleet_supplier_vehicle_unit_at", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: new Date(performedAt).toISOString() }).then(({ data, error: unitError }) => {
+      if (cancelled) return;
+      const result = Array.isArray(data) ? data[0] : data;
+      const effectiveUnit = unitError ? null : result?.responsible_unit_id || vehicle.responsible_unit_id;
+      setUnitId(effectiveUnit || "");
+      setBeneficiaryUnitId(effectiveUnit || "");
+      setAuthorizationId("");
+      setLoadingUnit(false);
+      if (unitError) setAuthorizationError("Não foi possível verificar a lotação do veículo na data informada.");
+    });
+    return () => { cancelled = true; };
+  }, [stationId, vehicleId, performedAt, vehicle?.responsible_unit_id]);
   useEffect(() => {
     if (!vehicleId || !supabase || !performedAt) { setAuthorizedDrivers([]); setLoadingDrivers(false); setDriverId(""); return; }
     let cancelled = false;
@@ -628,14 +652,13 @@ function FuelingForm({
     return () => { cancelled = true; };
   }, [stationId, vehicleId, performedAt]);
   useEffect(() => {
-    if (!vehicle || !supabase || !performedAt) { setUseAuthorizations([]); setAuthorizationId(""); setBeneficiaryUnitId(vehicle?.responsible_unit_id || ""); setLoadingUseAuthorizations(false); setAuthorizationError(""); return; }
+    if (!vehicle || !supabase || !performedAt) { setUseAuthorizations([]); setAuthorizationId(""); setLoadingUseAuthorizations(false); setAuthorizationError(""); return; }
     const eventTime = new Date(performedAt);
     if (!Number.isFinite(eventTime.getTime())) { setUseAuthorizations([]); setLoadingUseAuthorizations(false); return; }
     let cancelled = false;
     setLoadingUseAuthorizations(true);
     setAuthorizationError("");
     setAuthorizationId("");
-    setBeneficiaryUnitId(vehicle.responsible_unit_id || "");
     void supabase.rpc("fleet_supplier_authorization_options", { p_station_id: stationId, p_vehicle_id: vehicleId, p_performed_at: eventTime.toISOString() }).then(({ data, error: authorizationLoadError }) => {
       if (cancelled) return;
       const options = authorizationLoadError ? [] : (data || []) as UseAuthorizationOption[];
@@ -683,8 +706,8 @@ function FuelingForm({
           </label>
           <label>
             Combustível
-            <select required name="fuel_type_id" value={fuelTypeId} onChange={(event) => setFuelTypeId(event.target.value)}>
-              <option value="">Selecione o combustível</option>
+            <select required name="fuel_type_id" value={fuelTypeId} onChange={(event) => setFuelTypeId(event.target.value)} disabled={!vehicleId || loadingFuelTypes}>
+              <option value="">{loadingFuelTypes ? "Consultando produtos habilitados…" : "Selecione o combustível autorizado"}</option>
               {availableFuelTypes.map((fuel) => (
                 <option key={fuel.id} value={fuel.id}>
                   {fuel.nome}
@@ -695,17 +718,17 @@ function FuelingForm({
           </label>
           <label>
             Secretaria responsável
-            <input readOnly value={units.find((unit) => unit.id === unitId)?.nome || "Definida pela lotação administrativa do veículo"} />
+            <input readOnly value={loadingUnit ? "Consultando lotação na data…" : units.find((unit) => unit.id === unitId)?.nome || "Definida pela lotação administrativa do veículo"} />
           </label>
           <input type="hidden" name="responsible_unit_id" value={unitId} />
           <label>
             Cessão / autorização de uso
-            <select required={vehicle?.operational_status === "CEDIDO"} name="authorization_id" value={authorizationId} disabled={!vehicle || loadingUseAuthorizations} onChange={(event) => {
+            <select required={vehicle?.operational_status === "CEDIDO" || Boolean(unitId && beneficiaryUnitId && unitId !== beneficiaryUnitId)} name="authorization_id" value={authorizationId} disabled={!vehicle || loadingUseAuthorizations} onChange={(event) => {
               const selected = useAuthorizations.find((item) => item.id === event.target.value);
               setAuthorizationId(event.target.value);
               setBeneficiaryUnitId(selected?.beneficiary_unit_id || vehicle?.responsible_unit_id || "");
             }}>
-              <option value="">{loadingUseAuthorizations ? "Verificando autorizações…" : vehicle?.operational_status === "CEDIDO" ? "Selecione autorização vigente" : "Uso pela secretaria responsável"}</option>
+              <option value="">{loadingUseAuthorizations ? "Verificando autorizações…" : vehicle?.operational_status === "CEDIDO" || (unitId && beneficiaryUnitId !== unitId) ? "Selecione autorização vigente" : "Uso pela secretaria responsável"}</option>
               {useAuthorizations.map((authorization) => <option key={authorization.id} value={authorization.id}>{authorization.beneficiary_unit_name} · {authorization.purpose} · até {authorization.valid_until.slice(0, 10)}</option>)}
             </select>
             {authorizationError && <small className="supplier-upload-note">{authorizationError}</small>}
@@ -750,7 +773,7 @@ function FuelingForm({
             Preço unitário
             <input
               required
-              min="0"
+              min="0.001"
               step="0.0001"
               type="number"
               name="unit_price"
@@ -771,6 +794,10 @@ function FuelingForm({
           <label>
             Número do recibo
             <input name="receipt" placeholder="NF ou recibo" />
+          </label>
+          <label className="supplier-wide">
+            Justificativa de lançamento posterior
+            <textarea name="late_entry_reason" rows={2} placeholder="Preencha quando o lançamento ocorrer fora da janela normal." />
           </label>
           <label>
             Comprovante do abastecimento

@@ -13,6 +13,7 @@ import { StationManagementView } from './StationManagementView'
 import { FleetOverviewDashboard } from './FleetOverviewDashboard'
 import './FleetModule.css'
 import { FleetVehiclesView } from './FleetVehiclesView'
+import { FleetFuelingsView } from './FleetFuelingsView'
 
 type FleetView = 'overview' | 'vehicles' | 'fuelTypes' | 'fuelings' | 'closure' | 'analytics' | 'reports' | 'stations' | 'drivers' | 'accessRequests' | 'settings'
 type FleetProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
@@ -84,7 +85,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'overview' && <FleetOverviewDashboard key={refreshKey} userEmail={userEmail} onPendingCount={setPendingFuelings} onNavigate={(target) => setView(target)} />}
         {view === 'vehicles' && <FleetVehiclesView key={refreshKey} />}
         {view === 'fuelTypes' && <FuelTypesView key={refreshKey} onChanged={loadData} onRequestConfirmation={setConfirmation} />}
-        {view === 'fuelings' && <Fuelings key={refreshKey} onRequestConfirmation={setConfirmation} />}
+        {view === 'fuelings' && <FleetFuelingsView key={refreshKey} />}
         {view === 'closure' && <MonthlyClosure key={refreshKey} />}
         {view === 'analytics' && <FuelConsumptionDashboard key={refreshKey} />}
         {view === 'reports' && <FuelCostReports key={refreshKey} />}
@@ -310,7 +311,7 @@ function generatedFuelingAmount(litersValue: string, unitPriceValue: string): nu
   return Number.isFinite(amount) && amount <= 999_999_999_999.99 ? amount : null
 }
 
-function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: ConfirmationRequest) => void }) {
+export function LegacyFuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: ConfirmationRequest) => void }) {
   const [fuelings, setFuelings] = useState<Fueling[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)

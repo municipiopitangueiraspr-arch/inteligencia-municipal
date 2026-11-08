@@ -1,0 +1,16 @@
+.station-fuel-types-modal { width: min(680px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 32px)); overflow: auto; }
+.station-fuel-types-modal .fleet-modal-heading p { margin: 6px 0 0; color: var(--fleet-muted, #64748b); }
+.station-fuel-types-warning { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; margin: 14px 0; border: 1px solid #f2d18b; border-radius: 12px; background: #fff8e8; color: #734f12; font-size: 13px; line-height: 1.45; }
+.station-fuel-types-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.station-fuel-types-list { display: grid; gap: 8px; max-height: 440px; overflow: auto; padding: 2px; }
+.station-fuel-type-option { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--fleet-border, #e2e8f0); border-radius: 12px; cursor: pointer; background: #fff; }
+.station-fuel-type-option:hover { border-color: #90a8cf; background: #f8fbff; }
+.station-fuel-type-option input { width: 17px; height: 17px; accent-color: #2459a6; }
+.station-fuel-type-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #edf4ff; color: #2459a6; }
+.station-fuel-type-option > span:nth-of-type(2) { display: grid; gap: 3px; min-width: 0; }
+.station-fuel-type-option strong { font-size: 13px; color: #172b4d; }
+.station-fuel-type-option small { color: #66758a; font-size: 11px; }
+.station-fuel-type-state { margin-left: auto; white-space: nowrap; color: #778397; font-size: 11px; font-weight: 700; }
+.station-fuel-type-state.active { color: #16784a; }
+.station-fuel-types-modal .fleet-modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--fleet-border, #e2e8f0); }
+@media (max-width: 540px) { .station-fuel-type-option { gap: 8px; padding: 10px; } .station-fuel-type-state { display: none; } }

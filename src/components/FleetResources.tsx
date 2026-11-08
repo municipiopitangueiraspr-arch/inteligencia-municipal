@@ -11,6 +11,7 @@ import {
   Clock3,
   Edit3,
   Filter,
+  Fuel,
   Plus,
   RotateCcw,
   Save,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { FleetOperationConfirmation, type FleetConfirmationRequest } from "./FleetOperationConfirmation";
+import { StationFuelTypesPanel } from "./StationFuelTypesPanel";
 
 type StationStatus = "PENDENTE" | "ATIVO" | "SUSPENSO" | "INATIVO";
 type StationSortKey = "establishment" | "cnpj" | "representative" | "contact" | "status";
@@ -154,6 +156,7 @@ export function StationsView({ onSaved }: ResourceProps) {
   const [sortDirection, setSortDirection] = useState<StationSortDirection>("asc");
   const [confirmation, setConfirmation] = useState<FleetConfirmationRequest | null>(null);
   const [membersStation, setMembersStation] = useState<Station | null>(null);
+  const [fuelTypesStation, setFuelTypesStation] = useState<Station | null>(null);
   const [form, setForm] = useState<StationFormState>({
     razao_social_snapshot: "",
     nome_fantasia_snapshot: "",
@@ -414,6 +417,13 @@ export function StationsView({ onSaved }: ResourceProps) {
                     >
                       <UserPlus size={14} /> Gerenciar
                     </button>
+                    <button
+                      className="fleet-secondary-button fleet-members-button"
+                      onClick={() => setFuelTypesStation(station)}
+                      aria-label={`Combustíveis autorizados para ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`}
+                    >
+                      <Fuel size={14} /> Combustíveis
+                    </button>
                   </td>
                   <td>
                     <button
@@ -443,6 +453,13 @@ export function StationsView({ onSaved }: ResourceProps) {
         <StationMembersPanel
           station={membersStation}
           onClose={() => setMembersStation(null)}
+          onSaved={onSaved}
+        />
+      )}
+      {fuelTypesStation && (
+        <StationFuelTypesPanel
+          station={fuelTypesStation}
+          onClose={() => setFuelTypesStation(null)}
           onSaved={onSaved}
         />
       )}
