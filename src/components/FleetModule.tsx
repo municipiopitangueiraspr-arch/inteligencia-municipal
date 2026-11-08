@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, CircleAlert, Filter,
-  ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
+  ClipboardCheck, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
   RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X, Eye,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
 import { DriversView } from './DriverManagementView'
 import { StationManagementView } from './StationManagementView'
 import { FleetOverviewDashboard } from './FleetOverviewDashboard'
+import { FleetFuelReports } from './FleetFuelReports'
 import './FleetModule.css'
 import { FleetVehiclesView } from './FleetVehiclesView'
 import { FleetFuelingsView } from './FleetFuelingsView'
@@ -100,8 +98,8 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
   const visibleNavItems = accessLevel === 'manager'
     ? navItems
     : accessLevel === 'mayor'
-      ? navItems.filter((item) => item.id === 'overview' || item.id === 'closure')
-      : navItems.filter((item) => item.id === 'overview')
+      ? navItems.filter((item) => item.id === 'overview' || item.id === 'closure' || item.id === 'reports')
+      : navItems.filter((item) => item.id === 'overview' || item.id === 'reports')
 
   if (accessLevel === 'checking') return <div className="fleet-shell"><main className="fleet-main"><div className="fleet-loading"><RefreshCw className="spin" size={18}/> Validando seu perfil de acesso…</div></main></div>
   if (accessLevel === 'denied' || accessLevel === 'error') return <div className="fleet-shell"><main className="fleet-main"><section className="fleet-section fleet-page-section"><span className="fleet-kicker">MÓDULO OPERACIONAL</span><h1>Acesso ao módulo de Frotas</h1>{accessLevel === 'denied' ? <p>Este perfil não possui acesso ao painel municipal. Solicite ao administrador a vinculação do perfil correto.</p> : <div className="fleet-inline-error" role="alert"><CircleAlert size={15}/>{accessError}</div>}<div className="fleet-inline-actions"><button className="fleet-secondary-button" type="button" onClick={onBack}><ArrowLeft size={15}/> Voltar ao painel</button>{accessLevel === 'error'&&<button className="fleet-primary-button" type="button" onClick={()=>{setAccessLevel('checking');void checkAccess()}}>Tentar novamente</button>}</div></section></main></div>
@@ -122,7 +120,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'fuelings' && <FleetFuelingsView key={refreshKey} />}
         {view === 'closure' && <MonthlyClosure key={refreshKey} />}
         {view === 'analytics' && <FuelConsumptionDashboard key={refreshKey} />}
-        {view === 'reports' && <FuelCostReports key={refreshKey} />}
+        {view === 'reports' && <FleetFuelReports key={refreshKey} userEmail={userEmail} />}
         {view === 'stations' && <StationManagementView key={refreshKey} onSaved={loadData} />}
         {view === 'drivers' && <DriversView key={refreshKey} onSaved={loadData} />}
         {view === 'accessRequests' && <StationManagementView key={refreshKey} onSaved={loadData} />}
@@ -845,7 +843,6 @@ type CentralDashboardData = {
   filter_options: { units: { id: string; name: string; acronym: string }[] }
 }
 type AnalyticsRow = { tipo: string; descricao: string; abastecimentos: number; litros: number; custo: number; media: number }
-type ReportRow = { id: string; secretaria: string; sigla: string; abastecimentos: number; litros: number; custo: number; media: number }
 
 function monthEndExclusive(value: string) {
   const [year, month] = value.split('-').map(Number)
@@ -889,50 +886,6 @@ function FuelConsumptionDashboard() {
   const totalFuelings = Number(overview?.summary?.fueling_count || 0)
   const periodLabel = formatReference(period)
   return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">INTELIGÊNCIA OPERACIONAL</span><h2>Dashboard de consumo</h2><p>Volume e valores por veículo, agregados no Supabase para a competência selecionada.</p></div><div className="fleet-report-period"><BarChart3 size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>{periodLabel} · backend</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><BarChart3 size={19} /></span><div><span>Valor registrado</span><strong>{formatMoney(totalCost)}</strong><small>Exclui cancelamentos e rascunhos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><Truck size={19} /></span><div><span>Veículos distintos</span><strong>{Number(overview?.summary?.distinct_vehicles || 0).toLocaleString('pt-BR')}</strong><small>Ativos no período filtrado</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><ClipboardCheck size={19} /></span><div><span>Abastecimentos</span><strong>{totalFuelings.toLocaleString('pt-BR')}</strong><small>Contagem integral da competência</small></div></article></div>{loading ? <LoadingRows /> : overview && rows.length ? <><div className="fleet-overview-updated"><span>Atualizado em {formatDate(overview.updated_at)}</span><span>Os totais são integrais; a visualização por veículo apresenta os 12 maiores e permite detalhamento completo na Visão Geral.</span></div><div className="fleet-chart-grid"><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VOLUME</span><h2>Litros por veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`litros-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}{row.descricao ? ` · ${row.descricao}` : ''}</span><strong>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill blue" style={{ width: `${(row.litros / maxLiters) * 100}%` }} /></div></div>)}</div></article><article className="fleet-panel fleet-chart-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">VALOR REGISTRADO</span><h2>Valor por veículo</h2></div></div><div className="fleet-bars">{rows.map((row) => <div className="fleet-bar-row" key={`custo-${row.tipo}`}><div className="fleet-bar-label"><span>{row.tipo}{row.descricao ? ` · ${row.descricao}` : ''}</span><strong>{formatMoney(row.custo)}</strong></div><div className="fleet-bar-track"><span className="fleet-bar-fill gold" style={{ width: `${(row.custo / maxCost) * 100}%` }} /></div></div>)}</div></article></div><div className="fleet-table-panel"><table className="fleet-table fleet-report-table"><thead><tr><th>Veículo</th><th>Abastecimentos</th><th>Litros</th><th>Valor registrado</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.tipo}><td><strong>{row.tipo}</strong><small>{row.descricao || 'Descrição não informada no cadastro'}</small></td><td>{row.abastecimentos.toLocaleString('pt-BR')}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table></div></> : !loading && <EmptyState icon={BarChart3} title="Nenhum consumo encontrado" text="Não há abastecimentos válidos para a competência selecionada." />}</section>
-}
-
-function FuelCostReports() {
-  const initialPeriod = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date())
-  const [period, setPeriod] = useState(initialPeriod)
-  const [overview, setOverview] = useState<CentralDashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [secretaria, setSecretaria] = useState('TODAS')
-  const requestId = useRef(0)
-  useEffect(() => {
-    const id = ++requestId.current
-    setLoading(true); setError('')
-    void callDashboardOverview(period, secretaria === 'TODAS' ? null : secretaria).then(({ data, error: requestError }) => {
-      if (id !== requestId.current) return
-      if (requestError) { setOverview(null); setError('Não foi possível carregar o relatório centralizado. Verifique o perfil de Frotas e tente atualizar.') }
-      else setOverview(data as unknown as CentralDashboardData)
-      setLoading(false)
-    })
-  }, [period, secretaria])
-
-  const rows: ReportRow[] = (overview?.by_responsible_unit || []).map((row) => ({ id: row.id || row.label, secretaria: row.label, sigla: row.acronym || '—', abastecimentos: Number(row.fueling_count || 0), litros: Number(row.liters || 0), custo: Number(row.amount || 0), media: Number(row.fueling_count || 0) ? Number(row.amount || 0) / Number(row.fueling_count || 0) : 0 }))
-  const totalLiters = Number(overview?.summary?.liters || 0)
-  const totalCost = Number(overview?.summary?.registered_amount || 0)
-  const totalFuelings = Number(overview?.summary?.fueling_count || 0)
-  const periodLabel = formatReference(period)
-  const units = overview?.filter_options?.units || []
-  const selectedUnit = rows[0]?.secretaria || '—'
-
-  function exportExcel() {
-    if (!overview) return
-    const sheetData = rows.map((row) => ({ Secretaria: row.secretaria, Sigla: row.sigla, Abastecimentos: row.abastecimentos, 'Litros registrados': Number(row.litros.toFixed(2)), 'Valor registrado (R$)': Number(row.custo.toFixed(2)), 'Média por abastecimento (R$)': Number(row.media.toFixed(2)) }))
-    const summary = [{ Relatório: 'Custos de combustíveis por secretaria', Competência: periodLabel, Secretaria: secretaria === 'TODAS' ? 'Todas' : selectedUnit, Abastecimentos: totalFuelings, 'Litros registrados': Number(totalLiters.toFixed(2)), 'Valor registrado (R$)': Number(totalCost.toFixed(2)), 'Abrangência do ranking': 'Maiores 12 unidades; os cartões apresentam o total integral do backend.' }]
-    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Resumo'); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sheetData), 'Ranking por secretaria'); XLSX.writeFile(workbook, `relatorio-combustiveis-${period}.xlsx`)
-  }
-  function exportPdf() {
-    if (!overview) return
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setTextColor(11, 41, 64); doc.setFontSize(17); doc.text('Custos de combustíveis por secretaria', 14, 17); doc.setFontSize(9); doc.setTextColor(91, 112, 123); doc.text(`Competência: ${periodLabel}  •  Filtro: ${secretaria === 'TODAS' ? 'Todas as secretarias' : selectedUnit}`, 14, 24); doc.text(`Total integral: ${totalFuelings} abastecimentos  •  ${totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L  •  ${formatMoney(totalCost)}`, 14, 30); doc.text('Tabela: ranking das 12 maiores unidades; valores totais do resumo são integrais e calculados no backend.', 14, 35)
-    autoTable(doc, { startY: 41, head: [['Secretaria', 'Sigla', 'Abastecimentos', 'Litros', 'Valor registrado', 'Média por abastecimento']], body: rows.map((row) => [row.secretaria, row.sigla, row.abastecimentos.toLocaleString('pt-BR'), `${row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L`, formatMoney(row.custo), formatMoney(row.media)]), styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [15, 88, 115] }, alternateRowStyles: { fillColor: [245, 248, 250] } })
-    doc.save(`relatorio-combustiveis-${period}.pdf`)
-  }
-
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ANÁLISE GERENCIAL</span><h2>Relatórios de combustíveis</h2><p>Totais calculados no Supabase e ranking de gastos por secretaria responsável.</p></div><div className="fleet-report-period"><FileText size={15} /><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></div></div>{error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}<div className="fleet-report-toolbar"><label><span>Secretaria responsável</span><select value={secretaria} onChange={(event) => setSecretaria(event.target.value)}><option value="TODAS">Todas as secretarias</option>{units.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="fleet-report-actions"><button className="fleet-secondary-button" onClick={exportExcel} disabled={loading || !rows.length}><FileSpreadsheet size={15} /> Exportar Excel</button><button className="fleet-primary-button" onClick={exportPdf} disabled={loading || !rows.length}><Download size={15} /> Exportar PDF</button></div></div><p className="fleet-overview-helper">Seleção de secretaria e competência enviada ao backend. Com “Todas”, a tabela lista as 12 maiores unidades; os cartões abaixo continuam refletindo o total integral, sem corte amostral.</p><div className="fleet-metric-grid fleet-report-metrics"><article className="fleet-metric"><span className="fleet-metric-icon blue"><Fuel size={19} /></span><div><span>Abastecimentos válidos</span><strong>{totalFuelings.toLocaleString('pt-BR')}</strong><small>{periodLabel} · total integral</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon green"><Gauge size={19} /></span><div><span>Litros registrados</span><strong>{totalLiters.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L</strong><small>Exclui cancelamentos e rascunhos</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon violet"><BarChart3 size={19} /></span><div><span>Valor registrado</span><strong>{formatMoney(totalCost)}</strong><small>{secretaria === 'TODAS' ? 'Todas as unidades' : selectedUnit}</small></div></article><article className="fleet-metric"><span className="fleet-metric-icon amber"><FileText size={19} /></span><div><span>Média por abastecimento</span><strong>{formatMoney(Number(overview?.summary?.average_per_fueling || 0))}</strong><small>Agregada pelo backend</small></div></article></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : rows.length ? <table className="fleet-table fleet-report-table"><thead><tr><th>Secretaria</th><th>Sigla</th><th>Abastecimentos</th><th>Litros</th><th>Valor registrado</th><th>Média por abastecimento</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.secretaria}</strong><small>Centro de custo operacional</small></td><td className="fleet-plate">{row.sigla}</td><td>{row.abastecimentos.toLocaleString('pt-BR')}</td><td>{row.litros.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td><strong>{formatMoney(row.custo)}</strong></td><td>{formatMoney(row.media)}</td></tr>)}</tbody></table> : !loading && <EmptyState icon={BarChart3} title="Nenhum custo encontrado" text="Não há abastecimentos válidos para a competência e secretaria selecionadas." />}</div></section>
 }
 
 function MonthlyClosure() { return <FleetMonthlyClosure /> }
