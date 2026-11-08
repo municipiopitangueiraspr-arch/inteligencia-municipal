@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, ArrowLeft, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BadgeCheck, Bell, BarChart3, CalendarCheck, CheckCircle2, ChevronRight, CircleAlert, Filter,
   ClipboardCheck, Download, FileSpreadsheet, FileText, Fuel, Gauge, History, LayoutDashboard, LogOut, MapPin, Pencil, Plus, RefreshCw,
-  Settings2, ShieldCheck, Store, Truck, UserRound, X,
+  RotateCcw, Search, Settings2, ShieldCheck, Store, Truck, UserRound, X,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -151,7 +151,66 @@ function Overview({ activeVehicles, pendingFuelings, monthFuelings, monthTotal, 
   return <><section className="fleet-hero"><div><span className="fleet-hero-kicker">CONTROLE OPERACIONAL</span><h2>Frota em movimento, dados sob controle.</h2><p>Acompanhe abastecimentos, veículos e pendências em um único espaço de trabalho.</p></div><div className="fleet-hero-mark"><Gauge size={38} /></div></section><section className="fleet-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">ACOMPANHAMENTO</span><h2>Indicadores do módulo</h2></div><span className="fleet-period">Atualizado agora</span></div><div className="fleet-metric-grid">{metrics.map(({ label, value, helper, icon: Icon, tone }) => <article className="fleet-metric" key={label}><span className={`fleet-metric-icon ${tone}`}><Icon size={19} /></span><div><span>{label}</span><strong>{value}</strong><small>{helper}</small></div></article>)}</div></section><section className="fleet-section fleet-two-columns"><div className="fleet-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">FILA DE TRABALHO</span><h2>Abastecimentos recentes</h2></div><button className="fleet-link-button" onClick={() => onNavigate('fuelings')}>Ver fila <ChevronRight size={14} /></button></div><FuelingTable fuelings={fuelings.slice(0, 5)} compact /></div><div className="fleet-panel fleet-attention-panel"><div className="fleet-section-heading"><div><span className="fleet-kicker">ATENÇÃO</span><h2>Próximas ações</h2></div></div><div className="fleet-attention-item"><span className="fleet-attention-icon"><ClipboardCheck size={18} /></span><div><strong>{pendingFuelings ? `${pendingFuelings} abastecimento(s) aguardam conferência` : 'Nenhuma pendência registrada'}</strong><p>{pendingFuelings ? 'Revise os comprovantes e valide os registros enviados.' : 'Quando houver ações, elas aparecerão nesta área.'}</p></div></div></div></section></>
 }
 
-function Vehicles({ vehicles, units, fuelTypes, loading, onAdd, onEdit }: { vehicles: Vehicle[]; units: FleetOption[]; fuelTypes: FleetOption[]; loading: boolean; onAdd: () => void; onEdit: (vehicle: Vehicle) => void }) { const unitName = (id: string | null) => units.find((unit) => unit.id === id)?.nome || 'Unidade não informada'; const fuelName = (id: string | null) => fuelTypes.find((fuel) => fuel.id === id)?.nome || 'Combustível não informado'; return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DA FROTA</span><h2>Veículos</h2><p>Cadastre, edite, inative e consulte a identificação completa da frota.</p></div><button className="fleet-primary-button" onClick={onAdd}><Plus size={16} /> Novo veículo</button></div><div className="fleet-table-panel">{loading ? <LoadingRows /> : vehicles.length ? <table className="fleet-table fleet-vehicle-table"><thead><tr><th>Veículo</th><th>Placa</th><th>Secretaria</th><th>Combustível</th><th>Tanque</th><th>Hodômetro</th><th>Situação</th><th /></tr></thead><tbody>{vehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.marca || 'Marca não informada'} {vehicle.modelo || 'Modelo não informado'}</strong><small>{vehicle.ano_modelo || vehicle.ano_fabricacao || 'Ano não informado'} · ID {vehicle.id.slice(0, 8)}</small></td><td className="fleet-plate">{vehicle.placa}</td><td>{unitName(vehicle.responsible_unit_id)}</td><td>{fuelName(vehicle.fuel_type_id)}</td><td>{vehicle.tank_capacity_l} L</td><td>{vehicle.current_odometer_km ? `${vehicle.current_odometer_km.toLocaleString('pt-BR')} km` : '—'}</td><td><StatusChip value={vehicle.operational_status} /></td><td><button className="fleet-row-action" aria-label={`Editar veículo ${vehicle.placa}`} onClick={() => onEdit(vehicle)}><Pencil size={15} /></button></td></tr>)}</tbody></table> : <EmptyState icon={Truck} title="Nenhum veículo disponível" text="Cadastre o primeiro veículo para iniciar o controle da frota." action="Novo veículo" onAction={onAdd} />}</div></section> }
+type VehicleSortKey = 'vehicle' | 'plate' | 'unit' | 'fuel' | 'tank' | 'odometer' | 'status'
+type SortDirection = 'asc' | 'desc'
+
+function Vehicles({ vehicles, units, fuelTypes, loading, onAdd, onEdit }: { vehicles: Vehicle[]; units: FleetOption[]; fuelTypes: FleetOption[]; loading: boolean; onAdd: () => void; onEdit: (vehicle: Vehicle) => void }) {
+  const [search, setSearch] = useState('')
+  const [unitFilter, setUnitFilter] = useState('')
+  const [fuelFilter, setFuelFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [sortKey, setSortKey] = useState<VehicleSortKey>('plate')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const collator = useMemo(() => new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }), [])
+  const unitName = useCallback((id: string | null) => units.find((unit) => unit.id === id)?.nome || 'Unidade não informada', [units])
+  const fuelName = useCallback((id: string | null) => fuelTypes.find((fuel) => fuel.id === id)?.nome || 'Combustível não informado', [fuelTypes])
+  const visibleVehicles = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('pt-BR')
+    const filtered = vehicles.filter((vehicle) => {
+      const searchable = [vehicle.placa, vehicle.marca, vehicle.modelo, vehicle.chassi, vehicle.renavam].filter(Boolean).join(' ').toLocaleLowerCase('pt-BR')
+      return (!term || searchable.includes(term))
+        && (!unitFilter || vehicle.responsible_unit_id === unitFilter)
+        && (!fuelFilter || vehicle.fuel_type_id === fuelFilter)
+        && (!statusFilter || vehicle.operational_status === statusFilter)
+    })
+    const compare = (a: Vehicle, b: Vehicle) => {
+      switch (sortKey) {
+        case 'vehicle': return collator.compare(`${a.marca || ''} ${a.modelo || ''}`, `${b.marca || ''} ${b.modelo || ''}`)
+        case 'plate': return collator.compare(a.placa || '', b.placa || '')
+        case 'unit': return collator.compare(unitName(a.responsible_unit_id), unitName(b.responsible_unit_id))
+        case 'fuel': return collator.compare(fuelName(a.fuel_type_id), fuelName(b.fuel_type_id))
+        case 'tank': return Number(a.tank_capacity_l || 0) - Number(b.tank_capacity_l || 0)
+        case 'odometer': return Number(a.current_odometer_km ?? -1) - Number(b.current_odometer_km ?? -1)
+        case 'status': return collator.compare(statusLabel[a.operational_status] || a.operational_status, statusLabel[b.operational_status] || b.operational_status)
+      }
+    }
+    return filtered.sort((a, b) => compare(a, b) * (sortDirection === 'asc' ? 1 : -1))
+  }, [vehicles, search, unitFilter, fuelFilter, statusFilter, sortKey, sortDirection, collator, unitName, fuelName])
+  const activeFilters = Number(Boolean(search.trim())) + Number(Boolean(unitFilter)) + Number(Boolean(fuelFilter)) + Number(Boolean(statusFilter))
+  function clearFilters() { setSearch(''); setUnitFilter(''); setFuelFilter(''); setStatusFilter('') }
+  function sortBy(key: VehicleSortKey) {
+    if (sortKey === key) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDirection('asc') }
+  }
+  function sortHeading(key: VehicleSortKey, label: string) {
+    const Icon = sortKey === key ? sortDirection === 'asc' ? ArrowUp : ArrowDown : ArrowUpDown
+    return <button type="button" className="fleet-sort-button" onClick={() => sortBy(key)} aria-label={`Ordenar por ${label}${sortKey === key ? sortDirection === 'asc' ? ', crescente' : ', decrescente' : ''}`}><span>{label}</span><Icon size={13} aria-hidden="true" /></button>
+  }
+  const sortAria = (key: VehicleSortKey) => sortKey === key ? sortDirection === 'asc' ? 'ascending' as const : 'descending' as const : 'none' as const
+  return <section className="fleet-section fleet-page-section">
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DA FROTA</span><h2>Veículos</h2><p>Cadastre, edite, inative e consulte a identificação completa da frota.</p></div><button className="fleet-primary-button" onClick={onAdd}><Plus size={16} /> Novo veículo</button></div>
+    <div className="fleet-vehicle-filters">
+      <div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros</strong><span>{loading ? 'Carregando veículos…' : `${visibleVehicles.length.toLocaleString('pt-BR')} de ${vehicles.length.toLocaleString('pt-BR')} veículo(s)`}</span></div><button type="button" onClick={clearFilters} disabled={!activeFilters}><RotateCcw size={13} /> Limpar filtros</button></div>
+      <div className="fleet-vehicle-filter-grid">
+        <label className="fleet-vehicle-search">Buscar veículo<div><Search size={14} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Placa, marca, modelo, chassi ou RENAVAM" /></div></label>
+        <label>Secretaria responsável<select value={unitFilter} onChange={(event) => setUnitFilter(event.target.value)}><option value="">Todas as secretarias</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label>
+        <label>Tipo de combustível<select value={fuelFilter} onChange={(event) => setFuelFilter(event.target.value)}><option value="">Todos os combustíveis</option>{fuelTypes.map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ''}</option>)}</select></label>
+        <label>Situação operacional<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todas as situações</option><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option><option value="EM_MANUTENCAO">Em manutenção</option><option value="BAIXADO">Baixado</option><option value="CEDIDO">Cedido</option></select></label>
+      </div>
+    </div>
+    <div className="fleet-table-panel">{loading ? <LoadingRows /> : visibleVehicles.length ? <table className="fleet-table fleet-vehicle-table"><thead><tr><th aria-sort={sortAria('vehicle')}>{sortHeading('vehicle', 'Veículo')}</th><th aria-sort={sortAria('plate')}>{sortHeading('plate', 'Placa')}</th><th aria-sort={sortAria('unit')}>{sortHeading('unit', 'Secretaria')}</th><th aria-sort={sortAria('fuel')}>{sortHeading('fuel', 'Combustível')}</th><th aria-sort={sortAria('tank')}>{sortHeading('tank', 'Tanque')}</th><th aria-sort={sortAria('odometer')}>{sortHeading('odometer', 'Hodômetro')}</th><th aria-sort={sortAria('status')}>{sortHeading('status', 'Situação')}</th><th><span className="fleet-sr-only">Ações</span></th></tr></thead><tbody>{visibleVehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.marca || 'Marca não informada'} {vehicle.modelo || 'Modelo não informado'}</strong><small>{vehicle.ano_modelo || vehicle.ano_fabricacao || 'Ano não informado'} · ID {vehicle.id.slice(0, 8)}</small></td><td className="fleet-plate">{vehicle.placa}</td><td>{unitName(vehicle.responsible_unit_id)}</td><td>{fuelName(vehicle.fuel_type_id)}</td><td>{Number(vehicle.tank_capacity_l || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L</td><td>{vehicle.current_odometer_km != null ? `${vehicle.current_odometer_km.toLocaleString('pt-BR')} km` : '—'}</td><td><StatusChip value={vehicle.operational_status} /></td><td><button className="fleet-row-action" aria-label={`Editar veículo ${vehicle.placa}`} onClick={() => onEdit(vehicle)}><Pencil size={15} /></button></td></tr>)}</tbody></table> : vehicles.length ? <EmptyState icon={Truck} title="Nenhum veículo encontrado" text="Não há veículos que correspondam a estes filtros. Ajuste ou limpe os filtros para ver outros resultados." action="Limpar filtros" onAction={clearFilters} /> : <EmptyState icon={Truck} title="Nenhum veículo disponível" text="Cadastre o primeiro veículo para iniciar o controle da frota." action="Novo veículo" onAction={onAdd} />}</div>
+  </section>
+}
 
 type FuelTypeRecord = { id: string; nome: string; sigla: string | null; unidade_medida: string; ativo: boolean; created_at?: string; updated_at?: string }
 type FuelTypeUse = { id: string; fuel_type_id: string; performed_at: string; liters: number; status: string; station_receipt_number: string | null; vehicles?: { placa?: string; modelo?: string } | null; stations?: { nome_fantasia_snapshot?: string } | null }
