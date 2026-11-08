@@ -4,8 +4,11 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  AlertTriangle,
   Building2,
+  CheckCircle2,
   ChevronRight,
+  Clock3,
   Edit3,
   Filter,
   Plus,
@@ -24,6 +27,8 @@ import { FleetOperationConfirmation, type FleetConfirmationRequest } from "./Fle
 type StationStatus = "PENDENTE" | "ATIVO" | "SUSPENSO" | "INATIVO";
 type StationSortKey = "establishment" | "cnpj" | "representative" | "contact" | "status";
 type StationSortDirection = "asc" | "desc";
+type DriverSortKey = "name" | "registration" | "cpf" | "cnh" | "cnhExpiry" | "status";
+type DriverSortDirection = "asc" | "desc";
 export type Station = {
   id: string;
   razao_social_snapshot: string;
@@ -111,6 +116,26 @@ function normalizeError(code?: string) {
 }
 function inputValue(value: string | null | undefined) {
   return value || "";
+}
+function driverCnhDaysUntil(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const expiryUtc = Date.UTC(year, month - 1, day);
+  if (!Number.isFinite(expiryUtc)) return null;
+  return Math.round((expiryUtc - todayUtc) / 86_400_000);
+}
+function formatDriverCnhDate(value: string | null | undefined) {
+  return value ? new Intl.DateTimeFormat("pt-BR").format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "Não informada";
+}
+function driverCnhState(value: string | null | undefined): "missing" | "expired" | "soon" | "valid" {
+  const days = driverCnhDaysUntil(value);
+  if (days === null) return "missing";
+  if (days < 0) return "expired";
+  if (days <= 60) return "soon";
+  return "valid";
 }
 
 export function StationsView({ onSaved }: ResourceProps) {
@@ -986,214 +1011,152 @@ export function DriversView({ onSaved }: ResourceProps) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
-  const [form, setForm] = useState<DriverFormState>({
-    nome: "",
-    matricula: "",
-    cpf: "",
-    cnh_number: "",
-    cnh_valid_until: "",
-    ativo: "true",
-  });
+  const [statusFilter, setStatusFilter] = useState<"" | "ATIVO" | "INATIVO">("");
+  const [cnhFilter, setCnhFilter] = useState<"" | "EXPIRADA" | "ATE_60_DIAS" | "REGULAR" | "SEM_VALIDADE">("");
+  const [sortKey, setSortKey] = useState<DriverSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<DriverSortDirection>("asc");
+  const [confirmation, setConfirmation] = useState<FleetConfirmationRequest | null>(null);
+  const [form, setForm] = useState<DriverFormState>({ nome: "", matricula: "", cpf: "", cnh_number: "", cnh_valid_until: "", ativo: "true" });
 
   async function loadDrivers() {
-    if (!supabase) return;
+    if (!supabase) { setLoading(false); return; }
     setLoading(true);
     setError("");
-    const { data, error: resultError } = await supabase
-      .from("fleet_drivers")
-      .select(
-        "id,nome,matricula,cpf,cnh_number,cnh_valid_until,unidade_id,ativo",
-      )
-      .order("nome")
-      .limit(100);
-    if (resultError)
-      setError(
-        "Não foi possível carregar os motoristas permitidos para este usuário.",
-      );
-    else setDrivers((data || []) as Driver[]);
+    const all: Driver[] = [];
+    const pageSize = 1000;
+    try {
+      for (let offset = 0; ; offset += pageSize) {
+        const result = await supabase.from("fleet_drivers").select("id,nome,matricula,cpf,cnh_number,cnh_valid_until,unidade_id,ativo").order("nome").order("id").range(offset, offset + pageSize - 1);
+        if (result.error) { setError("Não foi possível carregar todos os motoristas permitidos para este usuário."); setDrivers([]); setLoading(false); return; }
+        const rows = (result.data || []) as Driver[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+      }
+      setDrivers(all);
+    } catch {
+      setError("Não foi possível carregar os motoristas. Verifique a conexão e tente novamente.");
+      setDrivers([]);
+    }
     setLoading(false);
   }
-  useEffect(() => {
-    void loadDrivers();
-  }, []);
+  useEffect(() => { void loadDrivers(); }, []);
+
   function openNew() {
     setEditing(null);
-    setForm({
-      nome: "",
-      matricula: "",
-      cpf: "",
-      cnh_number: "",
-      cnh_valid_until: "",
-      ativo: "true",
-    });
+    setForm({ nome: "", matricula: "", cpf: "", cnh_number: "", cnh_valid_until: "", ativo: "true" });
     setFormError("");
     setShowForm(true);
   }
   function openEdit(driver: Driver) {
     setEditing(driver);
-    setForm({
-      nome: driver.nome,
-      matricula: inputValue(driver.matricula),
-      cpf: inputValue(driver.cpf),
-      cnh_number: inputValue(driver.cnh_number),
-      cnh_valid_until: inputValue(driver.cnh_valid_until),
-      ativo: String(driver.ativo),
-    });
+    setForm({ nome: driver.nome, matricula: inputValue(driver.matricula), cpf: inputValue(driver.cpf), cnh_number: inputValue(driver.cnh_number), cnh_valid_until: inputValue(driver.cnh_valid_until), ativo: String(driver.ativo) });
     setFormError("");
     setShowForm(true);
   }
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supabase) return;
+  function requestSave() {
+    setConfirmation({
+      eyebrow: "INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS",
+      title: editing ? "Confirmar atualização do motorista" : "Confirmar cadastro de motorista",
+      message: editing ? "Os dados funcionais e da habilitação serão atualizados no cadastro municipal." : "O motorista será incluído no cadastro autorizado da frota municipal.",
+      details: [`Motorista: ${form.nome.trim() || "Não informado"}`, `CNH: ${form.cnh_number.trim() || "Não informada"}`, `Validade da CNH: ${formatDriverCnhDate(form.cnh_valid_until)}`, `Situação: ${form.ativo === "true" ? "Ativo" : "Inativo"}`],
+      confirmLabel: editing ? "Salvar alterações" : "Cadastrar motorista",
+      onConfirm: save,
+    });
+  }
+  async function save(): Promise<string | null> {
+    if (!supabase) return "O serviço de dados não está disponível.";
     setSaving(true);
     setFormError("");
-    const payload = {
-      nome: form.nome.trim(),
-      matricula: form.matricula.trim() || null,
-      cpf: form.cpf.trim() || null,
-      cnh_number: form.cnh_number.trim() || null,
-      cnh_valid_until: form.cnh_valid_until || null,
-      ativo: form.ativo === "true",
-      updated_at: new Date().toISOString(),
-    };
-    const result = editing
-      ? await supabase
-          .from("fleet_drivers")
-          .update(payload)
-          .eq("id", editing.id)
-      : await createDriver(payload);
-    setSaving(false);
-    if (result.error) {
-      setFormError(normalizeError(result.error.code));
-      return;
-    }
-    setShowForm(false);
-    await loadDrivers();
-    await onSaved();
+    const payload = { nome: form.nome.trim(), matricula: form.matricula.trim() || null, cpf: form.cpf.trim() || null, cnh_number: form.cnh_number.trim() || null, cnh_valid_until: form.cnh_valid_until || null, ativo: form.ativo === "true", updated_at: new Date().toISOString() };
+    try {
+      const result = editing ? await supabase.from("fleet_drivers").update(payload).eq("id", editing.id) : await createDriver(payload);
+      if (result.error) { const message = normalizeError(result.error.code); setFormError(message); return message; }
+      setShowForm(false);
+      try { await loadDrivers(); await onSaved(); }
+      catch { setError("Motorista salvo, mas a tela não pôde ser atualizada. Atualize os dados."); }
+      return null;
+    } catch {
+      return "Não foi possível salvar o motorista. Verifique a conexão e tente novamente.";
+    } finally { setSaving(false); }
   }
   async function createDriver(payload: Record<string, unknown>) {
-    const { data: municipio } = await supabase!.rpc(
-      "fleet_current_municipio_id",
-    );
-    const { data: currentUser } = await supabase!.rpc(
-      "fleet_current_usuario_id",
-    );
-    return supabase!
-      .from("fleet_drivers")
-      .insert({ ...payload, municipio_id: municipio, created_by: currentUser });
+    const { data: municipio } = await supabase!.rpc("fleet_current_municipio_id");
+    const { data: currentUser } = await supabase!.rpc("fleet_current_usuario_id");
+    return supabase!.from("fleet_drivers").insert({ ...payload, municipio_id: municipio, created_by: currentUser });
   }
-  const filtered = drivers.filter((driver) =>
-    `${driver.nome} ${driver.matricula || ""} ${driver.cpf || ""}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+
+  const filteredDrivers = useMemo(() => drivers.filter((driver) => {
+    const haystack = `${driver.nome} ${driver.matricula || ""} ${driver.cpf || ""} ${driver.cnh_number || ""}`.toLocaleLowerCase("pt-BR");
+    const cnhState = driverCnhState(driver.cnh_valid_until);
+    const cnhMatches = !cnhFilter || (cnhFilter === "EXPIRADA" && cnhState === "expired") || (cnhFilter === "ATE_60_DIAS" && cnhState === "soon") || (cnhFilter === "REGULAR" && cnhState === "valid") || (cnhFilter === "SEM_VALIDADE" && cnhState === "missing");
+    return haystack.includes(query.trim().toLocaleLowerCase("pt-BR")) && (!statusFilter || driver.ativo === (statusFilter === "ATIVO")) && cnhMatches;
+  }), [drivers, query, statusFilter, cnhFilter]);
+  const sortedDrivers = useMemo(() => [...filteredDrivers].sort((a, b) => {
+    if (sortKey === "cnhExpiry") {
+      const aDate = a.cnh_valid_until || "";
+      const bDate = b.cnh_valid_until || "";
+      if (!aDate && bDate) return 1;
+      if (aDate && !bDate) return -1;
+      if (!aDate && !bDate) return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
+      const cmp = aDate.localeCompare(bDate);
+      return sortDirection === "asc" ? cmp : -cmp;
+    }
+    const value = (driver: Driver) => sortKey === "name" ? driver.nome
+      : sortKey === "registration" ? driver.matricula || ""
+        : sortKey === "cpf" ? driver.cpf || ""
+          : sortKey === "cnh" ? driver.cnh_number || ""
+            : driver.ativo ? "Ativo" : "Inativo";
+    const cmp = value(a).localeCompare(value(b), "pt-BR", { numeric: true, sensitivity: "base" }) || a.id.localeCompare(b.id);
+    return sortDirection === "asc" ? cmp : -cmp;
+  }), [filteredDrivers, sortKey, sortDirection]);
+  const expiredDrivers = useMemo(() => drivers.filter((driver) => driverCnhState(driver.cnh_valid_until) === "expired"), [drivers]);
+  const expiringSoonDrivers = useMemo(() => drivers.filter((driver) => driverCnhState(driver.cnh_valid_until) === "soon"), [drivers]);
+  const activeFilterCount = Number(Boolean(query.trim())) + Number(Boolean(statusFilter)) + Number(Boolean(cnhFilter));
+  function clearDriverFilters() { setQuery(""); setStatusFilter(""); setCnhFilter(""); }
+  function toggleDriverSort(key: DriverSortKey) {
+    if (sortKey === key) setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDirection("asc"); }
+  }
+  function driverSortHeading(key: DriverSortKey, label: string) {
+    const active = sortKey === key;
+    const Icon = !active ? ArrowUpDown : sortDirection === "asc" ? ArrowUp : ArrowDown;
+    return <th aria-sort={active ? sortDirection === "asc" ? "ascending" : "descending" : "none"}><button type="button" className="fleet-sort-button" onClick={() => toggleDriverSort(key)}>{label}<Icon size={12} /></button></th>;
+  }
+  function cnhStatusLabel(driver: Driver) {
+    const days = driverCnhDaysUntil(driver.cnh_valid_until);
+    if (days === null) return "Sem validade";
+    if (days < 0) return `Vencida há ${Math.abs(days)} dia${Math.abs(days) === 1 ? "" : "s"}`;
+    if (days === 0) return "Vence hoje";
+    if (days <= 60) return `Vence em ${days} dia${days === 1 ? "" : "s"}`;
+    return "Regular";
+  }
+  function cnhBadgeClass(driver: Driver) {
+    const state = driverCnhState(driver.cnh_valid_until);
+    return state === "expired" ? "danger" : state === "soon" ? "warning" : state === "valid" ? "success" : "neutral";
+  }
+
   return (
     <section className="fleet-section fleet-page-section">
-      <div className="fleet-page-heading">
-        <div>
-          <span className="fleet-kicker">CADASTRO DE APOIO</span>
-          <h2>Motoristas</h2>
-          <p>
-            Condutores e habilitações autorizadas para operar veículos
-            municipais.
-          </p>
+      <div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO DE APOIO</span><h2>Motoristas</h2><p>Condutores e habilitações autorizadas para operar veículos municipais.</p></div><button className="fleet-primary-button" onClick={openNew}><Plus size={16} /> Novo motorista</button></div>
+      {error && <div className="fleet-inline-error" role="alert">{error}</div>}
+      <div className="fleet-driver-cnh-alerts">
+        {expiredDrivers.length > 0 && <section className="fleet-driver-cnh-alert fleet-driver-cnh-alert--expired" role="alert"><header><AlertTriangle size={18} /><div><strong>{expiredDrivers.length} CNH vencida{expiredDrivers.length === 1 ? "" : "s"}</strong><span>Atualize a validade antes de autorizar estes motoristas a conduzir.</span></div></header><ul>{expiredDrivers.map((driver) => <li key={driver.id}><div><strong>{driver.nome}</strong><small>CNH {driver.cnh_number || "não informada"} · venceu em {formatDriverCnhDate(driver.cnh_valid_until)}{driver.ativo ? " · Ativo" : " · Inativo"}</small></div><button type="button" onClick={() => openEdit(driver)}>Atualizar CNH</button></li>)}</ul></section>}
+        {expiringSoonDrivers.length > 0 && <section className="fleet-driver-cnh-alert fleet-driver-cnh-alert--soon" role="status"><header><Clock3 size={18} /><div><strong>{expiringSoonDrivers.length} CNH vence{expiringSoonDrivers.length === 1 ? "" : "m"} em até 60 dias</strong><span>Planeje a renovação para evitar interrupções na operação da frota.</span></div></header><ul>{expiringSoonDrivers.map((driver) => <li key={driver.id}><div><strong>{driver.nome}</strong><small>CNH {driver.cnh_number || "não informada"} · validade {formatDriverCnhDate(driver.cnh_valid_until)} · {cnhStatusLabel(driver)}{driver.ativo ? " · Ativo" : " · Inativo"}</small></div><button type="button" onClick={() => openEdit(driver)}>Atualizar CNH</button></li>)}</ul></section>}
+        {expiredDrivers.length === 0 && expiringSoonDrivers.length === 0 && !loading && !error && <div className="fleet-driver-cnh-clear"><CheckCircle2 size={16} /><span>Nenhuma CNH vencida ou com vencimento nos próximos 60 dias.</span></div>}
+      </div>
+      <div className="fleet-resource-toolbar"><div className="fleet-resource-summary"><UserRound size={17} /><strong>{drivers.length}</strong><span>motoristas cadastrados</span></div></div>
+      <section className="fleet-vehicle-filters driver-filters"><div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros de motoristas</strong><span>{filteredDrivers.length} resultado(s) · {activeFilterCount} filtro(s) ativo(s)</span></div><button type="button" onClick={clearDriverFilters} disabled={!activeFilterCount}><RotateCcw size={12} /> Limpar</button></div>
+        <div className="fleet-vehicle-filter-grid driver-filter-grid"><label className="fleet-vehicle-search"><span>Nome, matrícula, CPF ou CNH</span><div><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar motorista, CPF, CNH…" /></div></label>
+          <label>Situação do motorista<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "" | "ATIVO" | "INATIVO")}><option value="">Todas</option><option value="ATIVO">Ativo</option><option value="INATIVO">Inativo</option></select></label>
+          <label>Situação da CNH<select value={cnhFilter} onChange={(event) => setCnhFilter(event.target.value as typeof cnhFilter)}><option value="">Todas</option><option value="EXPIRADA">Vencida</option><option value="ATE_60_DIAS">Vence em até 60 dias</option><option value="REGULAR">Regular (mais de 60 dias)</option><option value="SEM_VALIDADE">Sem validade informada</option></select></label>
         </div>
-        <button className="fleet-primary-button" onClick={openNew}>
-          <Plus size={16} /> Novo motorista
-        </button>
-      </div>
-      {error && <div className="fleet-inline-error">{error}</div>}
-      <div className="fleet-resource-toolbar">
-        <div className="fleet-resource-summary">
-          <UserRound size={17} />
-          <strong>{drivers.length}</strong>
-          <span>motoristas carregados</span>
-        </div>
-        <input
-          className="fleet-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar por nome, matrícula ou CPF"
-        />
-      </div>
-      <div className="fleet-table-panel">
-        {loading ? (
-          <div className="fleet-loading">Carregando motoristas…</div>
-        ) : filtered.length ? (
-          <table className="fleet-table fleet-resource-table">
-            <thead>
-              <tr>
-                <th>Motorista</th>
-                <th>Matrícula</th>
-                <th>CPF</th>
-                <th>CNH</th>
-                <th>Situação</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((driver) => (
-                <tr key={driver.id}>
-                  <td>
-                    <strong>{driver.nome}</strong>
-                    <small>
-                      {driver.cnh_valid_until
-                        ? `Validade da CNH: ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${driver.cnh_valid_until}T00:00:00`))}`
-                        : "Validade da CNH não informada"}
-                    </small>
-                  </td>
-                  <td>{driver.matricula || "—"}</td>
-                  <td>{driver.cpf || "—"}</td>
-                  <td>
-                    <strong>{driver.cnh_number || "Não informada"}</strong>
-                  </td>
-                  <td>
-                    <span
-                      className={`fleet-status ${driver.ativo ? "success" : "neutral"}`}
-                    >
-                      {driver.ativo ? "Ativo" : "Inativo"}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="fleet-row-action"
-                      onClick={() => openEdit(driver)}
-                      aria-label={`Editar ${driver.nome}`}
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="fleet-empty">
-            <span>
-              <UserRound size={24} />
-            </span>
-            <strong>Nenhum motorista encontrado</strong>
-            <p>
-              Cadastre o primeiro motorista para relacioná-lo aos
-              abastecimentos.
-            </p>
-            <button className="fleet-primary-button" onClick={openNew}>
-              <Plus size={15} /> Novo motorista
-            </button>
-          </div>
-        )}
-      </div>
-      {showForm && (
-        <DriverForm
-          form={form}
-          setForm={setForm}
-          editing={editing}
-          saving={saving}
-          error={formError}
-          onClose={() => setShowForm(false)}
-          onSubmit={save}
-        />
-      )}
+      </section>
+      <div className="fleet-table-panel">{loading ? <div className="fleet-loading">Carregando motoristas…</div> : filteredDrivers.length ? <table className="fleet-table fleet-resource-table fleet-driver-table"><thead><tr>{driverSortHeading("name", "Motorista")}{driverSortHeading("registration", "Matrícula")}{driverSortHeading("cpf", "CPF")}{driverSortHeading("cnh", "Número da CNH")}{driverSortHeading("cnhExpiry", "Validade da CNH")}{driverSortHeading("status", "Situação") }<th>Ações</th></tr></thead><tbody>{sortedDrivers.map((driver) => {
+        const cnhState = driverCnhState(driver.cnh_valid_until);
+        return <tr key={driver.id} className={cnhState === "expired" ? "fleet-driver-row--expired" : cnhState === "soon" ? "fleet-driver-row--soon" : ""}><td><strong>{driver.nome}</strong></td><td>{driver.matricula || "—"}</td><td>{driver.cpf || "—"}</td><td>{driver.cnh_number || "Não informada"}</td><td><strong>{formatDriverCnhDate(driver.cnh_valid_until)}</strong><small><span className={`fleet-status ${cnhBadgeClass(driver)}`}>{cnhStatusLabel(driver)}</span></small></td><td><span className={`fleet-status ${driver.ativo ? "success" : "neutral"}`}>{driver.ativo ? "Ativo" : "Inativo"}</span></td><td><button className="fleet-row-action" onClick={() => openEdit(driver)} aria-label={`Editar ${driver.nome}`}><Edit3 size={16} /></button></td></tr>;
+      })}</tbody></table> : <div className="fleet-empty"><span><UserRound size={24} /></span><strong>{activeFilterCount ? "Nenhum motorista corresponde aos filtros" : "Nenhum motorista cadastrado"}</strong><p>{activeFilterCount ? "Ajuste os critérios ou limpe os filtros para consultar outros motoristas." : "Cadastre o primeiro motorista para relacioná-lo aos abastecimentos."}</p>{activeFilterCount ? <button className="fleet-secondary-button" onClick={clearDriverFilters}><RotateCcw size={14} /> Limpar filtros</button> : <button className="fleet-primary-button" onClick={openNew}><Plus size={15} /> Novo motorista</button>}</div>}</div>
+      {showForm && <DriverForm form={form} setForm={setForm} editing={editing} saving={saving} error={formError} onClose={() => setShowForm(false)} onSubmit={requestSave} />}
+      {confirmation && <FleetOperationConfirmation request={confirmation} onClose={() => setConfirmation(null)} />}
     </section>
   );
 }
@@ -1213,7 +1176,7 @@ function DriverForm({
   saving: boolean;
   error: string;
   onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: () => void;
 }) {
   const update = (key: keyof DriverFormState, value: string) =>
     setForm({ ...form, [key]: value });
@@ -1223,7 +1186,7 @@ function DriverForm({
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <form className="fleet-modal fleet-resource-modal" onSubmit={onSubmit}>
+      <form className="fleet-modal fleet-resource-modal" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
         <div className="fleet-modal-heading">
           <div>
             <span className="fleet-kicker">
