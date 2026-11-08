@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import {
   BadgeCheck,
   Bell,
+  CalendarCheck,
   ClipboardList,
   FileCheck2,
   Fuel,
@@ -18,6 +19,7 @@ import { StationMembersPanel } from "./FleetResources";
 import type { Station } from "./FleetResources";
 import { SupplierFuelingRecords } from "./SupplierFuelingRecords";
 import { SupplierDocumentsView } from "./SupplierDocumentsView";
+import { SupplierMonthlyClosuresView } from "./SupplierMonthlyClosuresView";
 import "./SupplierPortal.css";
 
 type SupplierPortalProps = {
@@ -27,7 +29,7 @@ type SupplierPortalProps = {
   initialVehicleId: string | null;
   onLogout: () => void;
 };
-type PortalView = "overview" | "fueling" | "records" | "documents" | "members";
+type PortalView = "overview" | "fueling" | "records" | "documents" | "closures" | "members";
 type VehicleOption = {
   id: string;
   placa: string;
@@ -80,6 +82,7 @@ const menu: Array<{ id: PortalView; label: string; icon: typeof Fuel }> = [
   { id: "fueling", label: "Novo abastecimento", icon: Plus },
   { id: "records", label: "Meus abastecimentos", icon: Fuel },
   { id: "documents", label: "Comprovantes", icon: FileCheck2 },
+  { id: "closures", label: "Fechamento mensal", icon: CalendarCheck },
 ];
 
 function money(value: number) {
@@ -510,6 +513,7 @@ export function SupplierPortal({
               onRefresh={loadPortal}
             />
           )}
+          {view === "closures" && <SupplierMonthlyClosuresView station={station} />}
         </div>
       </main>
       {showMembers && (
