@@ -415,6 +415,34 @@ type FuelingSortKey = 'date' | 'vehicle' | 'station' | 'fuel' | 'volume' | 'amou
 const fuelingStatuses = ['RASCUNHO', 'ENVIADO_PELO_POSTO', 'PENDENTE_DE_COMPROVANTE', 'PENDENTE_DE_CONFERENCIA', 'EM_ANALISE', 'COM_INCONSISTENCIA', 'SOLICITADA_CORRECAO', 'CORRIGIDO', 'CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO']
 const proofStatuses = ['PENDENTE', 'ENVIADO', 'EM_ANALISE', 'ACEITO', 'REJEITADO', 'SUBSTITUIDO']
 const completedFuelingStatuses = ['CONFERIDO', 'INCLUIDO_NO_FECHAMENTO', 'CANCELADO']
+type FuelingCreateForm = { vehicle_id: string; station_id: string; fuel_type_id: string; responsible_unit_id: string; beneficiary_unit_id: string; driver_id: string; performed_at: string; liters: string; unit_price: string; odometer_km: string; receipt: string; notes: string }
+type FuelingVehicleOption = Pick<Vehicle, 'id' | 'placa' | 'marca' | 'modelo' | 'fuel_type_id' | 'responsible_unit_id' | 'tank_capacity_l' | 'current_odometer_km'>
+type FuelingStationOption = { id: string; nome_fantasia_snapshot: string | null; razao_social_snapshot: string; cnpj_snapshot: string }
+type FuelingUnitOption = { id: string; nome: string; sigla: string | null }
+type FuelingDriverOption = { id: string; nome: string; matricula: string | null; cnh_valid_until: string | null }
+
+function localDateTimeInput(now = new Date()) {
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
+function emptyFuelingCreateForm(): FuelingCreateForm {
+  return { vehicle_id: '', station_id: '', fuel_type_id: '', responsible_unit_id: '', beneficiary_unit_id: '', driver_id: '', performed_at: localDateTimeInput(), liters: '', unit_price: '', odometer_km: '', receipt: '', notes: '' }
+}
+
+function generatedFuelingAmount(litersValue: string, unitPriceValue: string): number | null {
+  const toScaledInteger = (value: string, scale: number) => {
+    if (!/^\d+(?:\.\d*)?$/.test(value.trim())) return null
+    const [whole, fraction = ''] = value.trim().split('.')
+    if (fraction.length > scale) return null
+    return BigInt(whole) * (10n ** BigInt(scale)) + BigInt(fraction.padEnd(scale, '0') || '0')
+  }
+  const liters = toScaledInteger(litersValue, 3)
+  const unitPrice = toScaledInteger(unitPriceValue, 4)
+  if (liters == null || unitPrice == null) return null
+  const cents = (liters * unitPrice + 50_000n) / 100_000n
+  const amount = Number(cents) / 100
+  return Number.isFinite(amount) && amount <= 999_999_999_999.99 ? amount : null
+}
 
 function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: ConfirmationRequest) => void }) {
   const [fuelings, setFuelings] = useState<Fueling[]>([])
@@ -436,6 +464,16 @@ function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: 
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [correctionTarget, setCorrectionTarget] = useState<{ fueling: Fueling; document: FuelingDocument } | null>(null)
   const [preview, setPreview] = useState<{ title: string; url: string; mimeType: string } | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [createForm, setCreateForm] = useState<FuelingCreateForm>(() => emptyFuelingCreateForm())
+  const [createFormError, setCreateFormError] = useState('')
+  const [createOptionsLoading, setCreateOptionsLoading] = useState(false)
+  const [createSaving, setCreateSaving] = useState(false)
+  const [createVehicles, setCreateVehicles] = useState<FuelingVehicleOption[]>([])
+  const [createStations, setCreateStations] = useState<FuelingStationOption[]>([])
+  const [createFuelTypes, setCreateFuelTypes] = useState<FleetOption[]>([])
+  const [createUnits, setCreateUnits] = useState<FuelingUnitOption[]>([])
+  const [createDrivers, setCreateDrivers] = useState<FuelingDriverOption[]>([])
   const collator = useMemo(() => new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }), [])
 
   async function loadPage(offset: number, replace: boolean) {
@@ -469,7 +507,129 @@ function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: 
 
   useEffect(() => { void refresh() }, [])
 
+  function updateCreateForm<K extends keyof FuelingCreateForm>(key: K, value: FuelingCreateForm[K]) {
+    setCreateForm((current) => ({ ...current, [key]: value }))
+    setCreateFormError('')
+  }
+
+  async function openCreateForm() {
+    setCreateForm(emptyFuelingCreateForm())
+    setCreateFormError('')
+    setShowCreateForm(true)
+    if (!supabase) { setCreateFormError('O serviço de dados está indisponível.'); return }
+    setCreateOptionsLoading(true)
+    try {
+      const { data: municipalityId, error: municipalityError } = await withTimeout(supabase.rpc('fleet_current_municipio_id'))
+      if (municipalityError || !municipalityId) { setCreateFormError('Não foi possível identificar o município para carregar as opções do cadastro.'); return }
+      const [vehicleResult, stationResult, fuelTypeResult, unitResult, driverResult] = await Promise.all([
+        withTimeout(supabase.from('fleet_vehicles').select('id,placa,marca,modelo,fuel_type_id,responsible_unit_id,tank_capacity_l,current_odometer_km').eq('municipio_id', municipalityId).eq('operational_status', 'ATIVO').order('placa').limit(1000)),
+        withTimeout(supabase.from('fleet_fuel_stations').select('id,nome_fantasia_snapshot,razao_social_snapshot,cnpj_snapshot').eq('municipio_id', municipalityId).eq('status', 'ATIVO').order('nome_fantasia_snapshot').limit(1000)),
+        withTimeout(supabase.from('fleet_fuel_types').select('id,nome,sigla,ativo,unidade_medida').eq('municipio_id', municipalityId).eq('ativo', true).order('nome').limit(1000)),
+        withTimeout(supabase.from('unidades_organizacionais').select('id,nome,sigla').eq('municipio_id', municipalityId).eq('ativo', true).order('nome').limit(1000)),
+        withTimeout(supabase.from('fleet_drivers').select('id,nome,matricula,cnh_valid_until').eq('municipio_id', municipalityId).eq('ativo', true).order('nome').limit(1000)),
+      ])
+      const firstError = vehicleResult.error || stationResult.error || fuelTypeResult.error || unitResult.error || driverResult.error
+      if (firstError) { setCreateFormError('Não foi possível carregar os veículos, postos, combustíveis ou unidades disponíveis. Atualize a tela e tente novamente.'); return }
+      setCreateVehicles((vehicleResult.data || []) as unknown as FuelingVehicleOption[])
+      setCreateStations((stationResult.data || []) as unknown as FuelingStationOption[])
+      setCreateFuelTypes((fuelTypeResult.data || []) as FleetOption[])
+      setCreateUnits((unitResult.data || []) as unknown as FuelingUnitOption[])
+      setCreateDrivers((driverResult.data || []) as unknown as FuelingDriverOption[])
+    } catch {
+      setCreateFormError('Falha de conexão ao carregar as opções do cadastro. Tente novamente.')
+    } finally { setCreateOptionsLoading(false) }
+  }
+
+  async function saveNewFueling(): Promise<string | null> {
+    if (!supabase) return 'O serviço de dados está indisponível.'
+    setCreateSaving(true)
+    try {
+      const [municipalityResult, userResult] = await Promise.all([
+        withTimeout(supabase.rpc('fleet_current_municipio_id')),
+        withTimeout(supabase.rpc('fleet_current_usuario_id')),
+      ])
+      if (municipalityResult.error || !municipalityResult.data || userResult.error || userResult.data == null) return 'Não foi possível identificar o município e o operador autenticado para registrar o abastecimento.'
+      const performedAt = new Date(createForm.performed_at)
+      if (!Number.isFinite(performedAt.getTime())) return 'Informe uma data e hora válidas para o abastecimento.'
+      const insertResult = await withTimeout(supabase.from('fleet_fuelings').insert({
+        municipio_id: municipalityResult.data,
+        vehicle_id: createForm.vehicle_id,
+        station_id: createForm.station_id,
+        fuel_type_id: createForm.fuel_type_id,
+        responsible_unit_id: createForm.responsible_unit_id,
+        beneficiary_unit_id: createForm.beneficiary_unit_id || null,
+        driver_id: createForm.driver_id || null,
+        performed_at: performedAt.toISOString(),
+        created_by: userResult.data,
+        liters: Number(createForm.liters),
+        unit_price: Number(createForm.unit_price),
+        odometer_km: Number(createForm.odometer_km),
+        station_receipt_number: createForm.receipt.trim() || null,
+        notes: createForm.notes.trim() || null,
+        status: 'PENDENTE_DE_COMPROVANTE',
+      }).select('id,status').single())
+      if (insertResult.error || !insertResult.data) {
+        const message = insertResult.error?.message.toLocaleLowerCase('pt-BR') || ''
+        if (insertResult.error?.code === '42501') return 'Seu perfil não tem permissão para cadastrar abastecimentos neste município.'
+        if (message.includes('veiculo sem capacidade')) return 'O veículo selecionado não possui capacidade de tanque válida. Corrija o cadastro do veículo antes de continuar.'
+        if (message.includes('autorizacao') || message.includes('autorização')) return 'A autorização vinculada ao veículo não é válida para a data ou unidade informada.'
+        return 'Não foi possível cadastrar o abastecimento. Verifique se os dados ainda estão válidos e tente novamente.'
+      }
+      const persistedStatus = String(insertResult.data.status)
+      setShowCreateForm(false)
+      setCreateForm(emptyFuelingCreateForm())
+      await refresh()
+      setNotice(persistedStatus === 'COM_INCONSISTENCIA'
+        ? 'Abastecimento cadastrado, mas o banco identificou volume acima da capacidade do tanque e marcou o registro com inconsistência. Revise os dados antes do fechamento.'
+        : 'Abastecimento cadastrado. O registro ficou pendente de comprovante; o fechamento só será liberado após o anexo e a conferência oficial.')
+      return null
+    } catch {
+      return 'Falha de conexão ao registrar o abastecimento. Atualize os dados e tente novamente.'
+    } finally { setCreateSaving(false) }
+  }
+
+  function requestCreateFueling(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const vehicle = createVehicles.find((item) => item.id === createForm.vehicle_id)
+    const station = createStations.find((item) => item.id === createForm.station_id)
+    const fuel = createFuelTypes.find((item) => item.id === createForm.fuel_type_id)
+    const unit = createUnits.find((item) => item.id === createForm.responsible_unit_id)
+    const liters = Number(createForm.liters)
+    const unitPrice = Number(createForm.unit_price)
+    const odometer = Number(createForm.odometer_km)
+    const performedAt = new Date(createForm.performed_at)
+    if (!vehicle || !station || !fuel || !unit) { setCreateFormError('Selecione veículo, posto ativo, combustível e unidade responsável.'); return }
+    if (!createForm.performed_at || !Number.isFinite(performedAt.getTime())) { setCreateFormError('Informe uma data e hora válidas para o abastecimento.'); return }
+    if (!createForm.liters.trim() || !createForm.unit_price.trim() || !createForm.odometer_km.trim()) { setCreateFormError('Preencha litros, preço unitário e odômetro.'); return }
+    if (!Number.isFinite(liters) || liters <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0 || !Number.isFinite(odometer) || odometer < 0) { setCreateFormError('Informe litros, preço unitário e odômetro com valores válidos.'); return }
+    const driver = createDrivers.find((item) => item.id === createForm.driver_id)
+    const beneficiary = createUnits.find((item) => item.id === createForm.beneficiary_unit_id)
+    const amount = generatedFuelingAmount(createForm.liters, createForm.unit_price)
+    if (amount == null) { setCreateFormError('Informe litros e preço com até 3 e 4 casas decimais, respectivamente, dentro dos limites de valor do banco.'); return }
+    const exceedsTank = liters > Number(vehicle.tank_capacity_l)
+    onRequestConfirmation({
+      eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
+      title: 'Confirmar novo abastecimento',
+      message: 'Confira os dados antes de registrar. O valor total será calculado pelo banco e, sem comprovante anexado, o abastecimento ficará pendente até o envio e a conferência oficial.',
+      details: [
+        `Veículo: ${vehicle.placa} · ${vehicle.marca || ''} ${vehicle.modelo || ''}`.trim(),
+        `Posto: ${station.nome_fantasia_snapshot || station.razao_social_snapshot} · CNPJ ${station.cnpj_snapshot}`,
+        `Combustível: ${fuel.nome || '—'} · unidade responsável: ${unit.nome}${unit.sigla ? ` (${unit.sigla})` : ''}`,
+        `Data: ${formatDate(performedAt.toISOString())}`,
+        `Volume: ${liters.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} ${fuel.unidade_medida || 'L'} · preço unitário ${formatMoney(unitPrice)}`,
+        `Valor total calculado: ${formatMoney(amount)} · odômetro ${odometer.toLocaleString('pt-BR')} km`,
+        ...(beneficiary ? [`Unidade beneficiária: ${beneficiary.nome}${beneficiary.sigla ? ` (${beneficiary.sigla})` : ''}`] : []),
+        ...(driver ? [`Motorista: ${driver.nome}${driver.matricula ? ` · matrícula ${driver.matricula}` : ''}`] : []),
+        `Situação inicial: Pendente de comprovante${createForm.receipt.trim() ? ` · recibo ${createForm.receipt.trim()}` : ''}`,
+        ...(exceedsTank ? [`ATENÇÃO: volume informado excede a capacidade cadastrada do tanque (${Number(vehicle.tank_capacity_l).toLocaleString('pt-BR')} L); o banco marcará o registro com inconsistência.`] : []),
+      ],
+      confirmLabel: 'Cadastrar abastecimento',
+      onConfirm: saveNewFueling,
+    })
+  }
+
   const currentDocument = (fueling: Fueling) => (fueling.documents || []).filter((document) => document.is_current).sort((a, b) => Date.parse(b.uploaded_at) - Date.parse(a.uploaded_at))[0]
+  const generatedAmountPreview = generatedFuelingAmount(createForm.liters, createForm.unit_price)
   const activeFilters = Number(Boolean(search.trim())) + Number(Boolean(dateStart)) + Number(Boolean(dateEnd)) + Number(Boolean(vehicleFilter)) + Number(Boolean(fuelFilter)) + Number(Boolean(stationFilter)) + Number(Boolean(statusFilter)) + Number(Boolean(documentFilter))
   function clearFilters() { setSearch(''); setDateStart(''); setDateEnd(''); setVehicleFilter(''); setFuelFilter(''); setStationFilter(''); setStatusFilter(''); setDocumentFilter('') }
   const vehicleOptions = Array.from(new Map(fuelings.filter((item) => item.vehicle_id).map((item) => [item.vehicle_id as string, item.vehicles?.placa || 'Veículo sem placa'])).entries()).map(([id, label]) => ({ id, label })).sort((a, b) => collator.compare(a.label, b.label))
@@ -635,7 +795,7 @@ function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: 
   })
 
   return <section className="fleet-section fleet-page-section">
-    <div className="fleet-page-heading"><div><span className="fleet-kicker">FILA OPERACIONAL</span><h2>Abastecimentos</h2><p>Consulte, confira dados e analise os comprovantes enviados pelos postos.</p></div><button type="button" className="fleet-secondary-button fleet-fuelings-refresh" onClick={() => void refresh()} disabled={loading || Boolean(workingId)}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Atualizar</button></div>
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">FILA OPERACIONAL</span><h2>Abastecimentos</h2><p>Consulte, cadastre, confira dados e analise os comprovantes enviados pelos postos.</p></div><div className="fleet-fueling-page-actions"><button type="button" className="fleet-primary-button" onClick={() => void openCreateForm()} disabled={createOptionsLoading}><Plus size={15} /> Novo Abastecimento</button><button type="button" className="fleet-secondary-button fleet-fuelings-refresh" onClick={() => void refresh()} disabled={loading || Boolean(workingId)}><RefreshCw size={14} className={loading ? 'spin' : ''} /> Atualizar</button></div></div>
     {error && <div className="fleet-inline-error" role="alert"><CircleAlert size={15} /> {error}</div>}{notice && <div className="fleet-inline-success" role="status"><CheckCircle2 size={15} /> {notice}</div>}
     <div className="fleet-vehicle-filters fleet-fueling-filters"><div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros</strong><span>{loading ? 'Carregando…' : `${filtered.length.toLocaleString('pt-BR')} de ${fuelings.length.toLocaleString('pt-BR')} carregado(s)`}</span></div><button type="button" onClick={clearFilters} disabled={!activeFilters}><RotateCcw size={13} /> Limpar filtros</button></div>
       <div className="fleet-vehicle-filter-grid fleet-fueling-filter-grid">
@@ -651,6 +811,35 @@ function Fuelings({ onRequestConfirmation }: { onRequestConfirmation: (request: 
     <div className="fleet-fueling-page-hint"><ShieldCheck size={14} /> A lista começa pelos 100 abastecimentos mais recentes. “Carregar mais” acrescenta os próximos 100.</div>
     <div className="fleet-table-panel">{loading ? <LoadingRows /> : sorted.length ? <table className="fleet-table fleet-fuelings-table"><thead><tr><th aria-sort={sortAria('date')}>{sortHeading('date', 'Data real')}</th><th aria-sort={sortAria('vehicle')}>{sortHeading('vehicle', 'Veículo')}</th><th aria-sort={sortAria('station')}>{sortHeading('station', 'Posto')}</th><th aria-sort={sortAria('fuel')}>{sortHeading('fuel', 'Combustível')}</th><th aria-sort={sortAria('volume')}>{sortHeading('volume', 'Volume')}</th><th aria-sort={sortAria('amount')}>{sortHeading('amount', 'Valor')}</th><th aria-sort={sortAria('document')}>{sortHeading('document', 'Comprovante')}</th><th aria-sort={sortAria('status')}>{sortHeading('status', 'Situação')}</th><th><span className="fleet-sr-only">Ações</span></th></tr></thead><tbody>{renderRows()}</tbody></table> : <EmptyState icon={Fuel} title={fuelings.length ? 'Nenhum abastecimento encontrado' : 'Nenhum abastecimento cadastrado'} text={fuelings.length ? 'Nenhum registro corresponde aos filtros. Ajuste ou limpe os filtros.' : 'Os registros enviados pelos postos aparecerão aqui.'} action={fuelings.length && activeFilters ? 'Limpar filtros' : undefined} onAction={clearFilters} />}</div>
     {!loading && <div className="fleet-fueling-load-more"><span>{fuelings.length.toLocaleString('pt-BR')} abastecimento(s) carregado(s){hasMore ? ' · há mais registros disponíveis' : ' · fim da lista disponível'}</span>{hasMore && <button type="button" className="fleet-secondary-button" onClick={() => void loadMore()} disabled={loadingMore || Boolean(workingId)}>{loadingMore ? <><RefreshCw size={14} className="spin" /> Carregando…</> : 'Carregar mais 100'}</button>}</div>}
+    {showCreateForm && <div className="fleet-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !createSaving && setShowCreateForm(false)}><form className="fleet-modal fleet-fueling-create-modal" onSubmit={requestCreateFueling}>
+      <div className="fleet-modal-heading"><div><span className="fleet-kicker">CADASTRO OPERACIONAL</span><h2>Novo Abastecimento</h2></div><button type="button" className="fleet-close" onClick={() => setShowCreateForm(false)} aria-label="Fechar cadastro"><X size={18} /></button></div>
+      <p className="fleet-modal-note"><BadgeCheck size={16} /> O cadastro exige veículo ativo, posto credenciado e unidade responsável. O valor total é calculado pelo banco; o registro começa pendente de comprovante e não pode ser fechado até a conferência.</p>
+      {createOptionsLoading ? <div className="fleet-loading"><RefreshCw size={16} className="spin" /> Carregando opções oficiais do município…</div> : <>
+        <div className="fleet-form-grid fleet-fueling-create-grid">
+          <label>Veículo<select required value={createForm.vehicle_id} onChange={(event) => {
+            const vehicle = createVehicles.find((item) => item.id === event.target.value)
+            setCreateForm((current) => ({ ...current, vehicle_id: event.target.value, ...(vehicle?.fuel_type_id && createFuelTypes.some((fuel) => fuel.id === vehicle.fuel_type_id) ? { fuel_type_id: vehicle.fuel_type_id } : {}), ...(vehicle?.responsible_unit_id && createUnits.some((unit) => unit.id === vehicle.responsible_unit_id) ? { responsible_unit_id: vehicle.responsible_unit_id } : {}), odometer_km: vehicle?.current_odometer_km != null ? String(vehicle.current_odometer_km) : current.odometer_km }))
+            setCreateFormError('')
+          }}><option value="">Selecione a placa</option>{createVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.placa} — {vehicle.marca || ''} {vehicle.modelo || ''}</option>)}</select></label>
+          <label>Posto credenciado<select required value={createForm.station_id} onChange={(event) => updateCreateForm('station_id', event.target.value)}><option value="">Selecione um posto ativo</option>{createStations.map((station) => <option key={station.id} value={station.id}>{station.nome_fantasia_snapshot || station.razao_social_snapshot} · {station.cnpj_snapshot}</option>)}</select></label>
+          <label>Combustível<select required value={createForm.fuel_type_id} onChange={(event) => updateCreateForm('fuel_type_id', event.target.value)}><option value="">Selecione o combustível</option>{createFuelTypes.map((fuel) => <option key={fuel.id} value={fuel.id}>{fuel.nome}{fuel.sigla ? ` (${fuel.sigla})` : ''}</option>)}</select></label>
+          <label>Unidade responsável<select required value={createForm.responsible_unit_id} onChange={(event) => updateCreateForm('responsible_unit_id', event.target.value)}><option value="">Selecione a unidade</option>{createUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label>
+          <label>Unidade beneficiária (opcional)<select value={createForm.beneficiary_unit_id} onChange={(event) => updateCreateForm('beneficiary_unit_id', event.target.value)}><option value="">Não informada</option>{createUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}{unit.sigla ? ` (${unit.sigla})` : ''}</option>)}</select></label>
+          <label>Motorista (opcional)<select value={createForm.driver_id} onChange={(event) => updateCreateForm('driver_id', event.target.value)}><option value="">Não informado</option>{createDrivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.nome}{driver.matricula ? ` · ${driver.matricula}` : ''}</option>)}</select></label>
+          <label>Data e hora do abastecimento<input required type="datetime-local" value={createForm.performed_at} onChange={(event) => updateCreateForm('performed_at', event.target.value)} /></label>
+          <label>Litros<input required type="number" min="0.001" max="9999999.999" step="0.001" value={createForm.liters} onChange={(event) => updateCreateForm('liters', event.target.value)} /></label>
+          <label>Preço unitário<input required type="number" min="0" max="99999999.9999" step="0.0001" value={createForm.unit_price} onChange={(event) => updateCreateForm('unit_price', event.target.value)} /></label>
+          <label>Odômetro (km)<input required type="number" min="0" max="999999999999.99" step="0.01" value={createForm.odometer_km} onChange={(event) => updateCreateForm('odometer_km', event.target.value)} /></label>
+          <label>Número do recibo (opcional)<input maxLength={120} value={createForm.receipt} onChange={(event) => updateCreateForm('receipt', event.target.value)} placeholder="Nota fiscal ou recibo" /></label>
+          <label className="fleet-form-wide">Observações (opcional)<textarea maxLength={2000} rows={3} value={createForm.notes} onChange={(event) => updateCreateForm('notes', event.target.value)} placeholder="Informações complementares sobre o lançamento…" /></label>
+        </div>
+        {createForm.liters !== '' && createForm.unit_price !== '' && generatedAmountPreview != null && <div className="fleet-fueling-total-preview"><span>Valor total estimado <small>O valor oficial será calculado pelo banco.</small></span><strong>{formatMoney(generatedAmountPreview)}</strong></div>}
+        {(() => { const vehicle = createVehicles.find((item) => item.id === createForm.vehicle_id); return vehicle && Number(createForm.liters) > Number(vehicle.tank_capacity_l) ? <div className="fleet-fueling-capacity-warning" role="alert"><AlertTriangle size={15} /> O volume ultrapassa a capacidade cadastrada do tanque ({Number(vehicle.tank_capacity_l).toLocaleString('pt-BR')} L). Se confirmado, o banco marcará o abastecimento com inconsistência.</div> : null })()}
+      </>}
+      {createFormError && <div className="fleet-inline-error fleet-fueling-create-error" role="alert"><CircleAlert size={15} /> {createFormError}</div>}
+      {!createOptionsLoading && (!createVehicles.length || !createStations.length || !createFuelTypes.length || !createUnits.length) && <div className="fleet-fueling-create-hint">Para cadastrar, é necessário ter ao menos um veículo ativo, um posto credenciado ativo, um combustível ativo e uma unidade organizacional ativa.</div>}
+      <div className="fleet-modal-actions"><button type="button" className="fleet-secondary-button" onClick={() => setShowCreateForm(false)} disabled={createSaving}>Cancelar</button><button type="submit" className="fleet-primary-button" disabled={createOptionsLoading || createSaving || !createVehicles.length || !createStations.length || !createFuelTypes.length || !createUnits.length}><ShieldCheck size={15} /> Revisar e cadastrar</button></div>
+    </form></div>}
     {correctionTarget && <FuelingCorrectionDialog fueling={correctionTarget.fueling} document={correctionTarget.document} onCancel={() => setCorrectionTarget(null)} onConfirm={submitCorrection} />}
     {preview && <div className="fleet-proof-preview-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="fleet-proof-preview" role="dialog" aria-modal="true" aria-labelledby="fleet-proof-preview-title"><header><div><span className="fleet-kicker">COMPROVANTE DO ABASTECIMENTO</span><h2 id="fleet-proof-preview-title">{preview.title}</h2></div><button type="button" className="fleet-close" onClick={() => setPreview(null)} aria-label="Fechar pré-visualização"><X size={18} /></button></header><div className="fleet-proof-preview-body">{preview.mimeType.startsWith('image/') ? <img src={preview.url} alt={`Comprovante ${preview.title}`} /> : preview.mimeType === 'application/pdf' ? <iframe src={preview.url} title={`Pré-visualização de ${preview.title}`} /> : <p>Este formato não pode ser exibido aqui. <a href={preview.url} target="_blank" rel="noreferrer">Abrir comprovante em nova aba</a></p>}</div><footer><span>Link temporário e protegido, válido por 5 minutos.</span><a className="fleet-secondary-button" href={preview.url} target="_blank" rel="noreferrer">Abrir em nova aba</a></footer></section></div>}
   </section>
