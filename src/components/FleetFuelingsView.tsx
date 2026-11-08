@@ -49,7 +49,7 @@ function localDateStart(value: string | null) { return value ? new Date(`${value
 function localDateEnd(value: string | null) { if (!value) return null; const d = new Date(`${value}T00:00:00-03:00`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString() }
 function safeFileName(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) }
 
-export function FleetFuelingsView() {
+export function FleetFuelingsView({ onPendingCountRefresh }: { onPendingCountRefresh: () => Promise<void> }) {
   const [rows, setRows] = useState<Fueling[]>([])
   const [total, setTotal] = useState(0)
   const [filters, setFilters] = useState<Filters>(emptyFilters)
@@ -239,6 +239,7 @@ export function FleetFuelingsView() {
       }
       setShowCreate(false); setForm(newForm()); setNotice(`Abastecimento ${record.protocol_number || ''} registrado. ${form.files.length ? (attachmentWarning ? attachmentWarning : 'Comprovante(s) enviado(s) para conferência.') : 'Comprovante pendente dentro do prazo de 24 horas.'}`)
       await loadRows(true)
+      await onPendingCountRefresh()
     } catch (cause) { setFormError(errorText(cause)) }
     finally { setSaving(false) }
   }
@@ -261,7 +262,7 @@ export function FleetFuelingsView() {
     try {
       await uploadDocuments(details.id, [file], replacedDocumentId)
       setNotice('Comprovante anexado e encaminhado para conferência.')
-      await loadRows(true); await openDetails(details)
+      await loadRows(true); await openDetails(details); await onPendingCountRefresh()
     } catch (cause) { setError(`O registro permanece salvo, mas o documento não foi concluído: ${errorText(cause)}`) }
   }
 
@@ -279,7 +280,7 @@ export function FleetFuelingsView() {
     const { error: resultError } = await supabase.rpc('fleet_review_fueling_document', { p_document_id: document.id, p_decision: decision, p_reason: reason || null })
     if (resultError) { setError(resultError.message); return }
     setNotice(decision === 'ACEITO' ? 'Comprovante aceito.' : 'Comprovante rejeitado com motivo registrado.')
-    await loadRows(true); await openDetails(details)
+    await loadRows(true); await openDetails(details); await onPendingCountRefresh()
   }
 
   async function reviewFueling(status: 'EM_ANALISE' | 'CONFERIDO' | 'COM_PENDENCIA' | 'CONTESTADO' | 'REGULARIZADO') {
@@ -289,7 +290,7 @@ export function FleetFuelingsView() {
     if (status !== 'CONFERIDO' && notes.trim().length < 8) return
     const { error: resultError } = await supabase.rpc('fleet_review_fueling', { p_fueling_id: details.id, p_review_status: status, p_notes: notes || null, p_pending_reason: status === 'COM_PENDENCIA' || status === 'CONTESTADO' ? notes : null })
     if (resultError) { setError(resultError.message); return }
-    setNotice(`Conferência atualizada: ${labels[status] || status}.`); await loadRows(true); await openDetails({ ...details, review_status: status })
+    setNotice(`Conferência atualizada: ${labels[status] || status}.`); await loadRows(true); await openDetails({ ...details, review_status: status }); await onPendingCountRefresh()
   }
 
   async function cancelFueling(row: Fueling) {
@@ -298,7 +299,7 @@ export function FleetFuelingsView() {
     if (reason.trim().length < 8) return
     const { error: resultError } = await supabase.rpc('fleet_cancel_fueling', { p_fueling_id: row.id, p_reason: reason })
     if (resultError) { setError(resultError.message); return }
-    setNotice(`Registro ${row.protocol_number} cancelado com justificativa e trilha de auditoria.`); setDetails(null); await loadRows(true)
+    setNotice(`Registro ${row.protocol_number} cancelado com justificativa e trilha de auditoria.`); setDetails(null); await loadRows(true); await onPendingCountRefresh()
   }
 
   async function resolveAlert(alert: Alert) {
@@ -307,7 +308,7 @@ export function FleetFuelingsView() {
     if (reason.trim().length < 8) return
     const { error: resultError } = await supabase.rpc('fleet_resolve_fueling_alert', { p_alert_id: alert.id, p_resolution_notes: reason })
     if (resultError) { setError(resultError.message); return }
-    setNotice('Alerta resolvido com responsável, data e providência registrada.'); await loadRows(true); if (details) await openDetails(details)
+    setNotice('Alerta resolvido com responsável, data e providência registrada.'); await loadRows(true); if (details) await openDetails(details); await onPendingCountRefresh()
   }
 
   async function decideAdjustment(adjustment: Adjustment, decision: 'APROVADA' | 'REJEITADA') {
@@ -316,7 +317,7 @@ export function FleetFuelingsView() {
     if (notes.trim().length < 8) return
     const { error: resultError } = await supabase.rpc('fleet_decide_fueling_adjustment', { p_adjustment_id: adjustment.id, p_decision: decision, p_notes: notes })
     if (resultError) { setError(resultError.message); return }
-    setNotice(`Solicitação de correção ${decision.toLocaleLowerCase('pt-BR')}.`); await loadRows(true); if (details) await openDetails(details)
+    setNotice(`Solicitação de correção ${decision.toLocaleLowerCase('pt-BR')}.`); await loadRows(true); if (details) await openDetails(details); await onPendingCountRefresh()
   }
 
   async function saveRules(event: FormEvent<HTMLFormElement>) {

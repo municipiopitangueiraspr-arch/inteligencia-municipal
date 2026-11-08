@@ -98,6 +98,29 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
     setRefreshing(false)
   }, [])
 
+  const refreshPendingFuelings = useCallback(async () => {
+    if (!supabase || accessLevel !== 'manager') return
+    const now = new Date()
+    const monthStart = (offset: number) => {
+      const date = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+    }
+    try {
+      const { data, error } = await supabase.rpc('fleet_dashboard_overview', {
+        p_start_month: monthStart(-11), p_end_month_exclusive: monthStart(1),
+        p_responsible_unit_id: null, p_beneficiary_unit_id: null, p_vehicle_id: null,
+        p_driver_id: null, p_station_id: null, p_fuel_type_id: null,
+        p_fueling_status: null, p_document_status: null, p_recent_limit: 20,
+      })
+      if (error) return
+      const result = data as { summary?: { pending_confirmation_count?: number | string } } | null
+      const count = Number(result?.summary?.pending_confirmation_count)
+      if (Number.isFinite(count)) setPendingFuelings(count)
+    } catch {
+      // Mantém o último valor válido do badge se a consulta de atualização falhar.
+    }
+  }, [accessLevel])
+
   const visibleNavItems = accessLevel === 'manager'
     ? navItems
     : accessLevel === 'mayor'
@@ -120,7 +143,7 @@ export function FleetModule({ userEmail, onBack, onLogout }: FleetProps) {
         {view === 'overview' && <FleetOverviewDashboard key={refreshKey} userEmail={userEmail} onPendingCount={setPendingFuelings} readOnly={accessLevel !== 'manager'} scopeRole={accessLevel} scopeLabel={scopeLabel} onNavigate={(target) => { if (accessLevel === 'manager' || (target === 'closure' && accessLevel === 'mayor')) setView(target) }} />}
         {view === 'vehicles' && <FleetVehiclesView key={refreshKey} />}
         {view === 'fuelTypes' && <FuelTypesView key={refreshKey} onChanged={loadData} onRequestConfirmation={setConfirmation} />}
-        {view === 'fuelings' && <FleetFuelingsView key={refreshKey} />}
+        {view === 'fuelings' && <FleetFuelingsView key={refreshKey} onPendingCountRefresh={refreshPendingFuelings} />}
         {view === 'closure' && <MonthlyClosure key={refreshKey} />}
         {view === 'analytics' && <FuelConsumptionDashboard key={refreshKey} />}
         {view === 'reports' && <FleetFuelReports key={refreshKey} userEmail={userEmail} />}
