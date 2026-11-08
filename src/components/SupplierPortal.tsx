@@ -249,11 +249,13 @@ export function SupplierPortal({
   );
   const documentsPending = useMemo(
     () =>
-      fuelings.filter((item) =>
-        ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO"].includes(
-          item.status,
-        ) || documents.some((document) => document.fueling_id === item.id && document.is_current && document.document_status === "REJEITADO"),
-      ),
+      fuelings.filter((item) => {
+        const currentDocument = documents.find((document) => document.fueling_id === item.id && document.is_current);
+        const eligibleWithoutDocument = !currentDocument && !["RASCUNHO", "INCLUIDO_NO_FECHAMENTO", "CANCELADO"].includes(item.status);
+        return ["PENDENTE_DE_COMPROVANTE", "SOLICITADA_CORRECAO"].includes(item.status)
+          || currentDocument?.document_status === "REJEITADO"
+          || eligibleWithoutDocument;
+      }),
     [fuelings, documents],
   );
   async function uploadDocument(fuelingId: string, file: File) {
