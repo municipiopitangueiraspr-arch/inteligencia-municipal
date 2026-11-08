@@ -1,67 +1,144 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Clock3, ShieldCheck, Store, XCircle } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Clock3, Filter, RotateCcw, Search, ShieldCheck, Store, XCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { FleetOperationConfirmation, type FleetConfirmationRequest } from './FleetOperationConfirmation'
 
 type RequestItem = { id: string; cnpj: string; razao_social: string; representante_nome: string; representante_documento: string | null; representante_email: string; representante_telefone: string | null; status: string; requested_at: string; review_notes: string | null }
-type StationOption = { id: string; cnpj_snapshot: string; nome_fantasia_snapshot: string | null; razao_social_snapshot: string }
+type StationOption = { id: string; cnpj_snapshot: string }
 type RequestSortKey = 'requester' | 'company' | 'contact' | 'requested_at' | 'status'
 type SortDirection = 'asc' | 'desc'
+type CnpjFilter = '' | 'CADASTRADO' | 'NAO_CADASTRADO' | 'INVALIDO' | 'INDISPONIVEL'
+type CnpjValidation = 'CADASTRADO' | 'NAO_CADASTRADO' | 'INVALIDO' | 'DUPLICADO' | 'INDISPONIVEL'
 
 function fmt(value: string) { return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) }
-function cnpjDigits(value: string | null | undefined) { return (value || '').replace(/\D/g, '') }
+function cnpjKey(value: string | null | undefined) { return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '') }
+function isValidCnpj(value: string | null | undefined) {
+  const cnpj = cnpjKey(value)
+  if (cnpj.length !== 14 || !/^[A-Z0-9]{12}\d{2}$/.test(cnpj) || /^([A-Z0-9])\1{13}$/.test(cnpj)) return false
+  const calculateDigit = (base: string) => {
+    const values = [...base].map((character) => character.charCodeAt(0) - 48)
+    const weightsFromRight = [2, 3, 4, 5, 6, 7, 8, 9]
+    const sum = values.slice().reverse().reduce((total, value, index) => total + value * weightsFromRight[index % weightsFromRight.length], 0)
+    const remainder = sum % 11
+    return remainder < 2 ? 0 : 11 - remainder
+  }
+  const first = calculateDigit(cnpj.slice(0, 12))
+  if (first !== Number(cnpj[12])) return false
+  const second = calculateDigit(`${cnpj.slice(0, 12)}${first}`)
+  return second === Number(cnpj[13])
+}
+function localDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+function validateRequestCnpj(item: RequestItem, stations: StationOption[], lookupReady: boolean): CnpjValidation {
+  if (!lookupReady) return 'INDISPONIVEL'
+  if (!isValidCnpj(item.cnpj)) return 'INVALIDO'
+  const digits = cnpjKey(item.cnpj)
+  const matches = stations.filter((station) => cnpjKey(station.cnpj_snapshot) === digits)
+  if (matches.length > 1) return 'DUPLICADO'
+  return matches.length === 1 ? 'CADASTRADO' : 'NAO_CADASTRADO'
+}
 
 export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void> }) {
   const [items, setItems] = useState<RequestItem[]>([])
   const [stations, setStations] = useState<StationOption[]>([])
-  const [registeredCnpjs, setRegisteredCnpjs] = useState<string[]>([])
   const [cnpjLookupReady, setCnpjLookupReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState('')
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<RequestItem | null>(null)
-  const [stationId, setStationId] = useState('')
   const [notes, setNotes] = useState('')
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [cnpjFilter, setCnpjFilter] = useState<CnpjFilter>('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [sortKey, setSortKey] = useState<RequestSortKey>('requested_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [confirmation, setConfirmation] = useState<FleetConfirmationRequest | null>(null)
 
-  async function loadAllStationCnpjs() {
-    if (!supabase) return { values: [] as string[], error: false }
-    const values: string[] = []
+  async function loadAllStations() {
+    if (!supabase) return { values: [] as StationOption[], error: false }
+    const values: StationOption[] = []
     const pageSize = 1000
     for (let offset = 0; ; offset += pageSize) {
-      const result = await supabase.from('fleet_fuel_stations').select('cnpj_snapshot').range(offset, offset + pageSize - 1)
+      const result = await supabase.from('fleet_fuel_stations').select('id,cnpj_snapshot').order('id').range(offset, offset + pageSize - 1)
       if (result.error) return { values, error: true }
-      const rows = result.data || []
-      values.push(...rows.map((row) => cnpjDigits(row.cnpj_snapshot)).filter(Boolean))
+      const rows = (result.data || []) as StationOption[]
+      values.push(...rows)
       if (rows.length < pageSize) break
     }
-    return { values: [...new Set(values)], error: false }
+    return { values, error: false }
   }
 
   async function load() {
     if (!supabase) return
     setLoading(true)
     setError('')
-    const [requests, stationResult, cnpjResult] = await Promise.all([
-      supabase.from('fleet_station_access_requests').select('id,cnpj,razao_social,representante_nome,representante_documento,representante_email,representante_telefone,status,requested_at,review_notes').order('requested_at', { ascending: false }).limit(100),
-      supabase.from('fleet_fuel_stations').select('id,cnpj_snapshot,nome_fantasia_snapshot,razao_social_snapshot').order('nome_fantasia_snapshot').limit(100),
-      loadAllStationCnpjs(),
-    ])
-    if (requests.error || stationResult.error) setError('Não foi possível carregar as solicitações de primeiro acesso.')
-    else {
-      setItems((requests.data || []) as RequestItem[])
-      setStations((stationResult.data || []) as StationOption[])
-      setCnpjLookupReady(!cnpjResult.error)
-      setRegisteredCnpjs(cnpjResult.error ? [] : cnpjResult.values)
-      if (cnpjResult.error) setError('Solicitações carregadas, mas não foi possível comparar os CNPJs com o cadastro. Atualize antes de decidir.')
-    }
-    setLoading(false)
+    setCnpjLookupReady(false)
+    try {
+      const [requests, stationResult] = await Promise.all([
+        supabase.from('fleet_station_access_requests').select('id,cnpj,razao_social,representante_nome,representante_documento,representante_email,representante_telefone,status,requested_at,review_notes').order('requested_at', { ascending: false }).limit(100),
+        loadAllStations(),
+      ])
+      if (requests.error) {
+        setItems([])
+        setError('Não foi possível carregar as solicitações de primeiro acesso.')
+      } else {
+        setItems((requests.data || []) as RequestItem[])
+        if (stationResult.error) {
+          setStations([])
+          setCnpjLookupReady(false)
+          setError('Solicitações carregadas, mas não foi possível validar os CNPJs dos postos. Atualize antes de aprovar.')
+        } else {
+          setStations(stationResult.values)
+          setCnpjLookupReady(true)
+        }
+      }
+    } catch {
+      setItems([])
+      setStations([])
+      setError('Não foi possível carregar os dados. Verifique a conexão e tente novamente.')
+    } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
 
-  const sortedItems = useMemo(() => [...items].sort((a, b) => {
+  function matchingStations(item: RequestItem) {
+    const digits = cnpjKey(item.cnpj)
+    return stations.filter((station) => digits && cnpjKey(station.cnpj_snapshot) === digits)
+  }
+  function cnpjValidation(item: RequestItem): CnpjValidation {
+    if (!cnpjLookupReady) return 'INDISPONIVEL'
+    if (!isValidCnpj(item.cnpj)) return 'INVALIDO'
+    const matches = matchingStations(item)
+    if (matches.length > 1) return 'DUPLICADO'
+    return matches.length === 1 ? 'CADASTRADO' : 'NAO_CADASTRADO'
+  }
+  function cnpjWarningText(item: RequestItem) {
+    const result = cnpjValidation(item)
+    if (result === 'INDISPONIVEL') return 'Não foi possível validar o CNPJ agora. Atualize os dados antes de decidir.'
+    if (result === 'INVALIDO') return 'CNPJ inválido: confira os 12 caracteres iniciais e os dois dígitos verificadores.'
+    if (result === 'NAO_CADASTRADO') return 'CNPJ não corresponde a nenhum posto credenciado. Verifique o cadastro antes de aprovar.'
+    if (result === 'DUPLICADO') return 'Mais de um posto está cadastrado com este CNPJ. Regularize o cadastro antes de aprovar.'
+    return ''
+  }
+  function selectedStation() {
+    if (!selected || cnpjValidation(selected) !== 'CADASTRADO') return null
+    return matchingStations(selected)[0] || null
+  }
+
+  const filteredItems = useMemo(() => items.filter((item) => {
+    const haystack = `${item.representante_nome} ${item.representante_documento || ''} ${item.razao_social} ${item.cnpj} ${item.representante_email} ${item.representante_telefone || ''}`.toLocaleLowerCase('pt-BR')
+    const requestDate = localDate(item.requested_at)
+    return haystack.includes(query.trim().toLocaleLowerCase('pt-BR'))
+      && (!statusFilter || item.status === statusFilter)
+      && (!cnpjFilter || validateRequestCnpj(item, stations, cnpjLookupReady) === cnpjFilter)
+      && (!dateFrom || requestDate >= dateFrom)
+      && (!dateTo || requestDate <= dateTo)
+  }), [items, query, statusFilter, cnpjFilter, dateFrom, dateTo, cnpjLookupReady, stations])
+  const sortedItems = useMemo(() => [...filteredItems].sort((a, b) => {
     const value = (item: RequestItem) => sortKey === 'requester' ? item.representante_nome
       : sortKey === 'company' ? item.razao_social
         : sortKey === 'contact' ? `${item.representante_email} ${item.representante_telefone || ''}`
@@ -70,17 +147,9 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
       ? new Date(value(a)).getTime() - new Date(value(b)).getTime()
       : value(a).localeCompare(value(b), 'pt-BR', { numeric: true, sensitivity: 'base' })
     return sortDirection === 'asc' ? comparison : -comparison
-  }), [items, sortKey, sortDirection])
-
-  function requestHasRegisteredCnpj(item: RequestItem) {
-    const digits = cnpjDigits(item.cnpj)
-    return cnpjLookupReady && Boolean(digits) && registeredCnpjs.includes(digits)
-  }
-  function selectedStation() { return stations.find((station) => station.id === stationId) || null }
-  function selectedCnpjMismatch() {
-    const station = selectedStation()
-    return Boolean(station && cnpjDigits(station.cnpj_snapshot) !== cnpjDigits(selected?.cnpj))
-  }
+  }), [filteredItems, sortKey, sortDirection])
+  const activeFilterCount = Number(Boolean(query.trim())) + Number(Boolean(statusFilter)) + Number(Boolean(cnpjFilter)) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo))
+  function clearFilters() { setQuery(''); setStatusFilter(''); setCnpjFilter(''); setDateFrom(''); setDateTo('') }
   function toggleSort(key: RequestSortKey) {
     if (sortKey === key) setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDirection(key === 'requested_at' ? 'desc' : 'asc') }
@@ -92,43 +161,41 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
   }
   function openReview(item: RequestItem) {
     setSelected(item)
-    const match = stations.find((station) => cnpjDigits(station.cnpj_snapshot) === cnpjDigits(item.cnpj))
-    setStationId(match?.id || '')
     setNotes('')
     setError('')
   }
   function askReview(decision: 'APROVAR' | 'NEGAR') {
     if (!selected) return
-    if (decision === 'APROVAR' && !stationId) { setError('Selecione o posto que será vinculado ao representante.'); return }
+    const validation = cnpjValidation(selected)
+    if (decision === 'APROVAR' && validation !== 'CADASTRADO') { setError(`Aprovação indisponível: ${cnpjWarningText(selected)} Regularize o CNPJ e o cadastro do posto antes de liberar o acesso.`); return }
     const station = selectedStation()
-    const mismatch = decision === 'APROVAR' && selectedCnpjMismatch()
     setConfirmation({
       eyebrow: 'INTELIGÊNCIA MUNICIPAL · GESTÃO DE FROTAS',
-      title: decision === 'APROVAR' ? mismatch ? 'Aprovar com CNPJ divergente?' : 'Confirmar liberação de acesso' : 'Confirmar negativa de acesso',
+      title: decision === 'APROVAR' ? 'Confirmar liberação de acesso' : 'Confirmar negativa de acesso',
       message: decision === 'APROVAR'
-        ? mismatch ? 'O CNPJ informado no pedido não corresponde ao posto selecionado. Confira a documentação cadastral antes de liberar o vínculo.' : 'O representante será vinculado ao posto selecionado e receberá acesso ao portal.'
+        ? 'O representante será vinculado automaticamente ao único posto credenciado com CNPJ válido correspondente.'
         : 'O pedido de primeiro acesso será negado e a decisão ficará registrada para este solicitante.',
       details: [
         `Solicitante: ${selected.representante_nome}`,
         `Empresa informada: ${selected.razao_social}`,
         `CNPJ informado: ${selected.cnpj}`,
-        ...(decision === 'APROVAR' && station ? [`Posto selecionado: ${station.nome_fantasia_snapshot || station.razao_social_snapshot}`, `CNPJ cadastrado: ${station.cnpj_snapshot}`] : []),
+        ...(decision === 'APROVAR' && station ? ['Vínculo automático validado pelo CNPJ do pedido.'] : []),
         ...(notes.trim() ? [`Observação: ${notes.trim()}`] : []),
       ],
-      confirmLabel: decision === 'APROVAR' ? mismatch ? 'Aprovar apesar da divergência' : 'Aprovar e liberar' : 'Negar pedido',
-      tone: decision === 'NEGAR' || mismatch ? 'danger' : undefined,
+      confirmLabel: decision === 'APROVAR' ? 'Aprovar e liberar' : 'Negar pedido',
+      tone: decision === 'NEGAR' ? 'danger' : undefined,
       onConfirm: () => review(decision),
     })
   }
   async function review(decision: 'APROVAR' | 'NEGAR'): Promise<string | null> {
     if (!supabase || !selected) return 'O pedido não está mais disponível para análise.'
-    if (decision === 'APROVAR' && !stationId) return 'Selecione o posto que será vinculado ao representante.'
+    if (decision === 'APROVAR' && !selectedStation()) return 'Aprovação indisponível: é necessário um único posto credenciado com CNPJ válido correspondente.'
     setSaving(selected.id)
     setError('')
     const requestId = selected.id
     let result
     try {
-      result = await supabase.rpc('fleet_review_station_access_request', { p_request_id: requestId, p_decision: decision, p_station_id: decision === 'APROVAR' ? stationId : null, p_role: 'REPRESENTANTE_LEGAL', p_notes: notes.trim() || null })
+      result = await supabase.rpc('fleet_review_station_access_request', { p_request_id: requestId, p_decision: decision, p_station_id: decision === 'APROVAR' ? selectedStation()?.id : null, p_role: 'REPRESENTANTE_LEGAL', p_notes: notes.trim() || null })
     } catch {
       setSaving('')
       return 'Não foi possível concluir a decisão por uma falha de conexão.'
@@ -145,7 +212,6 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
     } catch { emailFailed = true }
     setSaving('')
     setSelected(null)
-    setStationId('')
     setNotes('')
     try { await load() } catch { setError('Decisão registrada, mas os dados não puderam ser atualizados. Atualize a tela.') }
     try { await onSaved() } catch { setError('Decisão registrada, mas houve uma falha ao atualizar a tela. Atualize os dados para ver o estado mais recente.') }
@@ -153,25 +219,32 @@ export function StationAccessRequests({ onSaved }: { onSaved: () => Promise<void
     return null
   }
 
-  return <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">CONTROLE DE ACESSO EXTERNO</span><h2>Primeiro acesso de postos</h2><p>Analise solicitações de representantes legais e libere o vínculo ao estabelecimento correto.</p></div><button className="fleet-secondary-button" onClick={() => void load()} disabled={loading}><Clock3 size={15} /> Atualizar</button></div>
+  return <section className="fleet-section fleet-page-section">
+    <div className="fleet-page-heading"><div><span className="fleet-kicker">CONTROLE DE ACESSO EXTERNO</span><h2>Pedidos de primeiro acesso</h2><p>Lista exclusiva de solicitações recebidas pelo portal do posto.</p></div><button className="fleet-secondary-button" onClick={() => void load()} disabled={loading}><Clock3 size={15} /> Atualizar</button></div>
     {error && <div className="fleet-inline-error" role="alert">{error}</div>}
-    <div className="fleet-access-note"><ShieldCheck size={16} /><span>A aprovação não expõe dados de outros postos. Ela cria o usuário institucional e o vínculo do representante somente após a decisão do Gestor.</span></div>
-    <div className="fleet-table-panel">{loading ? <div className="fleet-loading">Carregando solicitações…</div> : items.length ? <table className="fleet-table fleet-access-table"><thead><tr>{sortHeading('requester', 'Solicitante')}{sortHeading('company', 'Empresa / CNPJ')}{sortHeading('contact', 'Contato')}{sortHeading('requested_at', 'Solicitado em')}{sortHeading('status', 'Status')}<th>Ação</th></tr></thead><tbody>{sortedItems.map((item) => {
-      const cnpjKnown = requestHasRegisteredCnpj(item)
+    <div className="fleet-access-note"><ShieldCheck size={16} /><span>Esta lista mostra apenas solicitações de acesso. Os postos credenciados são consultados somente para validar o CNPJ e vincular uma aprovação; a decisão do Gestor sempre exige confirmação.</span></div>
+    <section className="fleet-vehicle-filters access-request-filters"><div className="fleet-vehicle-filter-heading"><div><Filter size={15} /><strong>Filtros de solicitações</strong><span>{filteredItems.length} resultado(s) · {activeFilterCount} filtro(s) ativo(s)</span></div><button type="button" onClick={clearFilters} disabled={!activeFilterCount}><RotateCcw size={12} /> Limpar</button></div>
+      <div className="fleet-vehicle-filter-grid access-request-filter-grid"><label className="fleet-vehicle-search"><span>Solicitante, empresa, CNPJ ou contato</span><div><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar solicitação…" /></div></label>
+        <label>Situação<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todas</option><option value="PENDENTE">Pendente</option><option value="APROVADO">Aprovado</option><option value="NEGADO">Negado</option></select></label>
+        <label>Validação do CNPJ<select value={cnpjFilter} onChange={(event) => setCnpjFilter(event.target.value as CnpjFilter)}><option value="">Todas</option><option value="CADASTRADO">Válido e cadastrado</option><option value="NAO_CADASTRADO">Sem posto correspondente</option><option value="INVALIDO">CNPJ inválido</option><option value="DUPLICADO">CNPJ duplicado no cadastro</option><option value="INDISPONIVEL">Validação indisponível</option></select></label>
+        <label>Solicitado a partir de<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label>Solicitado até<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+      </div>
+    </section>
+    <div className="fleet-table-panel">{loading ? <div className="fleet-loading">Carregando solicitações…</div> : filteredItems.length ? <table className="fleet-table fleet-access-table"><thead><tr>{sortHeading('requester', 'Solicitante')}{sortHeading('company', 'Empresa / CNPJ')}{sortHeading('contact', 'Contato')}{sortHeading('requested_at', 'Solicitado em')}{sortHeading('status', 'Status')}<th>Ação</th></tr></thead><tbody>{sortedItems.map((item) => {
+      const cnpjState = cnpjValidation(item)
       return <tr key={item.id}>
         <td><strong>{item.representante_nome}</strong><small>{item.representante_documento || 'Documento não informado'}</small></td>
-        <td><strong>{item.razao_social}</strong><small>CNPJ: {item.cnpj}</small>{!cnpjLookupReady ? <div className="fleet-station-cnpj-warning" role="status"><AlertTriangle size={13} /><span>Não foi possível validar este CNPJ agora. Atualize os dados antes de decidir.</span></div> : !cnpjKnown && <div className="fleet-station-cnpj-warning" role="alert"><AlertTriangle size={13} /><span>CNPJ do pedido não localizado entre os postos cadastrados. Verifique antes de aprovar.</span></div>}</td>
+        <td><strong>{item.razao_social}</strong><small>CNPJ: {item.cnpj}</small>{cnpjState !== 'CADASTRADO' && <div className="fleet-station-cnpj-warning" role={cnpjState === 'INDISPONIVEL' ? 'status' : 'alert'}><AlertTriangle size={13} /><span>{cnpjWarningText(item)}</span></div>}</td>
         <td><small>{item.representante_email}</small><small>{item.representante_telefone || 'Telefone não informado'}</small></td>
         <td>{fmt(item.requested_at)}</td>
         <td><span className={`fleet-status ${item.status === 'APROVADO' ? 'success' : item.status === 'NEGADO' ? 'danger' : 'warning'}`}>{item.status}</span></td>
         <td>{item.status === 'PENDENTE' ? <button className="fleet-primary-button fleet-access-action" onClick={() => openReview(item)}>Analisar</button> : <span className="fleet-access-reviewed">Revisado</span>}</td>
       </tr>
-    })}</tbody></table> : <div className="fleet-empty"><span><Store size={24} /></span><strong>Nenhuma solicitação pendente</strong><p>Os pedidos públicos de primeiro acesso aparecerão nesta área.</p></div>}</div>
+    })}</tbody></table> : <div className="fleet-empty"><span><Store size={24} /></span><strong>{activeFilterCount ? 'Nenhuma solicitação corresponde aos filtros' : 'Nenhuma solicitação encontrada'}</strong><p>{activeFilterCount ? 'Ajuste os critérios ou limpe os filtros.' : 'Os pedidos recebidos pelo portal do posto aparecerão aqui.'}</p>{activeFilterCount && <button className="fleet-secondary-button" onClick={clearFilters}><RotateCcw size={14} /> Limpar filtros</button>}</div>}</div>
     {selected && <div className="fleet-modal-backdrop" role="presentation"><section className="fleet-modal fleet-access-modal"><div className="fleet-modal-heading"><div><span className="fleet-kicker">ANÁLISE DO GESTOR</span><h2>Solicitação de primeiro acesso</h2></div><button className="fleet-close" onClick={() => setSelected(null)} aria-label="Fechar"><XCircle size={19} /></button></div>
       <div className="fleet-access-request-card"><strong>{selected.representante_nome}</strong><span>{selected.representante_email}</span><span>{selected.razao_social} · CNPJ {selected.cnpj}</span></div>
-      {!cnpjLookupReady ? <div className="fleet-station-cnpj-warning fleet-station-cnpj-warning--large" role="status"><AlertTriangle size={16} /><span><strong>Validação de CNPJ indisponível.</strong> Atualize os dados antes de decidir.</span></div> : !requestHasRegisteredCnpj(selected) && <div className="fleet-station-cnpj-warning fleet-station-cnpj-warning--large" role="alert"><AlertTriangle size={16} /><span><strong>CNPJ não localizado no cadastro de postos.</strong> Confira a documentação e o CNPJ do estabelecimento antes de vincular este representante.</span></div>}
-      <label>Vincular ao posto<select value={stationId} onChange={(event) => setStationId(event.target.value)}><option value="">Selecione o posto credenciado</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.nome_fantasia_snapshot || station.razao_social_snapshot} · CNPJ {station.cnpj_snapshot}</option>)}</select></label>
-      {selectedCnpjMismatch() && selectedStation() && <div className="fleet-station-cnpj-warning fleet-station-cnpj-warning--large" role="alert"><AlertTriangle size={16} /><span><strong>Divergência de CNPJ entre pedido e posto selecionado.</strong> Pedido: {selected.cnpj} · Cadastro: {selectedStation()?.cnpj_snapshot}. A aprovação continuará disponível, mas confirme os documentos antes de prosseguir.</span></div>}
+      {cnpjValidation(selected) === 'CADASTRADO' ? <div className="fleet-access-match-note"><CheckCircle2 size={16} /><span>O CNPJ válido do pedido corresponde a um único cadastro. A aprovação será vinculada automaticamente.</span></div> : <div className="fleet-station-cnpj-warning fleet-station-cnpj-warning--large" role={cnpjValidation(selected) === 'INDISPONIVEL' ? 'status' : 'alert'}><AlertTriangle size={16} /><span><strong>Validação do CNPJ requer atenção.</strong> {cnpjWarningText(selected)} Para aprovar, regularize o CNPJ e o cadastro do posto e atualize os dados.</span></div>}
       <label>Observação da decisão<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Informe uma justificativa ou orientação para o solicitante." /></label>
       <div className="fleet-modal-actions"><button className="fleet-secondary-button" onClick={() => askReview('NEGAR')} disabled={Boolean(saving)}><XCircle size={15} /> Negar acesso</button><button className="fleet-primary-button" onClick={() => askReview('APROVAR')} disabled={Boolean(saving)}><CheckCircle2 size={15} /> Aprovar e liberar</button></div>
     </section></div>}

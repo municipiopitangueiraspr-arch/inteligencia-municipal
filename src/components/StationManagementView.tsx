@@ -18,7 +18,7 @@ export function StationManagementView({ onSaved }: { onSaved: () => Promise<void
 
   return <section className="station-management">
     <div className="station-management-heading">
-      <div><span className="fleet-kicker">CREDENCIAMENTO E ACESSO EXTERNO</span><h2>Gestão de postos credenciados</h2><p>Cadastre estabelecimentos, acompanhe pedidos de primeiro acesso e administre os usuários autorizados.</p></div>
+      <div><span className="fleet-kicker">{tab === 'requests' ? 'ANÁLISE DE SOLICITAÇÕES' : 'CREDENCIAMENTO E ACESSO EXTERNO'}</span><h2>{tab === 'requests' ? 'Pedidos de primeiro acesso' : 'Gestão de postos credenciados'}</h2><p>{tab === 'requests' ? 'Consulte e analise exclusivamente os pedidos recebidos pelo Portal do Posto.' : 'Cadastre estabelecimentos, acompanhe pedidos de primeiro acesso e administre os usuários autorizados.'}</p></div>
     </div>
     <div className="station-management-tabs" role="tablist">
       <button className={tab === 'stations' ? 'active' : ''} onClick={() => setTab('stations')}><Store size={16} /> Postos credenciados</button>
