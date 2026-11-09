@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, isImportableLotGeometry, shouldStartMapPan, withLotIds } from './mapLogic'
+import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -21,6 +21,7 @@ type Lot = {
 }
 type CensusZone = { id: string; name: string; color: string; active: boolean }
 type CensusAcs = { id: string; full_name: string; email: string | null; phone: string | null; active: boolean }
+type AreaSelectionGesture = { start: Point; current: Point; startClientX: number; startClientY: number; targetLotKey: string | null; additive: boolean }
 
 type MapImport = {
   id: string
@@ -179,10 +180,13 @@ function MapPreparationWorkspace() {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
-  const [selectionMode, setSelectionMode] = useState(false)
+  const [areaSelectMode, setAreaSelectMode] = useState(false)
+  const [isAreaSelecting, setIsAreaSelecting] = useState(false)
   const [selectedLotKeys, setSelectedLotKeys] = useState<string[]>([])
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
   const mapViewportRef = useRef<HTMLDivElement | null>(null)
+  const areaGestureRef = useRef<AreaSelectionGesture | null>(null)
+  const areaRectOverlayRef = useRef<SVGRectElement | null>(null)
 
   const loadWorkspace = async () => {
     if (!supabase) { setLoading(false); return }
@@ -217,12 +221,34 @@ function MapPreparationWorkspace() {
   const bbox = mapImport?.bbox || (lots.length ? { minX: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), minY: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))), maxX: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), maxY: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))) } : null)
   const width = bbox ? Math.max(bbox.maxX - bbox.minX, 1) : 1
   const height = bbox ? Math.max(bbox.maxY - bbox.minY, 1) : 1
-  const toSvg = (point: Point) => bbox ? `${((point[0] - bbox.minX) / width) * 1000},${((bbox.maxY - point[1]) / height) * 1000}` : '0,0'
+  const toSvgPoint = (point: Point): Point => bbox ? [((point[0] - bbox.minX) / width) * 1000, ((bbox.maxY - point[1]) / height) * 1000] : [0, 0]
+  const toSvg = (point: Point) => toSvgPoint(point).join(',')
   const assignedCount = lots.filter((lot) => lot.zone_id).length
   const zoneCount = (zoneId: string) => lots.filter((lot) => lot.zone_id === zoneId).length
 
+  function clientToSvgPoint(clientX: number, clientY: number): Point | null {
+    const svg = mapViewportRef.current?.querySelector('svg')
+    const matrix = svg?.getScreenCTM()
+    if (!matrix) return null
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+    return [point.x, point.y]
+  }
+  function updateAreaRectOverlay(start: Point, current: Point, crossing: boolean) {
+    const overlay = areaRectOverlayRef.current
+    if (!overlay) return
+    overlay.setAttribute('x', String(Math.min(start[0], current[0])))
+    overlay.setAttribute('y', String(Math.min(start[1], current[1])))
+    overlay.setAttribute('width', String(Math.abs(current[0] - start[0])))
+    overlay.setAttribute('height', String(Math.abs(current[1] - start[1])))
+    overlay.setAttribute('class', `census-area-selection-rect ${crossing ? 'crossing' : 'window'}`)
+    overlay.removeAttribute('display')
+  }
+  function clearAreaRectOverlay() {
+    areaRectOverlayRef.current?.setAttribute('display', 'none')
+  }
+
   function assignLot(lot: Lot, multiSelect = false) {
-    if (selectionMode || multiSelect) {
+    if (areaSelectMode || multiSelect) {
       const key = getLotKey(lot)
       setSelectedLotKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
       return
@@ -236,19 +262,85 @@ function MapPreparationWorkspace() {
     if (!selectedLotKeys.length) return
     setLots((current) => assignLotsToZone(current, selectedLotKeys, activeZoneId))
     setSelectedLotKeys([])
-    setSelectionMode(false)
   }
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (areaSelectMode) {
+      const start = clientToSvgPoint(event.clientX, event.clientY)
+      if (!start) return
+      const target = event.target instanceof Element ? event.target.closest('[data-lot-key]') : null
+      const targetLotKey = target?.getAttribute('data-lot-key') || null
+      areaGestureRef.current = { start, current: start, startClientX: event.clientX, startClientY: event.clientY, targetLotKey, additive: event.shiftKey || event.ctrlKey || event.metaKey }
+      setIsAreaSelecting(true)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      updateAreaRectOverlay(start, start, false)
+      event.preventDefault()
+      return
+    }
     const targetIsLot = event.target instanceof Element && event.target.closest('polygon') !== null
     if (!shouldStartMapPan(targetIsLot)) return
     setDragging(true); dragStart.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; event.currentTarget.setPointerCapture(event.pointerId)
   }
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const gesture = areaGestureRef.current
+    if (areaSelectMode && gesture) {
+      const current = clientToSvgPoint(event.clientX, event.clientY)
+      if (!current) return
+      gesture.current = current
+      updateAreaRectOverlay(gesture.start, current, event.clientX < gesture.startClientX)
+      return
+    }
     if (!dragging) return
     setPan({ x: dragStart.current.panX + event.clientX - dragStart.current.x, y: dragStart.current.panY + event.clientY - dragStart.current.y })
   }
+  function finishPointerAction(event: React.PointerEvent<HTMLDivElement>) {
+    const gesture = areaGestureRef.current
+    if (!gesture) { setDragging(false); return }
+    const end = clientToSvgPoint(event.clientX, event.clientY) || gesture.current
+    const distance = Math.hypot(event.clientX - gesture.startClientX, event.clientY - gesture.startClientY)
+    let picked: string[]
+    if (distance < 4) {
+      picked = gesture.targetLotKey ? [gesture.targetLotKey] : []
+    } else {
+      const rect = { left: Math.min(gesture.start[0], end[0]), top: Math.min(gesture.start[1], end[1]), right: Math.max(gesture.start[0], end[0]), bottom: Math.max(gesture.start[1], end[1]) }
+      const polygons = lots.map((lot) => ({ key: getLotKey(lot), points: lot.geometry.map(toSvgPoint) }))
+      picked = selectLotKeysInRect(polygons, rect, event.clientX < gesture.startClientX ? 'crossing' : 'window')
+    }
+    setSelectedLotKeys((current) => mergeSelectedLotKeys(current, picked, gesture.additive))
+    areaGestureRef.current = null
+    setIsAreaSelecting(false)
+    setDragging(false)
+    clearAreaRectOverlay()
+  }
+  function cancelPointerAction() {
+    areaGestureRef.current = null
+    setIsAreaSelecting(false)
+    setDragging(false)
+    clearAreaRectOverlay()
+  }
   function zoomBy(factor: number) { setZoom((current) => Math.min(24, Math.max(0.65, current * factor))) }
-  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedLotKeys([]); setSelectionMode(false) }
+  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedLotKeys([]); setAreaSelectMode(false); cancelPointerAction() }
+  function toggleAreaSelectMode() {
+    if (areaSelectMode) {
+      setAreaSelectMode(false)
+      cancelPointerAction()
+    } else {
+      setAreaSelectMode(true)
+    }
+  }
+  useEffect(() => {
+    if (!areaSelectMode) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setSelectedLotKeys([])
+      setAreaSelectMode(false)
+      areaGestureRef.current = null
+      setIsAreaSelecting(false)
+      setDragging(false)
+      areaRectOverlayRef.current?.setAttribute('display', 'none')
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [areaSelectMode])
   async function importWorkspaceMap() {
     const db = supabase
     if (!db || !file) return
@@ -282,5 +374,5 @@ function MapPreparationWorkspace() {
     finally { setSaving(false) }
   }
 
-  return <section className="census-workspace"><div className="census-workspace-top"><div className="census-workspace-upload"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar mapa DXF'}</strong><small>{file ? 'Arquivo selecionado' : 'O mapa importado fica salvo para reabertura'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || saving} onClick={() => void importWorkspaceMap()}>{saving ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar mapa</button></div><div className="census-workspace-actions"><span>{mapImport ? `${mapImport.file_name} · ${assignedCount.toLocaleString('pt-BR')}/${lots.length.toLocaleString('pt-BR')} lotes classificados` : 'Nenhum mapa carregado'}</span><button type="button" className="fleet-secondary-button" disabled={saving || !mapImport} onClick={() => void saveWorkspace()}><Save size={15} /> Salvar divisão</button></div></div>{notice && <div className="census-workspace-notice"><CheckCircle2 size={15} />{notice}</div>}{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid"><div className="census-workspace-map"><div className="census-map-toolbar"><span><Move size={14} /> {selectionMode ? 'Toque ou clique nos lotes para selecionar' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para zoom'}</span><div><button type="button" className={`census-selection-toggle${selectionMode ? ' active' : ''}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((current) => !current)}><Check size={14} /><span>{selectionMode ? 'Concluir seleção' : 'Selecionar lotes'}</span></button><button type="button" onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div><div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}>{bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={selected ? '#e59a22' : assigned ? zone?.color || '#2c7892' : '#7da6aa'} strokeWidth={selected ? 3 : 1} vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); assignLot(lot, event.ctrlKey || event.metaKey) }}><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}</svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}</div><div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="selected" />Lote selecionado</span><span><i className="selected" />Zona ativa: {zones.find((zone) => zone.id === activeZoneId)?.name || 'selecione ao lado'}</span></div></div><aside className="census-workspace-zones"><div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>{zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}{selectedLotKeys.length > 0 && <div className="census-selection-actions"><strong>{selectedLotKeys.length.toLocaleString('pt-BR')} lote(s) selecionado(s)</strong><button type="button" className="fleet-primary-button" disabled={!activeZoneId} onClick={assignSelectedLots}><Check size={15} /> Atribuir à zona selecionada</button><button type="button" className="census-selection-clear" onClick={() => setSelectedLotKeys([])}>Limpar seleção</button></div>}<div className="census-workspace-tip"><MapPinned size={16} /><span>Selecione uma zona e clique em um lote para atribuí-lo na hora. Use “Selecionar lotes” ou Ctrl/Cmd+clique para escolher vários e aplicar a zona em grupo.</span></div></aside></div>}</section>
+  return <section className="census-workspace"><div className="census-workspace-top"><div className="census-workspace-upload"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar mapa DXF'}</strong><small>{file ? 'Arquivo selecionado' : 'O mapa importado fica salvo para reabertura'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || saving} onClick={() => void importWorkspaceMap()}>{saving ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar mapa</button></div><div className="census-workspace-actions"><span>{mapImport ? `${mapImport.file_name} · ${assignedCount.toLocaleString('pt-BR')}/${lots.length.toLocaleString('pt-BR')} lotes classificados` : 'Nenhum mapa carregado'}</span><button type="button" className="fleet-secondary-button" disabled={saving || !mapImport} onClick={() => void saveWorkspace()}><Save size={15} /> Salvar divisão</button></div></div>{notice && <div className="census-workspace-notice"><CheckCircle2 size={15} />{notice}</div>}{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid"><div className="census-workspace-map"><div className="census-map-toolbar"><span><Move size={14} /> {areaSelectMode ? 'Arraste da esquerda para a direita para incluir lotes inteiros; da direita para a esquerda para incluir os que cruzam a área. Esc cancela.' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para zoom'}</span><div><button type="button" className={`census-area-selection-toggle${areaSelectMode ? ' active' : ''}`} aria-pressed={areaSelectMode} onClick={toggleAreaSelectMode}><Move size={14} /><span>{areaSelectMode ? 'Sair da seleção por área' : 'Selecionar por área'}</span></button><button type="button" onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div><div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}${areaSelectMode ? ' area-select-mode' : ''}${isAreaSelecting ? ' area-selecting' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishPointerAction} onPointerCancel={cancelPointerAction}>{bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={selected ? '#e59a22' : assigned ? zone?.color || '#2c7892' : '#7da6aa'} strokeWidth={selected ? 3 : 1} vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); if (!areaSelectMode) assignLot(lot, event.ctrlKey || event.metaKey) }}><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}</div><div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="selected" />Lote selecionado</span><span><i className="selected" />Zona ativa: {zones.find((zone) => zone.id === activeZoneId)?.name || 'selecione ao lado'}</span></div></div><aside className="census-workspace-zones"><div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>{zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}{selectedLotKeys.length > 0 && <div className="census-selection-actions"><strong>{selectedLotKeys.length.toLocaleString('pt-BR')} lote(s) selecionado(s)</strong><button type="button" className="fleet-primary-button" disabled={!activeZoneId} onClick={assignSelectedLots}><Check size={15} /> Aplicar zona a {selectedLotKeys.length.toLocaleString('pt-BR')} lote(s)</button><button type="button" className="census-selection-clear" onClick={() => setSelectedLotKeys([])}>Limpar seleção</button></div>}<div className="census-workspace-tip"><MapPinned size={16} /><span>Clique em um lote para aplicar a zona imediatamente ou use Ctrl/Cmd+clique para seleção individual. Em “Selecionar por área”, arraste uma janela: esquerda → direita seleciona lotes totalmente contidos; direita → esquerda seleciona os que cruzam o retângulo. A seleção só recebe a zona ao clicar em Aplicar zona.</span></div></aside></div>}</section>
 }

@@ -99,4 +99,11 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 - Ignorar geometria aberta ou sem área válida e informar quantos elementos foram ignorados.
 - Clique simples atribui imediatamente o lote à zona ativa e atualiza sua cor. Seleção múltipla pode ser ativada por botão ou por Ctrl/Cmd+clique; a ação de grupo aplica a zona ativa aos selecionados.
 - Preservar pan por arraste do fundo do mapa, evitando capturar o pointer-down sobre os polígonos; ampliar o zoom por roda e controles até 24x.
-- Não alterar o schema/RLS nem publicar automaticamente; persistência continua usando o botão de salvar divisão existente.
+- Não alterar schema/RLS; a divisão continua como rascunho local até usar o botão existente para salvar. Publicar no Pages somente conforme a autorização explícita do usuário.
+
+## Escopo aprovado — seleção de lotes por área
+- Adicionar um modo separado `Selecionar por área`; enquanto ativo, o arraste no mapa desenha um retângulo e não desloca o mapa.
+- Da esquerda para a direita, selecionar somente polígonos inteiramente dentro da janela. Da direita para a esquerda, selecionar polígonos que cruzem ou estejam contidos na área.
+- Mostrar o retângulo e destacar os lotes selecionados; permitir incluir a seleção à atual com Shift/Ctrl/Cmd e selecionar um lote isolado com um clique curto no modo.
+- Mostrar a quantidade selecionada, manter a escolha da zona separada e oferecer ação explícita `Aplicar zona a N lote(s)`; essa ação atualiza a prévia local, e só o botão existente `Salvar divisão` grava no banco.
+- `Esc` cancela a área/seleção em andamento; limpar seleção continua disponível. Preservar seleção por Ctrl/Cmd+clique e clique simples com atribuição imediata fora do modo por área.
