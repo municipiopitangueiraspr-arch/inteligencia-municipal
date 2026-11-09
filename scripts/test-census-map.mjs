@@ -24,6 +24,7 @@ try {
     assignLotsToZone,
     getLotFillColor,
     getLotKey,
+    groupLotSaveAssignments,
     isImportableLotGeometry,
     mergeSelectedLotKeys,
     selectLotKeysInRect,
@@ -80,6 +81,15 @@ try {
   assert.deepEqual(selectLotKeysInRect(areaLots, selectionRect, 'crossing'), ['inside', 'crossing', 'surrounding'], 'cruzamento direita→esquerda inclui polígonos que tocam ou envolvem a área')
   assert.deepEqual(mergeSelectedLotKeys(['prior'], ['inside', 'crossing'], true), ['prior', 'inside', 'crossing'], 'Shift/Ctrl/Cmd acrescenta os lotes à seleção atual')
   assert.deepEqual(mergeSelectedLotKeys(['prior'], ['inside'], false), ['inside'], 'sem modificador, a nova janela substitui a seleção atual')
+
+  const saveGroups = groupLotSaveAssignments([
+    { id: 'lot-1', source_handle: 'A', zone_id: 'zone-red' },
+    { id: 'lot-2', source_handle: 'B', zone_id: 'zone-red' },
+    { id: 'lot-3', source_handle: 'C', zone_id: null },
+  ])
+  assert.deepEqual(saveGroups, [{ zoneId: 'zone-red', lotIds: ['lot-1', 'lot-2'] }, { zoneId: null, lotIds: ['lot-3'] }], 'atualizações de salvamento são agrupadas por zona e incluem lotes desatribuídos')
+  assert.throws(() => groupLotSaveAssignments([{ source_handle: 'missing-id' }]), /sem UUID/, 'save não pode transformar uma atribuição parcial em inserção')
+  assert.throws(() => groupLotSaveAssignments([{ id: 'same', source_handle: 'A' }, { id: 'same', source_handle: 'B' }]), /repetidos/, 'IDs repetidos são rejeitados antes da gravação')
 
   console.log('PASS: geometria, IDs, clique individual, seleção múltipla, cores, pan e seleção por área (janela/cruzamento).')
 } finally {

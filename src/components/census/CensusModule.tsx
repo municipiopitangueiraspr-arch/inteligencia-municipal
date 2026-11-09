@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
+import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, groupLotSaveAssignments, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -366,7 +366,26 @@ function MapPreparationWorkspace() {
     if (!db || !mapImport) return
     setSaving(true); setNotice('')
     try {
-      await chunks(lots.filter((lot) => lot.id), 100, async (chunk) => { const result = await db.from('census_map_lots').upsert(chunk.map((lot) => ({ id: lot.id, import_id: mapImport.id, zone_id: lot.zone_id || null, zone_number: null })), { onConflict: 'id' }); if (result.error) throw new Error(result.error.message) })
+      if (!lots.length) throw new Error('Não há lotes carregados para salvar. Recarregue o mapa e tente novamente.')
+      const groups = groupLotSaveAssignments(lots)
+      const lotIds = groups.flatMap((group) => group.lotIds)
+      const existingIds = new Set<string>()
+      await chunks(lotIds, 100, async (chunkIds) => {
+        const { data, error } = await db.from('census_map_lots').select('id').eq('import_id', mapImport.id).in('id', chunkIds)
+        if (error) throw new Error(`Não foi possível conferir os lotes antes de salvar: ${error.message}`)
+        for (const row of data || []) existingIds.add(row.id)
+      })
+      const missingIds = lotIds.filter((id) => !existingIds.has(id))
+      if (missingIds.length) throw new Error(`${missingIds.length.toLocaleString('pt-BR')} lote(s) não foram localizados nesta importação. Nenhuma alteração foi enviada ao banco; recarregue o mapa e tente novamente.`)
+
+      for (const group of groups) {
+        await chunks(group.lotIds, 100, async (chunkIds) => {
+          const { data, error } = await db.from('census_map_lots').update({ zone_id: group.zoneId, zone_number: null }).eq('import_id', mapImport.id).in('id', chunkIds).select('id')
+          if (error) throw new Error(error.message)
+          const updatedIds = new Set((data || []).map((row) => row.id))
+          if (updatedIds.size !== chunkIds.length) throw new Error(`A atualização alcançou ${updatedIds.size} de ${chunkIds.length} lotes após a conferência. Recarregue o mapa e confira a divisão; uma parte pode já ter sido salva.`)
+        })
+      }
       const result = await db.from('census_map_imports').update({ status: 'DRAFT', published_at: null }).eq('id', mapImport.id)
       if (result.error) throw new Error(result.error.message)
       setNotice('Divisão atual salva como rascunho.')

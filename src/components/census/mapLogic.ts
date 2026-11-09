@@ -10,6 +10,7 @@ export type MapLotAssignment = {
 export type MapZoneColor = { id: string; color: string }
 export type MapSelectionRect = { left: number; top: number; right: number; bottom: number }
 export type MapPolygonForSelection = { key: string; points: MapLotPoint[] }
+export type LotSaveGroup = { zoneId: string | null; lotIds: string[] }
 
 export function getLotKey(lot: MapLotAssignment) {
   return lot.id || lot.source_handle
@@ -30,6 +31,19 @@ export function assignLotsToZone<T extends MapLotAssignment>(lots: T[], keys: It
 
 export function mergeSelectedLotKeys(current: string[], picked: string[], additive: boolean) {
   return additive ? Array.from(new Set([...current, ...picked])) : picked
+}
+
+export function groupLotSaveAssignments(lots: MapLotAssignment[]): LotSaveGroup[] {
+  const ids = lots.map((lot) => lot.id).filter((id): id is string => Boolean(id))
+  if (ids.length !== lots.length) throw new Error('Há lote(s) sem UUID. Recarregue o mapa antes de salvar.')
+  if (new Set(ids).size !== ids.length) throw new Error('Há UUIDs de lote repetidos. Recarregue o mapa antes de salvar.')
+  const groups = new Map<string | null, string[]>()
+  for (const lot of lots) {
+    const id = lot.id as string
+    const zoneId = lot.zone_id || null
+    groups.set(zoneId, [...(groups.get(zoneId) || []), id])
+  }
+  return Array.from(groups, ([zoneId, lotIds]) => ({ zoneId, lotIds }))
 }
 
 export function getLotFillColor(lot: MapLotAssignment, zones: MapZoneColor[]) {

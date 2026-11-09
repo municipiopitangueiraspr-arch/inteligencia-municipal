@@ -107,3 +107,4 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 - Mostrar o retângulo e destacar os lotes selecionados; permitir incluir a seleção à atual com Shift/Ctrl/Cmd e selecionar um lote isolado com um clique curto no modo.
 - Mostrar a quantidade selecionada, manter a escolha da zona separada e oferecer ação explícita `Aplicar zona a N lote(s)`; essa ação atualiza a prévia local, e só o botão existente `Salvar divisão` grava no banco.
 - `Esc` cancela a área/seleção em andamento; limpar seleção continua disponível. Preservar seleção por Ctrl/Cmd+clique e clique simples com atribuição imediata fora do modo por área.
+- `Salvar divisão` atualiza apenas lotes existentes filtrando por `import_id` e `id`; valida IDs antes da escrita e confere quantas linhas foram atualizadas, sem usar upsert parcial que possa tentar inserir um lote sem `source_handle` obrigatório.
