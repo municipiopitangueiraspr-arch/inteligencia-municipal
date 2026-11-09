@@ -108,3 +108,10 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 - Mostrar a quantidade selecionada, manter a escolha da zona separada e oferecer ação explícita `Aplicar zona a N lote(s)`; essa ação atualiza a prévia local, e só o botão existente `Salvar divisão` grava no banco.
 - `Esc` cancela a área/seleção em andamento; limpar seleção continua disponível. Preservar seleção por Ctrl/Cmd+clique e clique simples com atribuição imediata fora do modo por área.
 - `Salvar divisão` atualiza apenas lotes existentes filtrando por `import_id` e `id`; valida IDs antes da escrita e confere quantas linhas foram atualizadas, sem usar upsert parcial que possa tentar inserir um lote sem `source_handle` obrigatório.
+
+## Escopo aprovado — navegação e feedback visual do Censo
+- Ao abrir o módulo Censo Municipal, iniciar em `Visão geral`; o título do cabeçalho acompanha a seção ativa.
+- Na preparação do mapa, remover o nome do arquivo importado da barra junto ao botão de salvar; exibir um resumo visual de lotes classificados e colocar um botão `Salvar divisão` grande e evidente no painel de zonas.
+- Antes de qualquer escrita feita por esta tela, pedir confirmação visual: criar zona, cadastrar ACS, vincular ACS à zona, importar mapa ou salvar a divisão.
+- Após confirmar, desabilitar ações duplicadas e mostrar spinner e mensagem de progresso durante gravações de mapa/zona; indicar sucesso ou erro com estilo e ícone coerentes. Não inventar porcentagens quando o backend não reporta progresso.
+- Reutilizar React, CSS e cliente Supabase existentes; sem migration ou mudança de RLS.

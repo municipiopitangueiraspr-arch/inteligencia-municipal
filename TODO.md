@@ -72,3 +72,9 @@
 - [x] `Salvar divisão` atualiza registros existentes da importação por `import_id` e `id`; não usa upsert parcial que tente criar linhas sem `source_handle`/geometria.
 - [x] Verifica UUIDs ausentes/duplicados e confirma que todos os IDs pertencem à importação antes de escrever; confere quantas linhas cada atualização realmente afetou.
 - [x] Teste sintético e build passam, sem repetir a gravação no banco compartilhado.
+
+## Entrada, hierarquia visual e confirmação de gravações no Censo
+- [x] Ao entrar em Censo Municipal, abrir diretamente `Visão geral`; o cabeçalho identifica a seção ativa, e não abre `Preparar mapa` por padrão.
+- [x] Em `Preparar mapa`, retirar o nome/descrição do arquivo importado da barra ao lado de `Salvar divisão`; mostrar um resumo visual dos lotes e posicionar um botão de salvar destacado junto ao painel de zonas.
+- [x] Antes de criar zona, cadastrar ACS, vincular ACS a uma zona, importar mapa ou salvar divisão, pedir confirmação visual e não iniciar a escrita até o usuário confirmar.
+- [x] Após confirmação, desabilitar repetições e mostrar spinner/mensagem clara enquanto houver upload ou gravação; informar sucesso ou falha com ícone e cor correspondentes.
