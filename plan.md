@@ -57,3 +57,19 @@ Implementar a primeira camada operacional do módulo em React, preservando o log
 - `src/App.tsx`: alternância entre dashboard e Frotas.
 - `src/components/Dashboard.tsx`: entrada do módulo.
 - `public/manus-routes.json`: rotas declaradas.
+
+## Plano — Esqueleto do Censo Municipal (Etapa 2)
+### Objetivo e escopo
+Adicionar ao Hall da Inteligência Municipal uma entrada para o Censo Municipal e implementar um shell navegável inicial, reutilizando a autenticação e a identidade visual existentes. O shell terá cabeçalho, navegação interna inicial, visão geral e área visual de mapa em estado vazio, informando que a base cartográfica depende de análise. Não serão exibidos mapa, lotes, zonas, indicadores ou respostas inventados.
+
+### Limites desta etapa
+Não criar ou alterar tabelas, RLS, contas, dados, questionário funcional ou fluxo offline. O shell não acessará dados do Censo e sua entrada não concederá acesso a respostas ou informações sensíveis. Permissões e RLS serão desenhadas e aprovadas antes de conectar dados. Preservar os fluxos de Frotas e Portal do Fornecedor.
+
+### Integração e estrutura
+- `src/App.tsx`: alternância entre Hall, Frotas e Censo após autenticação existente.
+- `src/components/Dashboard.tsx`: acesso ao Censo por cartão e navegação principal desktop/mobile.
+- `src/components/census/`: novo shell React/TypeScript e CSS isolado do Censo.
+- Reutilizar o brasão, cores institucionais, tipografia Manrope/DM Sans e os padrões responsivos já existentes.
+
+### Diretrizes de interface
+O mapa permanece como área de destaque, mas em estado vazio explícito até a análise do arquivo cartográfico. A interface será utilizável em desktop, tablet e mobile, com controles acessíveis. Não serão alterados estilos ou comportamento dos módulos existentes além do necessário para integrar o acesso no Hall.

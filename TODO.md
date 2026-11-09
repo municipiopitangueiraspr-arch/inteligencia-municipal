@@ -30,3 +30,12 @@
 - [ ] O cliente usa a sessão autenticada e não expõe chave administrativa.
 - [ ] O build TypeScript/Vite passa sem erros.
 - [ ] O manifesto `manus-routes.json` declara a rota do módulo.
+
+
+## Esqueleto e acesso ao Censo Municipal — Etapa 2
+- [ ] O Hall da intranet apresenta acesso ao Censo Municipal por cartão e por item de navegação desktop/mobile.
+- [ ] O Censo abre dentro da aplicação autenticada existente; não cria login nem aplicação paralela.
+- [ ] O shell do Censo apresenta uma visão geral e área de mapa em estado vazio, indicando que a base cartográfica aguarda análise; não apresenta lotes, zonas, indicadores ou respostas fictícias como dados reais.
+- [ ] A estrutura é utilizável em desktop, tablet e mobile e mantém a identidade visual institucional.
+- [ ] Esta etapa não cria tabelas, permissões ou dados do Censo, nem altera os fluxos de Frotas e Portal do Fornecedor.
+- [ ] O build TypeScript/Vite passa sem erros após a integração.

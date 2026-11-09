@@ -5,6 +5,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './components/Dashboard'
 import { FleetModule } from './components/FleetModule'
+import { CensusModule } from './components/census/CensusModule'
 import { SupplierPortal } from './components/SupplierPortal'
 import { SupplierAccessRequest } from './components/SupplierAccessRequest'
 import type { Station } from './components/FleetResources'
@@ -33,7 +34,7 @@ function App() {
   const [sessionChecking, setSessionChecking] = useState(true)
   const [requiresPasswordSetup, setRequiresPasswordSetup] = useState(false)
   const [isSupplierAccount, setIsSupplierAccount] = useState(false)
-  const [activeArea, setActiveArea] = useState<'dashboard' | 'fleet'>('dashboard')
+  const [activeArea, setActiveArea] = useState<'dashboard' | 'fleet' | 'census'>('dashboard')
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
@@ -133,7 +134,8 @@ function App() {
   if (signedIn && supplierMode) return <SupplierAccessRequest authenticatedEmail={email} onBack={() => void logout()} />
   if (signedIn) {
     if (activeArea === 'fleet') return <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onLogout={() => void logout()} />
+    if (activeArea === 'census') return <CensusModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
+    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onLogout={() => void logout()} />
   }
   if (showFirstAccess && supplierMode) return <SupplierAccessRequest onBack={() => setShowFirstAccess(false)} />
 
