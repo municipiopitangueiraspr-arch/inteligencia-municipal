@@ -25,6 +25,8 @@ try {
     getLotFillColor,
     getLotKey,
     isImportableLotGeometry,
+    mergeSelectedLotKeys,
+    selectLotKeysInRect,
     shouldStartMapPan,
     withLotIds,
   } = requireFromHere(join(outputDir, 'mapLogic.js'))
@@ -67,7 +69,19 @@ try {
   assert.equal(shouldStartMapPan(true), false, 'pointer-down no polígono não captura o clique do lote')
   assert.equal(shouldStartMapPan(false), true, 'arrastar o fundo continua movendo o mapa')
 
-  console.log('PASS: classificação geométrica, IDs, clique individual, seleção múltipla, cores de zona e pan.')
+  const areaLots = [
+    { key: 'inside', points: [[2, 2], [4, 2], [4, 4], [2, 4]] },
+    { key: 'crossing', points: [[9, 2], [12, 2], [12, 4], [9, 4]] },
+    { key: 'outside', points: [[12, 12], [14, 12], [14, 14], [12, 14]] },
+    { key: 'surrounding', points: [[-2, -2], [12, -2], [12, 12], [-2, 12]] },
+  ]
+  const selectionRect = { left: 0, top: 0, right: 10, bottom: 10 }
+  assert.deepEqual(selectLotKeysInRect(areaLots, selectionRect, 'window'), ['inside'], 'janela esquerda→direita inclui somente lotes inteiramente contidos')
+  assert.deepEqual(selectLotKeysInRect(areaLots, selectionRect, 'crossing'), ['inside', 'crossing', 'surrounding'], 'cruzamento direita→esquerda inclui polígonos que tocam ou envolvem a área')
+  assert.deepEqual(mergeSelectedLotKeys(['prior'], ['inside', 'crossing'], true), ['prior', 'inside', 'crossing'], 'Shift/Ctrl/Cmd acrescenta os lotes à seleção atual')
+  assert.deepEqual(mergeSelectedLotKeys(['prior'], ['inside'], false), ['inside'], 'sem modificador, a nova janela substitui a seleção atual')
+
+  console.log('PASS: geometria, IDs, clique individual, seleção múltipla, cores, pan e seleção por área (janela/cruzamento).')
 } finally {
   rmSync(outputDir, { recursive: true, force: true })
 }

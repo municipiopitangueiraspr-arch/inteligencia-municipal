@@ -59,3 +59,11 @@
 - [x] O mapa mantém pan por arraste no fundo, não captura o clique sobre o polígono, e permite ampliar/reduzir por roda e controles até 24x.
 - [x] A correção do listener `wheel` usa `passive: false` e remove o listener ao desmontar/trocar o estado de carregamento.
 - [x] O build TypeScript/Vite passa sem erros; lint direcionado não apresenta erros.
+
+## Seleção de lotes por área no mapa do Censo
+- [x] A tela oferece um modo separado `Selecionar por área`; enquanto ativo, arrastar no mapa desenha um retângulo sem deslocar o mapa.
+- [x] Arrastar da esquerda para a direita seleciona polígonos totalmente contidos; arrastar da direita para a esquerda seleciona polígonos que cruzam ou estão dentro do retângulo.
+- [x] O retângulo aparece durante a seleção e os lotes selecionados ficam destacados; Shift/Ctrl/Cmd acrescenta a nova seleção, e um clique curto no modo seleciona um lote isolado.
+- [x] A tela mostra a quantidade selecionada, permite escolher a zona e oferece `Aplicar zona a N lote(s)` separadamente; aplicar altera a prévia local e somente `Salvar divisão` grava no banco.
+- [x] `Esc` cancela a seleção e `Limpar seleção` continua disponível; clique simples e Ctrl/Cmd+clique existentes continuam funcionando fora do modo por área.
+- [x] Testes sintéticos de janela/cruzamento e build TypeScript/Vite passam.
