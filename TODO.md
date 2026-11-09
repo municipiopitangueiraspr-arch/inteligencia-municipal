@@ -37,6 +37,8 @@
 - [ ] O Censo abre dentro da aplicação autenticada existente; não cria login nem aplicação paralela.
 - [ ] Ao alternar entre Frotas e Censo, a moldura do sistema mantém a mesma posição e comportamento: sidebar, marca/voltar, navegação, cabeçalho e área de conteúdo; mudam apenas as opções do módulo e seu conteúdo.
 - [ ] O shell do Censo apresenta uma visão geral e área de mapa em estado vazio, indicando que a base cartográfica aguarda análise; não apresenta lotes, zonas, indicadores ou respostas fictícias como dados reais.
+- [ ] A navegação do Censo inclui Gestão de DWG; a tela aceita seleção local de `.dwg` e `.dxf`, informa o arquivo selecionado nesta sessão e não afirma que ele foi salvo no Supabase enquanto a persistência não estiver conectada.
+- [ ] A biblioteca de desenhos permanece vazia até existir arquivo no armazenamento municipal; a tela não lê o Google Drive em tempo de execução nem mostra um arquivo do Drive como já importado.
 - [ ] A estrutura é utilizável em desktop, tablet e mobile e mantém a identidade visual institucional.
 - [ ] Esta etapa não cria tabelas, permissões ou dados do Censo, nem altera os fluxos de Frotas e Portal do Fornecedor.
 - [ ] O build TypeScript/Vite passa sem erros após a integração.

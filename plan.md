@@ -73,3 +73,8 @@ Não criar ou alterar tabelas, RLS, contas, dados, questionário funcional ou fl
 
 ### Diretrizes de interface
 O mapa permanece como área de destaque, mas em estado vazio explícito até a análise do arquivo cartográfico. A interface será utilizável em desktop, tablet e mobile, com controles acessíveis. Não serão alterados estilos ou comportamento dos módulos existentes além do necessário para integrar o acesso no Hall.
+
+## Plano — Gestão de desenhos CAD no Censo
+Adicionar uma opção `Gestão de DWG` na navegação lateral do Censo, usando a moldura comum de Frotas. A tela permitirá selecionar um arquivo local `.dwg` ou `.dxf`, exibir nome e tamanho do arquivo escolhido nesta sessão e deixar explícito que a seleção local ainda não equivale a upload/persistência. A biblioteca do Censo apresentará estado vazio enquanto nenhum desenho estiver armazenado no backend; não incluir registros fictícios nem buscar arquivos do Drive em tempo de execução.
+
+A persistência do original será tratada como etapa própria por Supabase Storage privado, com metadados no PostgreSQL, após definir as permissões e preparar a leitura geográfica. O arquivo DXF fornecido não será exposto como público nem apresentado como já importado. O processamento CAD, validação do sistema de coordenadas e separação de camadas por zona ficam fora desta tela inicial.
