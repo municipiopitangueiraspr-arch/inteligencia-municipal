@@ -49,3 +49,13 @@
 - [x] O hall mantém a identidade institucional, a identificação da conta e a ação de sair, sem alterar autenticação ou os menus internos dos módulos.
 - [x] O hall funciona em desktop, tablet e celular e não mostra indicadores fictícios ou ações vazias.
 - [x] O build TypeScript/Vite passa sem erros.
+
+## Mapa do Censo — geometria, atribuição e seleção múltipla
+- [x] Na importação, cada polilinha fechada com pelo menos três vértices e área positiva na camada `Lotes Urbanos` representa um lote; textos, endereços e rótulos desatualizados do DXF não são usados para nomear, validar ou classificar lotes.
+- [x] Cada geometria importada recebe UUID próprio e fica associada ao polígono e ao registro do lote; a classificação e o salvamento não dependem de um identificador antigo do arquivo.
+- [x] Polilinhas abertas ou sem área válida são ignoradas e a tela informa quantos elementos não foram importados.
+- [x] Clique simples em um lote atribui a zona ativa imediatamente e pinta o polígono com a cor dessa zona; a divisão continua como rascunho até usar Salvar divisão.
+- [x] O agente pode ativar seleção múltipla pelo botão ou usar Ctrl/Cmd+clique; lotes selecionados ficam destacados e podem receber juntos a zona ativa.
+- [x] O mapa mantém pan por arraste no fundo, não captura o clique sobre o polígono, e permite ampliar/reduzir por roda e controles até 24x.
+- [x] A correção do listener `wheel` usa `passive: false` e remove o listener ao desmontar/trocar o estado de carregamento.
+- [x] O build TypeScript/Vite passa sem erros; lint direcionado não apresenta erros.

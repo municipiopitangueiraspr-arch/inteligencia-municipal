@@ -20,6 +20,7 @@ type Lot = {
 }
 type CensusZone = { id: string; name: string; color: string; active: boolean }
 type CensusAcs = { id: string; full_name: string; email: string | null; phone: string | null; active: boolean }
+const lotKey = (lot: Lot) => lot.id || lot.source_handle
 
 type MapImport = {
   id: string
@@ -54,29 +55,17 @@ function areaOf(points: Point[]) {
     return sum + point[0] * next[1] - next[0] * point[1]
   }, 0) / 2)
 }
-function pointInPolygon(point: Point, polygon: Point[]) {
-  let inside = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][0]; const yi = polygon[i][1]
-    const xj = polygon[j][0]; const yj = polygon[j][1]
-    const intersects = yi > point[1] !== yj > point[1] && point[0] < (xj - xi) * (point[1] - yi) / ((yj - yi) || Number.EPSILON) + xi
-    if (intersects) inside = !inside
-  }
-  return inside
-}
 function parseDxf(text: string) {
   const lines = text.replace(/\r/g, '').split('\n').map((line) => line.trim())
   const polylines: Array<{ handle: string; layer: string; closed: boolean; points: Point[] }> = []
-  const texts: Array<{ layer: string; point: Point; value: string }> = []
-  let entity: { type: string; handle: string; layer: string; closed: boolean; points: Point[]; point: Point; value: string } | null = null
+  let entity: { type: string; handle: string; layer: string; closed: boolean; points: Point[] } | null = null
   const flush = () => {
     if (!entity) return
     if (entity.type === 'LWPOLYLINE') polylines.push({ handle: entity.handle || `entity-${polylines.length + 1}`, layer: entity.layer, closed: entity.closed, points: entity.points })
-    if (entity.type === 'MTEXT' && entity.value && Number.isFinite(entity.point[0]) && Number.isFinite(entity.point[1])) texts.push({ layer: entity.layer, point: entity.point, value: entity.value.replace(/\\P/g, ' ').replace(/\\~/g, ' ').trim() })
   }
   for (let i = 0; i < lines.length - 1; i += 2) {
     const code = lines[i]; const value = lines[i + 1]
-    if (code === '0') { flush(); entity = { type: value, handle: '', layer: '', closed: false, points: [], point: [NaN, NaN], value: '' }; continue }
+    if (code === '0') { flush(); entity = { type: value, handle: '', layer: '', closed: false, points: [] }; continue }
     if (!entity) continue
     if (code === '5') entity.handle = value
     if (code === '8') entity.layer = value
@@ -87,26 +76,17 @@ function parseDxf(text: string) {
         if (Number.isFinite(x) && Number.isFinite(y)) { entity.points.push([x, y]); i += 2 }
       }
     }
-    if (entity.type === 'MTEXT') {
-      if (code === '10') entity.point[0] = Number(value)
-      if (code === '20') entity.point[1] = Number(value)
-      if (code === '1' || code === '3') entity.value += value
-    }
   }
   flush()
-  const source = polylines.filter((polyline) => polyline.layer.toLowerCase() === 'lotes urbanos')
+  const candidates = polylines.filter((polyline) => polyline.layer.trim().toLowerCase() === 'lotes urbanos')
+  const source = candidates.filter((polyline) => polyline.closed && polyline.points.length >= 3 && areaOf(polyline.points) > 0)
   const lots: Lot[] = source.map((polyline) => {
     const area = polyline.points.length >= 3 ? areaOf(polyline.points) : 0
-    const reasons: string[] = []
-    if (!polyline.closed) reasons.push('Polilinha aberta')
-    if (polyline.points.length < 3 || area <= 0) reasons.push('Área zero ou geometria insuficiente')
-    const label = texts.find((item) => item.layer.toLowerCase() === 'lotes urbanos' && pointInPolygon(item.point, polyline.points))?.value || null
-    if (!label) reasons.push('Sem identificador textual')
-    return { source_handle: polyline.handle, label, layer_name: polyline.layer, geometry: polyline.points, area, is_valid: reasons.length === 0, problem_reasons: reasons, zone_number: null }
+    return { source_handle: polyline.handle, label: null, layer_name: polyline.layer, geometry: polyline.points, area, is_valid: true, problem_reasons: [], zone_number: null }
   })
   const allPoints = lots.flatMap((lot) => lot.geometry)
   const bbox = allPoints.length ? { minX: Math.min(...allPoints.map((point) => point[0])), minY: Math.min(...allPoints.map((point) => point[1])), maxX: Math.max(...allPoints.map((point) => point[0])), maxY: Math.max(...allPoints.map((point) => point[1])) } : null
-  return { lots, bbox, textCount: texts.length, sourceLayer: source[0]?.layer || 'Lotes Urbanos' }
+  return { lots, bbox, sourceLayer: source[0]?.layer || candidates[0]?.layer || 'Lotes Urbanos', ignoredGeometryCount: candidates.length - source.length }
 }
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
   for (let index = 0; index < values.length; index += size) await callback(values.slice(index, index + size))
@@ -199,6 +179,8 @@ function MapPreparationWorkspace() {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedLotKeys, setSelectedLotKeys] = useState<string[]>([])
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
   const mapViewportRef = useRef<HTMLDivElement | null>(null)
 
@@ -225,7 +207,7 @@ function MapPreparationWorkspace() {
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
-      setZoom((current) => Math.min(5, Math.max(0.65, current + (event.deltaY < 0 ? 0.2 : -0.2))))
+      setZoom((current) => Math.min(24, Math.max(0.65, current * (event.deltaY < 0 ? 1.15 : 1 / 1.15))))
     }
 
     viewport.addEventListener('wheel', handleWheel, { passive: false })
@@ -239,18 +221,34 @@ function MapPreparationWorkspace() {
   const assignedCount = lots.filter((lot) => lot.zone_id).length
   const zoneCount = (zoneId: string) => lots.filter((lot) => lot.zone_id === zoneId).length
 
-  function assignLot(lot: Lot) {
+  function assignLot(lot: Lot, multiSelect = false) {
+    if (selectionMode || multiSelect) {
+      const key = lotKey(lot)
+      setSelectedLotKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+      return
+    }
     if (!activeZoneId) { setNotice('Cadastre e selecione uma zona antes de clicar nos lotes.'); return }
-    setLots((current) => current.map((item) => item.id === lot.id ? { ...item, zone_id: activeZoneId, zone_number: null } : item))
+    const key = lotKey(lot)
+    setLots((current) => current.map((item) => lotKey(item) === key ? { ...item, zone_id: activeZoneId, zone_number: null } : item))
+  }
+  function assignSelectedLots() {
+    if (!activeZoneId) { setNotice('Selecione uma zona antes de atribuir os lotes.'); return }
+    if (!selectedLotKeys.length) return
+    const selected = new Set(selectedLotKeys)
+    setLots((current) => current.map((lot) => selected.has(lotKey(lot)) ? { ...lot, zone_id: activeZoneId, zone_number: null } : lot))
+    setSelectedLotKeys([])
+    setSelectionMode(false)
   }
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.target instanceof Element && event.target.closest('polygon')) return
     setDragging(true); dragStart.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; event.currentTarget.setPointerCapture(event.pointerId)
   }
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragging) return
     setPan({ x: dragStart.current.panX + event.clientX - dragStart.current.x, y: dragStart.current.panY + event.clientY - dragStart.current.y })
   }
-  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }) }
+  function zoomBy(factor: number) { setZoom((current) => Math.min(24, Math.max(0.65, current * factor))) }
+  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedLotKeys([]); setSelectionMode(false) }
   async function importWorkspaceMap() {
     const db = supabase
     if (!db || !file) return
@@ -258,16 +256,16 @@ function MapPreparationWorkspace() {
     try {
       if (!/\.dxf$/i.test(file.name)) throw new Error('Selecione um arquivo DXF ASCII.')
       const parsed = parseDxf(await file.text())
-      if (!parsed.lots.length) throw new Error('A camada Lotes Urbanos não foi encontrada.')
+      if (!parsed.lots.length) throw new Error('A camada Lotes Urbanos não contém polígonos fechados com área válida.')
       const id = crypto.randomUUID(); const path = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const upload = await db.storage.from('census-maps').upload(path, file, { contentType: file.type || 'application/dxf', upsert: false })
       if (upload.error) throw new Error(upload.error.message)
-      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length, valid_features: parsed.lots.filter((lot) => lot.is_valid).length, problematic_features: parsed.lots.filter((lot) => !lot.is_valid).length, bbox: parsed.bbox, raw_metadata: { text_count: parsed.textCount, parser: 'client-dxf-lwpolyline-v1' } }
+      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, raw_metadata: { parser: 'client-dxf-geometry-only-v2', ignored_geometry_count: parsed.ignoredGeometryCount } }
       const inserted = await db.from('census_map_imports').insert(record)
       if (inserted.error) throw new Error(inserted.error.message)
-      const rows = parsed.lots.map((lot) => ({ ...lot, import_id: id, zone_id: null }))
+      const rows = parsed.lots.map((lot) => ({ ...lot, id: crypto.randomUUID(), import_id: id, zone_id: null }))
       await chunks(rows, 100, async (chunk) => { const result = await db.from('census_map_lots').insert(chunk); if (result.error) throw new Error(result.error.message) })
-      setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null } as MapImport); setLots(parsed.lots); setFile(null); resetView(); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} lotes carregados. Selecione uma zona e clique nos lotes.`)
+      setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null } as MapImport); setLots(rows as Lot[]); setFile(null); resetView(); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} polígonos fechados reconhecidos como lotes.${parsed.ignoredGeometryCount ? ` ${parsed.ignoredGeometryCount.toLocaleString('pt-BR')} elemento(s) sem geometria válida foram ignorados.` : ''} Selecione uma zona e clique nos lotes.`)
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível importar o mapa.') }
     finally { setSaving(false) }
   }
@@ -284,5 +282,5 @@ function MapPreparationWorkspace() {
     finally { setSaving(false) }
   }
 
-  return <section className="census-workspace"><div className="census-workspace-top"><div className="census-workspace-upload"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar mapa DXF'}</strong><small>{file ? 'Arquivo selecionado' : 'O mapa importado fica salvo para reabertura'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || saving} onClick={() => void importWorkspaceMap()}>{saving ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar mapa</button></div><div className="census-workspace-actions"><span>{mapImport ? `${mapImport.file_name} · ${assignedCount.toLocaleString('pt-BR')}/${lots.length.toLocaleString('pt-BR')} lotes classificados` : 'Nenhum mapa carregado'}</span><button type="button" className="fleet-secondary-button" disabled={saving || !mapImport} onClick={() => void saveWorkspace()}><Save size={15} /> Salvar divisão</button></div></div>{notice && <div className="census-workspace-notice"><CheckCircle2 size={15} />{notice}</div>}{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid"><div className="census-workspace-map"><div className="census-map-toolbar"><span><Move size={14} /> Arraste para movimentar · role para zoom</span><div><button type="button" onClick={() => setZoom((current) => Math.min(5, current + .2))} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(.65, current - .2))} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div><div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}>{bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); return <polygon key={lot.id || lot.source_handle} points={lot.geometry.map(toSvg).join(' ')} fill={zone ? `${zone.color}c9` : lot.is_valid ? '#edf5f4' : '#f4d5d0'} stroke={assigned ? zone?.color || '#2c7892' : lot.is_valid ? '#7da6aa' : '#b64b40'} strokeWidth="1" vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); assignLot(lot) }}><title>{lot.label || `Lote ${String(index + 1).padStart(4, '0')} · sem identificação`} · {zone?.name || 'sem zona'}</title></polygon> })}</svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}</div><div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="problem" />Revisar</span><span><i className="selected" />Zona ativa: {zones.find((zone) => zone.id === activeZoneId)?.name || 'selecione ao lado'}</span></div></div><aside className="census-workspace-zones"><div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>{zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}<div className="census-workspace-tip"><MapPinned size={16} /><span>Depois de selecionar a zona, clique nos quadradinhos do mapa. O lote entra imediatamente nessa zona.</span></div></aside></div>}</section>
+  return <section className="census-workspace"><div className="census-workspace-top"><div className="census-workspace-upload"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar mapa DXF'}</strong><small>{file ? 'Arquivo selecionado' : 'O mapa importado fica salvo para reabertura'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || saving} onClick={() => void importWorkspaceMap()}>{saving ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar mapa</button></div><div className="census-workspace-actions"><span>{mapImport ? `${mapImport.file_name} · ${assignedCount.toLocaleString('pt-BR')}/${lots.length.toLocaleString('pt-BR')} lotes classificados` : 'Nenhum mapa carregado'}</span><button type="button" className="fleet-secondary-button" disabled={saving || !mapImport} onClick={() => void saveWorkspace()}><Save size={15} /> Salvar divisão</button></div></div>{notice && <div className="census-workspace-notice"><CheckCircle2 size={15} />{notice}</div>}{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid"><div className="census-workspace-map"><div className="census-map-toolbar"><span><Move size={14} /> {selectionMode ? 'Toque ou clique nos lotes para selecionar' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para zoom'}</span><div><button type="button" className={`census-selection-toggle${selectionMode ? ' active' : ''}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((current) => !current)}><Check size={14} /><span>{selectionMode ? 'Concluir seleção' : 'Selecionar lotes'}</span></button><button type="button" onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div><div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}>{bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); const selected = selectedLotKeys.includes(lotKey(lot)); return <polygon key={lotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={zone ? `${zone.color}c9` : '#edf5f4'} stroke={selected ? '#e59a22' : assigned ? zone?.color || '#2c7892' : '#7da6aa'} strokeWidth={selected ? 3 : 1} vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); assignLot(lot, event.ctrlKey || event.metaKey) }}><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}</svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}</div><div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="selected" />Lote selecionado</span><span><i className="selected" />Zona ativa: {zones.find((zone) => zone.id === activeZoneId)?.name || 'selecione ao lado'}</span></div></div><aside className="census-workspace-zones"><div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>{zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}{selectedLotKeys.length > 0 && <div className="census-selection-actions"><strong>{selectedLotKeys.length.toLocaleString('pt-BR')} lote(s) selecionado(s)</strong><button type="button" className="fleet-primary-button" disabled={!activeZoneId} onClick={assignSelectedLots}><Check size={15} /> Atribuir à zona selecionada</button><button type="button" className="census-selection-clear" onClick={() => setSelectedLotKeys([])}>Limpar seleção</button></div>}<div className="census-workspace-tip"><MapPinned size={16} /><span>Selecione uma zona e clique em um lote para atribuí-lo na hora. Use “Selecionar lotes” ou Ctrl/Cmd+clique para escolher vários e aplicar a zona em grupo.</span></div></aside></div>}</section>
 }
