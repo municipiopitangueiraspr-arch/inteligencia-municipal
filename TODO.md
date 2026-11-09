@@ -67,3 +67,8 @@
 - [x] A tela mostra a quantidade selecionada, permite escolher a zona e oferece `Aplicar zona a N lote(s)` separadamente; aplicar altera a prévia local e somente `Salvar divisão` grava no banco.
 - [x] `Esc` cancela a seleção e `Limpar seleção` continua disponível; clique simples e Ctrl/Cmd+clique existentes continuam funcionando fora do modo por área.
 - [x] Testes sintéticos de janela/cruzamento e build TypeScript/Vite passam.
+
+## Salvamento seguro da divisão do Censo
+- [x] `Salvar divisão` atualiza registros existentes da importação por `import_id` e `id`; não usa upsert parcial que tente criar linhas sem `source_handle`/geometria.
+- [x] Verifica UUIDs ausentes/duplicados e confirma que todos os IDs pertencem à importação antes de escrever; confere quantas linhas cada atualização realmente afetou.
+- [x] Teste sintético e build passam, sem repetir a gravação no banco compartilhado.
