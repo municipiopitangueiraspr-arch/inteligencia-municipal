@@ -1,0 +1,15 @@
+create table if not exists public.census_zones (id uuid primary key default gen_random_uuid(), name text not null unique, color text not null default '#2c7892', active boolean not null default true, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists public.census_acs (id uuid primary key default gen_random_uuid(), full_name text not null, email text, phone text, active boolean not null default true, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists public.census_acs_zone_assignments (id uuid primary key default gen_random_uuid(), acs_id uuid not null references public.census_acs(id) on delete cascade, zone_id uuid not null references public.census_zones(id) on delete cascade, active boolean not null default true, created_at timestamptz not null default now(), unique (acs_id, zone_id));
+alter table public.census_map_lots add column if not exists zone_id uuid references public.census_zones(id) on delete set null;
+create index if not exists census_map_lots_zone_id_idx on public.census_map_lots(import_id, zone_id);
+create index if not exists census_acs_zone_assignments_zone_idx on public.census_acs_zone_assignments(zone_id);
+alter table public.census_zones enable row level security;
+alter table public.census_acs enable row level security;
+alter table public.census_acs_zone_assignments enable row level security;
+drop policy if exists census_zones_open_authenticated on public.census_zones;
+create policy census_zones_open_authenticated on public.census_zones for all to authenticated using (true) with check (true);
+drop policy if exists census_acs_open_authenticated on public.census_acs;
+create policy census_acs_open_authenticated on public.census_acs for all to authenticated using (true) with check (true);
+drop policy if exists census_acs_zone_assignments_open_authenticated on public.census_acs_zone_assignments;
+create policy census_acs_zone_assignments_open_authenticated on public.census_acs_zone_assignments for all to authenticated using (true) with check (true);
