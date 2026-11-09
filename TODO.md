@@ -78,3 +78,7 @@
 - [x] Em `Preparar mapa`, retirar o nome/descrição do arquivo importado da barra ao lado de `Salvar divisão`; mostrar um resumo visual dos lotes e posicionar um botão de salvar destacado junto ao painel de zonas.
 - [x] Antes de criar zona, cadastrar ACS, vincular ACS a uma zona, importar mapa ou salvar divisão, pedir confirmação visual e não iniciar a escrita até o usuário confirmar.
 - [x] Após confirmação, desabilitar repetições e mostrar spinner/mensagem clara enquanto houver upload ou gravação; informar sucesso ou falha com ícone e cor correspondentes.
+
+## Permanência no módulo e limpeza do mapa
+- [x] Atualizar a página em Censo (ou Frotas) mantém o usuário no mesmo módulo; voltar ao hall ou sair limpa o estado salvo.
+- [x] Remover da legenda do mapa o popup/aviso `Zona ativa: ...`; a zona ativa continua identificável no painel de zonas.
