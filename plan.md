@@ -78,3 +78,17 @@ O mapa permanece como área de destaque, mas em estado vazio explícito até a a
 Adicionar uma opção `Gestão de DWG` na navegação lateral do Censo, usando a moldura comum de Frotas. A tela permitirá selecionar um arquivo local `.dwg` ou `.dxf`, exibir nome e tamanho do arquivo escolhido nesta sessão e deixar explícito que a seleção local ainda não equivale a upload/persistência. A biblioteca do Censo apresentará estado vazio enquanto nenhum desenho estiver armazenado no backend; não incluir registros fictícios nem buscar arquivos do Drive em tempo de execução.
 
 A persistência do original será tratada como etapa própria por Supabase Storage privado, com metadados no PostgreSQL, após definir as permissões e preparar a leitura geográfica. O arquivo DXF fornecido não será exposto como público nem apresentado como já importado. O processamento CAD, validação do sistema de coordenadas e separação de camadas por zona ficam fora desta tela inicial.
+
+## Plano — Hall municipal em cards
+### Objetivo e escopo aprovado
+Remodelar somente o hall autenticado de `src/components/Dashboard.tsx`: apresentar os módulos municipais em cards visuais centralizados, sem navegação lateral nem menu lateral móvel. Preservar o login, a identificação do usuário e a saída da sessão. Manter funcionando os callbacks existentes para Gestão de Frotas e Censo Municipal.
+
+### Decisões de interface
+- Reutilizar a identidade visual institucional, o brasão, as cores e os ícones já instalados no projeto.
+- Dar aos cards hierarquia visual clara, área clicável acessível e estado responsivo para desktop, tablet e celular.
+- Só oferecer abertura aos módulos que tenham callback funcional no app atual; os demais permanecem visíveis como em preparação, sem ação falsa.
+- Remover do hall indicadores `—` e ações vazias que não exibem dados funcionais, mantendo a tela focada na seleção de módulos.
+- Preservar os menus internos de Frotas, Censo e Portal do Fornecedor; a remoção de navegação lateral vale apenas para o hall.
+
+### Limites desta mudança
+Não alterar autenticação, banco, permissões, módulos internos, manifestos de rota ou configurações de publicação. Validar com build local; não publicar no GitHub Pages sem aprovação específica.
