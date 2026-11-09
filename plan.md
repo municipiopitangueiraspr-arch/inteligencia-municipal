@@ -92,3 +92,11 @@ Remodelar somente o hall autenticado de `src/components/Dashboard.tsx`: apresent
 
 ### Limites desta mudança
 Não alterar autenticação, banco, permissões, módulos internos, manifestos de rota ou configurações de publicação. Validar com build local; não publicar no GitHub Pages sem aprovação específica.
+
+## Escopo aprovado — interação do mapa do Censo
+- Interpretar como lote cada polilinha fechada com pelo menos três vértices e área positiva na camada `Lotes Urbanos`; o importador não usa textos, endereços ou rótulos antigos do DXF para identificar ou validar lotes.
+- Criar um UUID próprio para cada geometria importada e associá-lo ao respectivo polígono e registro de lote, permitindo classificação e gravação da divisão sem depender de identificadores cadastrais do desenho.
+- Ignorar geometria aberta ou sem área válida e informar quantos elementos foram ignorados.
+- Clique simples atribui imediatamente o lote à zona ativa e atualiza sua cor. Seleção múltipla pode ser ativada por botão ou por Ctrl/Cmd+clique; a ação de grupo aplica a zona ativa aos selecionados.
+- Preservar pan por arraste do fundo do mapa, evitando capturar o pointer-down sobre os polígonos; ampliar o zoom por roda e controles até 24x.
+- Não alterar o schema/RLS nem publicar automaticamente; persistência continua usando o botão de salvar divisão existente.
