@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:census-map": "node scripts/test-census-map.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
