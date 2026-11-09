@@ -13,6 +13,15 @@ import './App.css'
 
 const assetBase = import.meta.env.BASE_URL
 type SupplierContext = { station: Station; role: string; vehicleId: string | null; accessAvailable: boolean; accessReason: string | null }
+type ActiveArea = 'dashboard' | 'fleet' | 'census'
+const activeAreaStorageKey = 'inteligencia-municipal.active-area'
+
+function getInitialActiveArea(): ActiveArea {
+  try {
+    const stored = window.sessionStorage.getItem(activeAreaStorageKey)
+    return stored === 'fleet' || stored === 'census' ? stored : 'dashboard'
+  } catch { return 'dashboard' }
+}
 
 function isSupplierIdentity(user: User) {
   const metadata = user.user_metadata || {}
@@ -34,7 +43,7 @@ function App() {
   const [sessionChecking, setSessionChecking] = useState(true)
   const [requiresPasswordSetup, setRequiresPasswordSetup] = useState(false)
   const [isSupplierAccount, setIsSupplierAccount] = useState(false)
-  const [activeArea, setActiveArea] = useState<'dashboard' | 'fleet' | 'census'>('dashboard')
+  const [activeArea, setActiveArea] = useState<ActiveArea>(getInitialActiveArea)
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
@@ -73,6 +82,14 @@ function App() {
     void supabase.auth.getSession().then(({ data }) => { if (mounted && data.session) applySession(data.session) }).catch(() => undefined).finally(() => { if (mounted) setSessionChecking(false) })
     return () => { mounted = false; subscription.unsubscribe() }
   }, [])
+
+  useEffect(() => {
+    if (sessionChecking) return
+    try {
+      if (signedIn && activeArea !== 'dashboard') window.sessionStorage.setItem(activeAreaStorageKey, activeArea)
+      else window.sessionStorage.removeItem(activeAreaStorageKey)
+    } catch { /* Storage may be unavailable; the app still works normally. */ }
+  }, [activeArea, sessionChecking, signedIn])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

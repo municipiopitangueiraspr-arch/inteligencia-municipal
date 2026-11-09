@@ -115,3 +115,7 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 - Antes de qualquer escrita feita por esta tela, pedir confirmação visual: criar zona, cadastrar ACS, vincular ACS à zona, importar mapa ou salvar a divisão.
 - Após confirmar, desabilitar ações duplicadas e mostrar spinner e mensagem de progresso durante gravações de mapa/zona; indicar sucesso ou erro com estilo e ícone coerentes. Não inventar porcentagens quando o backend não reporta progresso.
 - Reutilizar React, CSS e cliente Supabase existentes; sem migration ou mudança de RLS.
+
+## Escopo aprovado — permanência no módulo e limpeza da legenda
+- Guardar a área principal ativa (`dashboard`, `fleet` ou `census`) em `sessionStorage` somente enquanto houver sessão autenticada, para que atualizar a página mantenha o usuário no mesmo módulo; limpar a preferência ao voltar ao hall ou sair.
+- Remover da legenda do mapa o aviso flutuante `Zona ativa: ...`; manter a zona escolhida e sua indicação visual no painel lateral de classificação.
