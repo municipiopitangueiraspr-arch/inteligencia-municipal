@@ -82,3 +82,13 @@
 ## Permanência no módulo e limpeza do mapa
 - [x] Atualizar a página em Censo (ou Frotas) mantém o usuário no mesmo módulo; voltar ao hall ou sair limpa o estado salvo.
 - [x] Remover da legenda do mapa o popup/aviso `Zona ativa: ...`; a zona ativa continua identificável no painel de zonas.
+
+## Gestão de questionários do Censo
+- [x] A opção `Questionários` abre uma gestão persistente com lista, criação e edição de questionários, estado `Rascunho`/`Ativo`/`Inativo` e pré-visualização; é possível ativar e inativar sem excluir o formulário.
+- [x] O editor permite cadastrar título/subtítulo/descrição, adicionar/remover/reordenar seções e perguntas, editar rótulos e textos de ajuda, definir obrigatoriedade, tipo de resposta, opções e validações adequadas ao tipo.
+- [x] Tipos oferecidos incluem texto curto e longo, número, moeda, data, sim/não, escolha única e múltipla, tabela repetível e assinatura; a pré-visualização mostra os controles correspondentes sem enviar respostas.
+- [x] Antes de salvar alterações ou ativar/inativar, aparece confirmação; enquanto grava, os controles ficam bloqueados e uma indicação visual mostra carregamento e o resultado de sucesso ou erro.
+- [ ] A migration `202611091853_census_questionnaires.sql` ainda precisa ser aplicada ao Supabase; ela cria a tabela/RLS e insere a ficha inicial em `Rascunho`, pronta para revisão e ativação.
+- [x] A ficha inicial tem o título `FICHA DE CADASTRO E ACOMPANHAMENTO DOMICILIAR`, subtítulo `Levantamento Socioeconômico, Habitacional e de Saúde Familiar`, campos de identificação, as quatro seções e as perguntas/opções do Google Doc fornecido.
+- [x] A pergunta 1.2 representa os oito moradores com colunas `Nome / Parentesco do Morador` e `Idade`, incluindo a primeira linha `Responsável`; o encerramento inclui `Assinatura do Morador Responsável`.
+- [x] Os dados de resposta dos domicílios não são coletados nesta tela de gestão; o banco armazena apenas a definição do questionário.
