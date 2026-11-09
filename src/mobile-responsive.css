@@ -199,3 +199,75 @@
     font-weight: 700;
   }
 }
+
+/* Supplier proof cards: keep action labels readable instead of shrinking them to min-content. */
+@media (min-width: 761px) {
+  .supplier-document-card {
+    grid-template-columns: minmax(0, 1fr) auto minmax(300px, max-content) !important;
+  }
+  .supplier-document-card-main { min-width: 0; }
+  .supplier-document-card-actions { min-width: 300px; }
+  .supplier-document-card-actions > :is(.supplier-secondary, .supplier-upload-modern, .supplier-document-locked) {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    max-width: 100%;
+  }
+  .supplier-document-card-actions > :is(.supplier-secondary, .supplier-upload-modern) {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+}
+
+/* Below this width, put the action controls on their own row instead of squeezing the details. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .supplier-document-card { grid-template-columns: minmax(0, 1fr) auto !important; }
+  .supplier-document-card-actions {
+    grid-column: 1 / -1;
+    min-width: 0;
+    justify-content: flex-start;
+    padding-left: 43px;
+  }
+}
+
+/* At phone widths, keep each proof action at its intrinsic width and wrap the group safely. */
+@media (max-width: 760px) {
+  .supplier-document-card-actions { justify-content: flex-start; }
+  .supplier-document-card-actions > :is(.supplier-secondary, .supplier-upload-modern, .supplier-document-locked) {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    max-width: 100%;
+  }
+  .supplier-document-card-actions > :is(.supplier-secondary, .supplier-upload-modern) { white-space: nowrap; }
+}
+
+
+/* Full-width mobile sidebars include horizontal padding; keep them inside the viewport box. */
+@media (max-width: 900px) {
+  .dashboard-sidebar, .fleet-sidebar, .supplier-sidebar { box-sizing: border-box; }
+}
+
+
+/* Keep native file inputs inside fluid form columns without changing intentionally hidden upload inputs. */
+.supplier-form-grid label:not(.supplier-upload) input[type="file"],
+.supplier-closure-file input[type="file"],
+.station-contract-upload .station-detail-grid input[type="file"],
+.fueling-form-grid .fueling-form-full input[type="file"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Arbitrary uploaded filenames and server-provided document labels must be allowed to wrap. */
+.fv-record-list strong,
+.supplier-closure-doc-main > :is(strong, small) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .supplier-closure-heading > label > button,
+  .supplier-closure-fueling-table td button,
+  .supplier-closure-more { min-height: 44px; }
+}
