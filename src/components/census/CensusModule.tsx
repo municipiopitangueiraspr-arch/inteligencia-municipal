@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import '../FleetModule.css'
 import './CensusModule.css'
@@ -39,7 +39,6 @@ type MapImport = {
 type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 
-const zoneColors = ['#2c7892', '#ad7b26', '#3c8a70', '#8b5d91', '#c05c4d']
 const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'territory', label: 'Mapa territorial', icon: MapPinned },
@@ -115,116 +114,23 @@ async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Pr
 
 export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps) {
   const [view, setView] = useState<CensusSection>('dwg')
-  const [mapImport, setMapImport] = useState<MapImport | null>(null)
-  const [lots, setLots] = useState<Lot[]>([])
-  const [selectedLotIds, setSelectedLotIds] = useState<string[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
-  const [activeZoneId, setActiveZoneId] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [processing, setProcessing] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [reviewConfirmed, setReviewConfirmed] = useState(false)
-  const [search, setSearch] = useState('')
-
   const loadZones = async () => {
     if (!supabase) return
     const { data } = await supabase.from('census_zones').select('id,name,color,active').eq('active', true).order('created_at').limit(100)
-    const nextZones = (data || []) as CensusZone[]
-    setZones(nextZones)
-    setActiveZoneId((current) => current || nextZones[0]?.id || '')
+    setZones((data || []) as CensusZone[])
   }
-  const loadSavedMap = async () => {
-    if (!supabase) { setLoading(false); return }
-    setLoading(true)
-    const { data: imports, error } = await supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at').in('status', ['DRAFT', 'PUBLISHED']).order('updated_at', { ascending: false }).limit(1)
-    if (error || !imports?.[0]) { setMapImport(null); setLots([]); setLoading(false); return }
-    const current = imports[0] as MapImport
-    const { data: rows } = await supabase.from('census_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id').eq('import_id', current.id).order('source_handle').limit(5000)
-    setMapImport(current); setLots((rows || []) as Lot[]); setLoading(false)
-  }
-  useEffect(() => { void loadZones(); void loadSavedMap() }, [])
-
-  const filteredLots = useMemo(() => lots.filter((lot) => !search || `${lot.label || ''} ${lot.source_handle}`.toLowerCase().includes(search.toLowerCase())), [lots, search])
-  const counts = useMemo(() => zones.map((zone) => lots.filter((lot) => lot.zone_id === zone.id).length), [lots, zones])
-  const problematic = lots.filter((lot) => !lot.is_valid)
-  const currentBbox = mapImport?.bbox || (lots.length ? { minX: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), minY: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))), maxX: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), maxY: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))) } : null)
-  const mapWidth = currentBbox ? Math.max(currentBbox.maxX - currentBbox.minX, 1) : 1
-  const mapHeight = currentBbox ? Math.max(currentBbox.maxY - currentBbox.minY, 1) : 1
-  const toSvg = (point: Point) => currentBbox ? `${((point[0] - currentBbox.minX) / mapWidth) * 1000},${((currentBbox.maxY - point[1]) / mapHeight) * 1000}` : '0,0'
-
-  function toggleLot(lot: Lot) {
-    if (!lot.id) return
-    setSelectedLotIds((current) => current.includes(lot.id as string) ? current.filter((id) => id !== lot.id) : [...current, lot.id as string])
-  }
-  function applyZone() {
-    if (!selectedLotIds.length) return
-    setLots((current) => current.map((lot) => lot.id && selectedLotIds.includes(lot.id) ? { ...lot, zone_id: activeZoneId, zone_number: null } : lot))
-    setSelectedLotIds([]); setReviewConfirmed(false)
-  }
-  function clearZone() {
-    if (!selectedLotIds.length) return
-    setLots((current) => current.map((lot) => lot.id && selectedLotIds.includes(lot.id) ? { ...lot, zone_id: null, zone_number: null } : lot))
-    setSelectedLotIds([]); setReviewConfirmed(false)
-  }
-  async function importMap() {
-    const db = supabase
-    if (!db || !file) return
-    setProcessing(true); setMessage(null)
-    try {
-      if (!/\.dxf$/i.test(file.name)) throw new Error('Nesta primeira versão, importe um DXF ASCII. O suporte a DWG será adicionado após conversão.')
-      const parsed = parseDxf(await file.text())
-      if (!parsed.lots.length) throw new Error('Não encontrei polilinhas na camada Lotes Urbanos.')
-      const id = crypto.randomUUID()
-      const storagePath = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-      const { error: uploadError } = await db.storage.from('census-maps').upload(storagePath, file, { contentType: file.type || 'application/dxf', upsert: false })
-      if (uploadError) throw new Error(`Falha ao salvar o arquivo original: ${uploadError.message}`)
-      const draft = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: storagePath, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length, valid_features: parsed.lots.filter((lot) => lot.is_valid).length, problematic_features: parsed.lots.filter((lot) => !lot.is_valid).length, bbox: parsed.bbox, raw_metadata: { text_count: parsed.textCount, parser: 'client-dxf-lwpolyline-v1' } }
-      const { error: importError } = await db.from('census_map_imports').insert(draft)
-      if (importError) throw new Error(`Falha ao registrar a importação: ${importError.message}`)
-      const rows = parsed.lots.map((lot) => ({ ...lot, import_id: id }))
-      await chunks(rows, 100, async (chunk) => { const { error } = await db.from('census_map_lots').insert(chunk); if (error) throw new Error(`Falha ao salvar os lotes: ${error.message}`) })
-      setMapImport({ ...draft, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null } as MapImport); setLots(parsed.lots); setFile(null); setMessage({ type: 'success', text: `${parsed.lots.length.toLocaleString('pt-BR')} lotes extraídos e salvos como rascunho.` })
-    } catch (error) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Não foi possível importar o mapa.' }) }
-    finally { setProcessing(false) }
-  }
-  async function saveDraft() {
-    const db = supabase
-    if (!db || !mapImport) return
-    setProcessing(true); setMessage(null)
-    try {
-      await chunks(lots.filter((lot) => lot.id), 100, async (chunk) => { const { error } = await db.from('census_map_lots').upsert(chunk.map((lot) => ({ id: lot.id, import_id: mapImport.id, zone_number: null, zone_id: lot.zone_id || null })), { onConflict: 'id' }); if (error) throw error })
-      const { error } = await db.from('census_map_imports').update({ status: 'DRAFT', published_at: null }).eq('id', mapImport.id)
-      if (error) throw error
-      setMapImport({ ...mapImport, status: 'DRAFT', published_at: null, updated_at: new Date().toISOString() }); setMessage({ type: 'success', text: 'Divisão salva como rascunho. O mapa original permanece no Storage.' })
-    } catch (error) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Não foi possível salvar o rascunho.' }) }
-    finally { setProcessing(false) }
-  }
-  async function publishMap() {
-    const db = supabase
-    if (!db || !mapImport || !reviewConfirmed) return
-    setProcessing(true); setMessage(null)
-    try {
-      await chunks(lots.filter((lot) => lot.id), 100, async (chunk) => { const { error } = await db.from('census_map_lots').upsert(chunk.map((lot) => ({ id: lot.id, import_id: mapImport.id, zone_number: null, zone_id: lot.zone_id || null })), { onConflict: 'id' }); if (error) throw error })
-      const { error } = await db.from('census_map_imports').update({ status: 'PUBLISHED', published_at: new Date().toISOString() }).eq('id', mapImport.id)
-      if (error) throw error
-      setMapImport({ ...mapImport, status: 'PUBLISHED', published_at: new Date().toISOString() }); setMessage({ type: 'success', text: 'Divisão publicada. O mapa está pronto para ser usado pelo Censo.' })
-    } catch (error) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Não foi possível publicar a divisão.' }) }
-    finally { setProcessing(false) }
-  }
+  useEffect(() => { void loadZones() }, [])
 
   return <div className="fleet-shell census-shell">
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Censo Municipal</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação do Censo Municipal">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => setView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong><small>Preparação territorial aberta</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
     <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>Preparação do mapa</h1></div><div className="fleet-header-actions"><span className="fleet-protected"><ShieldCheck size={16} /> Ambiente aberto de desenvolvimento</span></div></header><div className="fleet-content census-content">
-      {view !== 'dwg' && view !== 'zones' && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">{view === 'overview' ? 'VISÃO TERRITORIAL' : 'ESTRUTURA DO CENSO'}</span><h2>{view === 'overview' ? 'Mapa municipal' : navItems.find((item) => item.id === view)?.label}</h2><p>{view === 'overview' ? 'A preparação do mapa e a divisão das zonas ficam concentradas nesta tela.' : 'Esta área será conectada ao mapa preparado nas próximas etapas.'}</p></div></div>{view === 'territory' && mapImport ? <MapCanvas lots={filteredLots} zones={zones} bbox={currentBbox} toSvg={toSvg} selectedLotIds={selectedLotIds} onToggle={toggleLot} /> : <div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon">{view === 'overview' ? <MapPinned size={21} /> : view === 'families' ? <UsersRound size={21} /> : view === 'forms' ? <FileText size={21} /> : <ClipboardList size={21} />}</span><strong>{view === 'overview' ? 'O mapa será exibido aqui após a preparação' : 'Estrutura em preparação'}</strong><span>{view === 'overview' ? 'Importe um DXF na tela Preparar mapa para começar a classificar os lotes.' : 'Conclua a divisão territorial antes de iniciar esta etapa.'}</span><button type="button" className="fleet-primary-button" onClick={() => setView('dwg')}>Abrir preparação do mapa</button></div>}</section>}
+      {view !== 'dwg' && view !== 'zones' && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ESTRUTURA DO CENSO</span><h2>{navItems.find((item) => item.id === view)?.label}</h2><p>Esta área será conectada ao mapa preparado nas próximas etapas.</p></div></div><div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon"><MapPinned size={21} /></span><strong>Estrutura em preparação</strong><span>Conclua a preparação territorial antes de iniciar esta etapa.</span><button type="button" className="fleet-primary-button" onClick={() => setView('dwg')}>Abrir preparação do mapa</button></div></section>}
       {view === 'zones' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
-      {view === 'dwg' && <><section className="fleet-hero census-hero"><div><span className="fleet-hero-kicker">PREPARAÇÃO CARTOGRÁFICA</span><h2>Importe, confira e divida os lotes por zona.</h2><p>O arquivo original fica preservado no Storage e a versão processada permanece no banco para você reabrir o mapa sem novo upload.</p></div><div className="fleet-hero-mark"><MapPinned size={34} /></div></section>{message && <div className={`fleet-inline-${message.type === 'error' ? 'error' : 'success'}`} role="status">{message.type === 'error' ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}{message.text}</div>}<section className="fleet-section fleet-page-section census-prep-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ARQUIVO DO MAPA</span><h2>Importar e extrair lotes</h2><p>Na primeira versão, o importador processa arquivos DXF ASCII e extrai a camada <strong>Lotes Urbanos</strong>.</p></div></div><div className="census-import-toolbar"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Escolher arquivo DXF'}</strong><small>{file ? `${(file.size / 1024 / 1024).toFixed(2)} MB selecionado` : 'O original será salvo no Supabase Storage'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || processing} onClick={() => void importMap()}>{processing ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar e extrair</button>{mapImport && <button type="button" className="fleet-secondary-button" disabled={processing} onClick={() => void loadSavedMap()}><FolderOpen size={15} /> Reabrir mapa salvo</button>}</div></section>{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa salvo…</div> : mapImport ? <><section className="fleet-section census-map-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">MAPA PROCESSADO</span><h2>{mapImport.file_name}</h2></div><div className="census-map-badges"><span className={`fleet-status ${mapImport.status === 'PUBLISHED' ? 'success' : 'warning'}`}>{mapImport.status === 'PUBLISHED' ? 'Publicado' : 'Rascunho'}</span><span className="fleet-period">{mapImport.total_features.toLocaleString('pt-BR')} lotes</span></div></div><MapCanvas lots={filteredLots} zones={zones} bbox={currentBbox} toSvg={toSvg} selectedLotIds={selectedLotIds} onToggle={toggleLot} /></section><section className="fleet-section census-classification-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO TERRITORIAL</span><h2>Distribuir lotes nas zonas cadastradas</h2></div><span className="fleet-period">{selectedLotIds.length} selecionado(s)</span></div><div className="census-zone-workbench"><div className="census-zone-list">{zones.length ? zones.map((zone, index) => <button key={zone.id} type="button" className={`census-zone-option${activeZoneId === zone.id ? ' active' : ''}`} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color || zoneColors[index % zoneColors.length] }} /><span><strong>{zone.name}</strong><small>{counts[index].toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>) : <div className="census-no-zones"><strong>Nenhuma zona cadastrada.</strong><small>Abra “Zonas e ACS” para criar a primeira.</small></div>}</div><div className="census-zone-actions"><p>Selecione lotes no mapa e escolha a zona de destino. Você pode mover um lote de zona a qualquer momento.</p><div><button type="button" className="fleet-primary-button" disabled={!selectedLotIds.length} onClick={applyZone}>Classificar em {zones.find((zone) => zone.id === activeZoneId)?.name || 'zona selecionada'}</button><button type="button" className="fleet-secondary-button" disabled={!selectedLotIds.length} onClick={clearZone}>Remover classificação</button></div></div></div></section><section className="fleet-section census-review-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">CONFERÊNCIA E PUBLICAÇÃO</span><h2>Salvar divisão territorial</h2></div><span className="fleet-period">{problematic.length} pendência(s)</span></div><div className="census-review-grid"><div className="census-review-card"><span className="census-review-icon"><AlertTriangle size={18} /></span><div><strong>Lotes problemáticos</strong><p>{problematic.length ? `${problematic.length.toLocaleString('pt-BR')} lote(s) precisam de revisão geométrica ou identificador.` : 'Nenhuma pendência foi identificada na importação.'}</p></div></div><div className="census-review-card"><span className="census-review-icon positive"><CheckCircle2 size={18} /></span><div><strong>Divisão atual</strong><p>{lots.filter((lot) => lot.zone_id).length.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lote(s) classificados.</p></div></div></div><label className="census-review-check"><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} /><span>Conferi a classificação no mapa e estou ciente de que a publicação transforma esta divisão em referência do Censo.</span></label><div className="census-publish-actions"><button type="button" className="fleet-secondary-button" disabled={processing} onClick={() => void saveDraft()}><Save size={15} /> Salvar como rascunho</button><button type="button" className="fleet-primary-button" disabled={processing || !reviewConfirmed} onClick={() => void publishMap()}><CheckCircle2 size={15} /> Publicar divisão conferida</button></div></section><section className="fleet-section census-lot-list-section"><div className="fleet-section-heading"><div><span className="fleet-kicker">REVISÃO RÁPIDA</span><h2>Identificadores e pendências</h2></div><input className="census-search" placeholder="Buscar lote ou identificador" value={search} onChange={(event) => setSearch(event.target.value)} /></div><div className="census-lot-list">{filteredLots.slice(0, 80).map((lot) => <button key={lot.id || lot.source_handle} type="button" className={`census-lot-row${lot.id && selectedLotIds.includes(lot.id) ? ' selected' : ''}`} onClick={() => toggleLot(lot)}><span className="census-lot-dot" style={{ background: zones.find((zone) => zone.id === lot.zone_id)?.color || '#d7e1e4' }} /><span><strong>{lot.label || 'Sem identificador'}</strong><small>Ref. {lot.source_handle} · {zones.find((zone) => zone.id === lot.zone_id)?.name || 'Sem zona'}{lot.problem_reasons.length ? ` · ${lot.problem_reasons.join(', ')}` : ''}</small></span>{lot.problem_reasons.length ? <AlertTriangle size={15} /> : <Check size={15} />}</button>)}</div>{filteredLots.length > 80 && <p className="census-list-note">Mostrando os primeiros 80 resultados. Use a busca para localizar outros lotes.</p>}</section></> : <div className="fleet-panel census-empty-map"><FolderOpen size={28} /><strong>Nenhum mapa salvo ainda</strong><p>Escolha o arquivo DXF acima para criar a primeira importação persistida do Censo Municipal.</p></div>}</>}
+      {view === 'dwg' && <MapPreparationWorkspace />}
+
     </div></main>
   </div>
-}
-
-function MapCanvas({ lots, zones, bbox, toSvg, selectedLotIds, onToggle }: { lots: Lot[]; zones: CensusZone[]; bbox: MapImport['bbox']; toSvg: (point: Point) => string; selectedLotIds: string[]; onToggle: (lot: Lot) => void }) {
-  return <div className="census-map-frame">{bbox ? <svg className="census-map-svg" viewBox="0 0 1000 1000" role="img" aria-label="Mapa dos lotes municipais">{lots.map((lot) => { const selected = lot.id ? selectedLotIds.includes(lot.id) : false; const points = lot.geometry.map(toSvg).join(' '); const zone = zones.find((item) => item.id === lot.zone_id); const fill = selected ? '#e2a63d' : zone ? `${zone.color}b8` : lot.is_valid ? '#eef5f4' : '#f7d9d4'; return <polygon key={lot.id || lot.source_handle} points={points} fill={fill} stroke={selected ? '#8d5c12' : lot.is_valid ? '#8baeb1' : '#b74b3e'} strokeWidth={selected ? 2.3 : 0.8} vectorEffect="non-scaling-stroke" onClick={() => onToggle(lot)}><title>{lot.label || 'Sem identificador'} · {zones.find((zone) => zone.id === lot.zone_id)?.name || 'Sem zona'}{lot.problem_reasons.length ? ` · ${lot.problem_reasons.join(', ')}` : ''}</title></polygon> })}</svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Mapa sem geometria</strong></div>}<div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="problem" />Revisar</span><span><i className="selected" />Selecionado</span></div><span className="census-map-help">Clique nos lotes para selecionar. Passe o cursor para ver o identificador.</span></div>
 }
 
 function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: () => void }) {
@@ -279,4 +185,95 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
   const zoneNameFor = (acsId: string) => assignments.filter((link) => link.acs_id === acsId).map((link) => zones.find((zone) => zone.id === link.zone_id)?.name).filter(Boolean).join(', ') || 'Sem zona vinculada'
 
   return <section className="fleet-section fleet-page-section census-zones-page"><div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO MUNICIPAL</span><h2>Zonas e ACS</h2><p>Cadastre a quantidade de zonas que o município precisar e mantenha o catálogo de ACS disponível para os demais módulos.</p></div><span className="fleet-status success">Cadastro aberto</span></div>{notice && <div className="fleet-inline-success"><CheckCircle2 size={15} />{notice}</div>}<div className="census-management-grid"><section className="fleet-panel census-management-card"><div className="census-management-heading"><div><span className="fleet-kicker">ZONAS</span><h3>Criar zona</h3></div><MapPinned size={19} /></div><p>Não há limite fixo de cinco zonas. Crie, por exemplo, três, quatro, seis ou mais zonas.</p><div className="census-form-stack"><label>Nome da zona<input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ex.: Zona Norte" /></label><label>Cor no mapa<div className="census-color-input"><input type="color" value={zoneColor} onChange={(event) => setZoneColor(event.target.value)} /><span>{zoneColor}</span></div></label><button type="button" className="fleet-primary-button" disabled={saving || !zoneName.trim()} onClick={() => void createZone()}><MapPinned size={15} /> Criar zona</button></div><div className="census-catalog-list">{zones.map((zone) => <div className="census-catalog-row" key={zone.id}><i style={{ background: zone.color }} /><strong>{zone.name}</strong><small>Ativa</small></div>)}{!zones.length && <span>Nenhuma zona cadastrada.</span>}</div></section><section className="fleet-panel census-management-card"><div className="census-management-heading"><div><span className="fleet-kicker">CADASTRO GLOBAL</span><h3>Cadastrar ACS</h3></div><UsersRound size={19} /></div><p>Este é o cadastro operacional do ACS. As regras de acesso e limitações serão definidas quando o módulo estiver consolidado.</p><div className="census-form-stack"><label>Nome completo<input value={acsName} onChange={(event) => setAcsName(event.target.value)} placeholder="Ex.: Maria da Silva" /></label><div className="census-form-row"><label>E-mail<input type="email" value={acsEmail} onChange={(event) => setAcsEmail(event.target.value)} placeholder="Opcional" /></label><label>Telefone<input value={acsPhone} onChange={(event) => setAcsPhone(event.target.value)} placeholder="Opcional" /></label></div><button type="button" className="fleet-primary-button" disabled={saving || !acsName.trim()} onClick={() => void createAcs()}><UsersRound size={15} /> Cadastrar ACS</button></div><div className="census-catalog-list">{acs.map((person) => <div className="census-catalog-row census-acs-row" key={person.id}><span className="fleet-user-avatar">{person.full_name[0]?.toUpperCase()}</span><span><strong>{person.full_name}</strong><small>{zoneNameFor(person.id)}</small></span></div>)}{!acs.length && <span>Nenhum ACS cadastrado.</span>}</div></section></div><section className="fleet-panel census-link-card"><div className="census-management-heading"><div><span className="fleet-kicker">VÍNCULO TERRITORIAL</span><h3>Ligar um ACS a uma zona</h3></div><ClipboardList size={19} /></div><p>Um ACS pode ser vinculado a uma ou mais zonas nesta fase aberta. A limitação para uma zona será definida depois.</p><div className="census-link-form"><label>ACS<select value={selectedAcs} onChange={(event) => setSelectedAcs(event.target.value)}><option value="">Selecione o ACS</option>{acs.map((person) => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select></label><label>Zona<select value={selectedZone} onChange={(event) => setSelectedZone(event.target.value)}><option value="">Selecione a zona</option>{zones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><button type="button" className="fleet-primary-button" disabled={saving || !selectedAcs || !selectedZone} onClick={() => void linkAcs()}><Check size={15} /> Vincular ACS à zona</button></div></section></section>
+}
+
+function MapPreparationWorkspace() {
+  const [mapImport, setMapImport] = useState<MapImport | null>(null)
+  const [lots, setLots] = useState<Lot[]>([])
+  const [zones, setZones] = useState<CensusZone[]>([])
+  const [activeZoneId, setActiveZoneId] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
+
+  const loadWorkspace = async () => {
+    if (!supabase) { setLoading(false); return }
+    setLoading(true)
+    const [{ data: imports }, { data: zoneRows }] = await Promise.all([
+      supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at').in('status', ['DRAFT', 'PUBLISHED']).order('updated_at', { ascending: false }).limit(1),
+      supabase.from('census_zones').select('id,name,color,active').eq('active', true).order('created_at').limit(100),
+    ])
+    const nextZones = (zoneRows || []) as CensusZone[]
+    setZones(nextZones); setActiveZoneId((current) => current || nextZones[0]?.id || '')
+    const current = imports?.[0] as MapImport | undefined
+    if (current) {
+      const { data: rows } = await supabase.from('census_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id').eq('import_id', current.id).order('source_handle').limit(5000)
+      setMapImport(current); setLots((rows || []) as Lot[])
+    }
+    setLoading(false)
+  }
+  useEffect(() => { void loadWorkspace() }, [])
+
+  const bbox = mapImport?.bbox || (lots.length ? { minX: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), minY: Math.min(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))), maxX: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[0]))), maxY: Math.max(...lots.flatMap((lot) => lot.geometry.map((point) => point[1]))) } : null)
+  const width = bbox ? Math.max(bbox.maxX - bbox.minX, 1) : 1
+  const height = bbox ? Math.max(bbox.maxY - bbox.minY, 1) : 1
+  const toSvg = (point: Point) => bbox ? `${((point[0] - bbox.minX) / width) * 1000},${((bbox.maxY - point[1]) / height) * 1000}` : '0,0'
+  const assignedCount = lots.filter((lot) => lot.zone_id).length
+  const zoneCount = (zoneId: string) => lots.filter((lot) => lot.zone_id === zoneId).length
+
+  function assignLot(lot: Lot) {
+    if (!activeZoneId) { setNotice('Cadastre e selecione uma zona antes de clicar nos lotes.'); return }
+    setLots((current) => current.map((item) => item.id === lot.id ? { ...item, zone_id: activeZoneId, zone_number: null } : item))
+  }
+  function onWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setZoom((current) => Math.min(5, Math.max(0.65, current + (event.deltaY < 0 ? 0.2 : -0.2))))
+  }
+  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    setDragging(true); dragStart.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging) return
+    setPan({ x: dragStart.current.panX + event.clientX - dragStart.current.x, y: dragStart.current.panY + event.clientY - dragStart.current.y })
+  }
+  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }) }
+  async function importWorkspaceMap() {
+    const db = supabase
+    if (!db || !file) return
+    setSaving(true); setNotice('')
+    try {
+      if (!/\.dxf$/i.test(file.name)) throw new Error('Selecione um arquivo DXF ASCII.')
+      const parsed = parseDxf(await file.text())
+      if (!parsed.lots.length) throw new Error('A camada Lotes Urbanos não foi encontrada.')
+      const id = crypto.randomUUID(); const path = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const upload = await db.storage.from('census-maps').upload(path, file, { contentType: file.type || 'application/dxf', upsert: false })
+      if (upload.error) throw new Error(upload.error.message)
+      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length, valid_features: parsed.lots.filter((lot) => lot.is_valid).length, problematic_features: parsed.lots.filter((lot) => !lot.is_valid).length, bbox: parsed.bbox, raw_metadata: { text_count: parsed.textCount, parser: 'client-dxf-lwpolyline-v1' } }
+      const inserted = await db.from('census_map_imports').insert(record)
+      if (inserted.error) throw new Error(inserted.error.message)
+      const rows = parsed.lots.map((lot) => ({ ...lot, import_id: id, zone_id: null }))
+      await chunks(rows, 100, async (chunk) => { const result = await db.from('census_map_lots').insert(chunk); if (result.error) throw new Error(result.error.message) })
+      setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null } as MapImport); setLots(parsed.lots); setFile(null); resetView(); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} lotes carregados. Selecione uma zona e clique nos lotes.`)
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível importar o mapa.') }
+    finally { setSaving(false) }
+  }
+  async function saveWorkspace() {
+    const db = supabase
+    if (!db || !mapImport) return
+    setSaving(true); setNotice('')
+    try {
+      await chunks(lots.filter((lot) => lot.id), 100, async (chunk) => { const result = await db.from('census_map_lots').upsert(chunk.map((lot) => ({ id: lot.id, import_id: mapImport.id, zone_id: lot.zone_id || null, zone_number: null })), { onConflict: 'id' }); if (result.error) throw new Error(result.error.message) })
+      const result = await db.from('census_map_imports').update({ status: 'DRAFT', published_at: null }).eq('id', mapImport.id)
+      if (result.error) throw new Error(result.error.message)
+      setNotice('Divisão atual salva como rascunho.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Não foi possível salvar a divisão.') }
+    finally { setSaving(false) }
+  }
+
+  return <section className="census-workspace"><div className="census-workspace-top"><div className="census-workspace-upload"><label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar mapa DXF'}</strong><small>{file ? 'Arquivo selecionado' : 'O mapa importado fica salvo para reabertura'}</small></span><input type="file" accept=".dxf,application/dxf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><button type="button" className="fleet-primary-button" disabled={!file || saving} onClick={() => void importWorkspaceMap()}>{saving ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />} Importar mapa</button></div><div className="census-workspace-actions"><span>{mapImport ? `${mapImport.file_name} · ${assignedCount.toLocaleString('pt-BR')}/${lots.length.toLocaleString('pt-BR')} lotes classificados` : 'Nenhum mapa carregado'}</span><button type="button" className="fleet-secondary-button" disabled={saving || !mapImport} onClick={() => void saveWorkspace()}><Save size={15} /> Salvar divisão</button></div></div>{notice && <div className="census-workspace-notice"><CheckCircle2 size={15} />{notice}</div>}{loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid"><div className="census-workspace-map"><div className="census-map-toolbar"><span><Move size={14} /> Arraste para movimentar · role para zoom</span><div><button type="button" onClick={() => setZoom((current) => Math.min(5, current + .2))} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(.65, current - .2))} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div><div className={`census-map-viewport${dragging ? ' dragging' : ''}`} onWheel={onWheel} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => setDragging(false)} onPointerCancel={() => setDragging(false)}>{bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); return <polygon key={lot.id || lot.source_handle} points={lot.geometry.map(toSvg).join(' ')} fill={zone ? `${zone.color}c9` : lot.is_valid ? '#edf5f4' : '#f4d5d0'} stroke={assigned ? zone?.color || '#2c7892' : lot.is_valid ? '#7da6aa' : '#b64b40'} strokeWidth="1" vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); assignLot(lot) }}><title>{lot.label || `Lote ${String(index + 1).padStart(4, '0')} · sem identificação`} · {zone?.name || 'sem zona'}</title></polygon> })}</svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}</div><div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="problem" />Revisar</span><span><i className="selected" />Zona ativa: {zones.find((zone) => zone.id === activeZoneId)?.name || 'selecione ao lado'}</span></div></div><aside className="census-workspace-zones"><div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>{zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}<div className="census-workspace-tip"><MapPinned size={16} /><span>Depois de selecionar a zona, clique nos quadradinhos do mapa. O lote entra imediatamente nessa zona.</span></div></aside></div>}</section>
 }
