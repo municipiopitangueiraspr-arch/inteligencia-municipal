@@ -1,48 +1,150 @@
-import { useState } from 'react'
-import { Bell, ChevronDown, ClipboardList, FileText, Fuel, LayoutDashboard, LogOut, Map, MapPinned, Menu, Package, Settings2, ShieldCheck, Truck, Users, Wrench, X } from 'lucide-react'
+import { ArrowRight, FileText, LogOut, MapPinned, Package, ShieldCheck, Truck } from 'lucide-react'
 import './Dashboard.css'
 
 const assetBase = import.meta.env.BASE_URL
 
-type DashboardProps = { userEmail?: string; onOpenFleet: () => void; onOpenCensus: () => void; onLogout: () => void }
-
-const cards = [
-  { label: 'Veículos ativos', value: '—', helper: 'Aguardando dados de frotas', icon: Truck, tone: 'blue' },
-  { label: 'Em manutenção', value: '—', helper: 'Indicador do módulo de frotas', icon: Wrench, tone: 'amber' },
-  { label: 'Abastecimentos no mês', value: '—', helper: 'Consumo consolidado', icon: Fuel, tone: 'green' },
-  { label: 'Solicitações pendentes', value: '—', helper: 'Ações que exigem atenção', icon: ClipboardList, tone: 'violet' },
-]
+type DashboardProps = {
+  userEmail?: string
+  onOpenFleet: () => void
+  onOpenCensus: () => void
+  onLogout: () => void
+}
 
 const modules = [
-  { title: 'Gestão de Frotas', description: 'Veículos, condutores, manutenção e abastecimento.', icon: Truck, status: 'Em implantação', active: true },
-  { title: 'Atas e Pedidos', description: 'Atas de registro de preços, saldos e solicitações.', icon: FileText, status: 'Disponível', active: false },
-  { title: 'Compras Públicas', description: 'Processos, contratos e acompanhamento das aquisições.', icon: Package, status: 'Em preparação', active: false },
-  { title: 'Atos Oficiais', description: 'Publicações e documentos oficiais do Município.', icon: ShieldCheck, status: 'Disponível', active: false },
-  { title: 'Censo Municipal', description: 'Gestão territorial, domiciliar e familiar do Município.', icon: Map, status: 'Estrutura inicial', active: true },
-]
+  {
+    id: 'fleet',
+    title: 'Gestão de Frotas',
+    description: 'Veículos, condutores e abastecimentos.',
+    icon: Truck,
+    status: 'Em implantação',
+    tone: 'fleet',
+    available: true,
+  },
+  {
+    id: 'census',
+    title: 'Censo Municipal',
+    description: 'Mapa e informações do território municipal.',
+    icon: MapPinned,
+    status: 'Estrutura inicial',
+    tone: 'census',
+    available: true,
+  },
+  {
+    id: 'atas',
+    title: 'Atas e Pedidos',
+    description: 'Atas de registro de preços e solicitações.',
+    icon: FileText,
+    status: 'Em preparação',
+    tone: 'records',
+    available: false,
+  },
+  {
+    id: 'compras',
+    title: 'Compras Públicas',
+    description: 'Processos, contratos e aquisições.',
+    icon: Package,
+    status: 'Em preparação',
+    tone: 'procurement',
+    available: false,
+  },
+  {
+    id: 'acts',
+    title: 'Atos Oficiais',
+    description: 'Publicações e documentos municipais.',
+    icon: ShieldCheck,
+    status: 'Em preparação',
+    tone: 'official',
+    available: false,
+  },
+] as const
 
 export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onLogout }: DashboardProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const openModule = (id: (typeof modules)[number]['id']) => {
+    if (id === 'fleet') onOpenFleet()
+    if (id === 'census') onOpenCensus()
+  }
+
   return <div className="dashboard-shell">
-    <aside className="dashboard-sidebar">
-      <div className="dashboard-brand"><div className="dashboard-brand-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão municipal" /></div><div><strong>Inteligência</strong><span>Municipal</span></div><button type="button" className="dashboard-mobile-menu-toggle" aria-label={mobileMenuOpen ? 'Fechar menu principal' : 'Abrir menu principal'} aria-expanded={mobileMenuOpen} aria-controls="dashboard-mobile-nav" onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}<span>{mobileMenuOpen ? 'Fechar' : 'Menu'}</span></button></div>
-      <nav id="dashboard-mobile-nav" className={`dashboard-mobile-nav${mobileMenuOpen ? ' is-open' : ''}`} aria-label="Navegação principal móvel">
-        <div className="dashboard-mobile-nav-group"><span>MENU PRINCIPAL</span><button type="button" className="dashboard-mobile-nav-item active" aria-current="page" onClick={() => setMobileMenuOpen(false)}><LayoutDashboard size={18} />Visão geral</button><button type="button" className="dashboard-mobile-nav-item" onClick={() => { setMobileMenuOpen(false); onOpenFleet() }}><Truck size={18} />Gestão de Frotas</button><button type="button" className="dashboard-mobile-nav-item" onClick={() => { setMobileMenuOpen(false); onOpenCensus() }}><Map size={18} />Censo Municipal</button><button type="button" className="dashboard-mobile-nav-item"><FileText size={18} />Atas e Pedidos</button><button type="button" className="dashboard-mobile-nav-item"><Package size={18} />Compras Públicas</button><button type="button" className="dashboard-mobile-nav-item"><MapPinned size={18} />Atos Oficiais</button></div>
-        <div className="dashboard-mobile-nav-group"><span>ADMINISTRAÇÃO</span><button type="button" className="dashboard-mobile-nav-item"><Users size={18} />Usuários e unidades</button><button type="button" className="dashboard-mobile-nav-item"><Settings2 size={18} />Configurações</button></div>
-        <button type="button" className="dashboard-mobile-logout" onClick={() => { setMobileMenuOpen(false); onLogout() }}><LogOut size={18} />Sair do sistema</button>
-      </nav>
-      <div className="sidebar-label">MENU PRINCIPAL</div>
-      <nav className="dashboard-nav"><button className="nav-item active"><LayoutDashboard size={18} /> Visão geral</button><button className="nav-item" onClick={onOpenFleet}><Truck size={18} /> Gestão de Frotas <span className="nav-dot" /></button><button className="nav-item" onClick={onOpenCensus}><Map size={18} /> Censo Municipal <span className="nav-dot" /></button><button className="nav-item"><FileText size={18} /> Atas e Pedidos</button><button className="nav-item"><Package size={18} /> Compras Públicas</button><button className="nav-item"><MapPinned size={18} /> Atos Oficiais</button></nav>
-      <div className="sidebar-label sidebar-label-lower">ADMINISTRAÇÃO</div><nav className="dashboard-nav"><button className="nav-item"><Users size={18} /> Usuários e unidades</button><button className="nav-item"><Settings2 size={18} /> Configurações</button></nav>
-      <div className="sidebar-bottom"><div className="support-card"><span className="support-icon"><ShieldCheck size={17} /></span><div><strong>Ambiente seguro</strong><small>Acesso institucional</small></div></div><button className="logout-button" onClick={onLogout}><LogOut size={17} /> Sair do sistema</button></div>
-    </aside>
+    <header className="dashboard-header">
+      <div className="dashboard-header-inner">
+        <div className="dashboard-brand">
+          <span className="dashboard-brand-mark">
+            <img src={`${assetBase}assets/brasao-pref.png`} alt="" />
+          </span>
+          <span className="dashboard-brand-copy">
+            <strong>Inteligência Municipal</strong>
+            <small>Prefeitura de Pitangueiras–PR</small>
+          </span>
+        </div>
+        <div className="dashboard-account">
+          <span className="user-avatar" aria-hidden="true">{(userEmail?.[0] || 'U').toUpperCase()}</span>
+          <span className="user-details">
+            <strong>{userEmail || 'Usuário institucional'}</strong>
+            <small>Sessão ativa</small>
+          </span>
+          <button className="logout-button" type="button" aria-label="Sair do sistema" onClick={onLogout}>
+            <LogOut size={17} aria-hidden="true" />
+            <span>Sair</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
     <main className="dashboard-main">
-      <header className="dashboard-header"><div><p className="header-kicker">PAINEL MUNICIPAL</p><h1>Visão geral</h1></div><div className="header-actions"><button className="notification-button" aria-label="Notificações"><Bell size={19} /><span /></button><div className="user-menu"><div className="user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</div><div className="user-details"><strong>{userEmail || 'Usuário institucional'}</strong><span>Usuário autenticado</span></div><ChevronDown size={16} /></div></div></header>
-      <div className="dashboard-content"><section className="hero-strip"><div><span className="hero-eyebrow">INTELIGÊNCIA MUNICIPAL</span><h2>Bom trabalho hoje.</h2><p>Acompanhe os principais indicadores e acesse rapidamente os módulos da Prefeitura.</p></div><div className="hero-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="" /></div></section>
-        <section className="section-block"><div className="section-heading"><div><span className="section-kicker">ACOMPANHAMENTO</span><h2>Indicadores principais</h2></div><span className="period-label">Visão atual</span></div><div className="metric-grid">{cards.map(({ label, value, helper, icon: Icon, tone }) => <article className="metric-card" key={label}><div className={`metric-icon ${tone}`}><Icon size={19} /></div><div className="metric-data"><span>{label}</span><strong>{value}</strong><small>{helper}</small></div></article>)}</div></section>
-        <section className="section-block"><div className="section-heading"><div><span className="section-kicker">ACESSO RÁPIDO</span><h2>Módulos municipais</h2></div><button className="link-button">Ver todos</button></div><div className="module-grid">{modules.map(({ title, description, icon: Icon, status, active }) => <article className={`module-card ${active ? 'module-card-active' : ''}`} key={title}><div className="module-card-top"><span className="module-icon"><Icon size={20} /></span><span className={`module-status ${active ? 'status-active' : ''}`}>{status}</span></div><h3>{title}</h3><p>{description}</p><button className="module-link" onClick={title === 'Gestão de Frotas' ? onOpenFleet : title === 'Censo Municipal' ? onOpenCensus : undefined}>Acessar módulo <span>→</span></button></article>)}</div></section>
-        <section className="section-block attention-section"><div className="section-heading"><div><span className="section-kicker">CENTRAL DE ATENÇÃO</span><h2>Próximas ações</h2></div></div><div className="empty-attention"><div className="empty-attention-icon"><Bell size={21} /></div><div><strong>Nenhuma pendência registrada</strong><p>Quando houver tarefas ou solicitações, elas aparecerão nesta área.</p></div></div></section>
-      </div><footer className="dashboard-footer"><span>Inteligência Municipal · Prefeitura de Pitangueiras–PR</span><span>Ambiente institucional</span></footer>
+      <div className="dashboard-content">
+        <section className="hero-strip" aria-labelledby="dashboardTitle">
+          <div className="hero-copy">
+            <span className="hero-eyebrow">PITANGUEIRAS · PARANÁ</span>
+            <h1 id="dashboardTitle">Gestão municipal</h1>
+            <p>Escolha um módulo para continuar.</p>
+          </div>
+          <div className="hero-mark" aria-hidden="true">
+            <img src={`${assetBase}assets/brasao-pref.png`} alt="" />
+          </div>
+        </section>
+
+        <section className="module-section" aria-labelledby="moduleTitle">
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">ACESSO AOS SERVIÇOS</span>
+              <h2 id="moduleTitle">Módulos municipais</h2>
+            </div>
+            <span className="section-hint">Selecione um card</span>
+          </div>
+
+          <div className="module-grid">
+            {modules.map(({ id, title, description, icon: Icon, status, tone, available }) => (
+              <button
+                key={id}
+                className={`module-card module-card--${tone}`}
+                type="button"
+                disabled={!available}
+                aria-label={available ? `Abrir ${title}` : `${title}: em preparação`}
+                onClick={() => openModule(id)}
+              >
+                <span className="module-card-top">
+                  <span className="module-icon"><Icon size={27} strokeWidth={1.8} aria-hidden="true" /></span>
+                  <span className={`module-status${available ? ' module-status--active' : ''}`}>
+                    <span className="status-dot" aria-hidden="true" />
+                    {status}
+                  </span>
+                </span>
+                <span className="module-card-title">{title}</span>
+                <span className="module-card-description">{description}</span>
+                <span className={`module-card-action${available ? '' : ' module-card-action--disabled'}`}>
+                  {available ? 'Abrir módulo' : 'Em breve'}
+                  {available && <ArrowRight size={17} aria-hidden="true" />}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
     </main>
+
+    <footer className="dashboard-footer">
+      <span>Inteligência Municipal</span>
+      <span>Prefeitura de Pitangueiras–PR</span>
+    </footer>
   </div>
 }

@@ -42,3 +42,10 @@
 - [ ] A estrutura é utilizável em desktop, tablet e mobile e mantém a identidade visual institucional.
 - [ ] Esta etapa não cria tabelas, permissões ou dados do Censo, nem altera os fluxos de Frotas e Portal do Fornecedor.
 - [ ] O build TypeScript/Vite passa sem erros após a integração.
+
+## Hall municipal em cards — redesign
+- [x] Depois do login, o hall apresenta os módulos municipais em cards visuais centralizados e não exibe menu lateral no desktop nem navegação lateral móvel.
+- [x] Cards de Gestão de Frotas e Censo Municipal abrem os callbacks já existentes; módulos sem navegação funcional são identificados como em preparação e não fingem ser acionáveis.
+- [x] O hall mantém a identidade institucional, a identificação da conta e a ação de sair, sem alterar autenticação ou os menus internos dos módulos.
+- [x] O hall funciona em desktop, tablet e celular e não mostra indicadores fictícios ou ações vazias.
+- [x] O build TypeScript/Vite passa sem erros.
