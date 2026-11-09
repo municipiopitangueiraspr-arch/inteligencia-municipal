@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test:census-map": "node scripts/test-census-map.mjs",
+    "test:census-questionnaires": "node scripts/test-census-questionnaires.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

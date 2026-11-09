@@ -119,3 +119,11 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 ## Escopo aprovado — permanência no módulo e limpeza da legenda
 - Guardar a área principal ativa (`dashboard`, `fleet` ou `census`) em `sessionStorage` somente enquanto houver sessão autenticada, para que atualizar a página mantenha o usuário no mesmo módulo; limpar a preferência ao voltar ao hall ou sair.
 - Remover da legenda do mapa o aviso flutuante `Zona ativa: ...`; manter a zona escolhida e sua indicação visual no painel lateral de classificação.
+
+## Escopo aprovado — gestão de questionários do Censo
+- Substituir o placeholder `Questionários` por uma tela de gestão onde a equipe lista, cria, edita, salva, pré-visualiza e ativa/inativa questionários; não oferecer exclusão permanente.
+- Persistir cada definição (título, subtítulo, descrição, estado e seções/perguntas) em `public.census_questionnaires.form_schema` como JSONB, com RLS para usuários autenticados, seguindo o padrão das tabelas de Censo. Essa tela não coleta nem armazena respostas dos domicílios.
+- O editor permite adicionar/remover/reordenar seções e perguntas, editar rótulo/ajuda, marcar obrigatório, selecionar tipo de resposta, configurar opções e validações compatíveis com o tipo. Incluir tipos texto curto/longo, número, moeda, data, sim/não, escolha única/múltipla, tabela repetível e assinatura.
+- Antes de salvar ou mudar estado, confirmar visualmente; durante a escrita, desabilitar duplicatas e mostrar progresso, sucesso ou erro. Inativar preserva o questionário e seu histórico.
+- Precarregar a ficha do Google Doc fornecido, com o título `FICHA DE CADASTRO E ACOMPANHAMENTO DOMICILIAR`, subtítulo `Levantamento Socioeconômico, Habitacional e de Saúde Familiar`, os campos de identificação, as quatro seções e as perguntas/opções do original. Representar a relação de moradores como tabela repetível com as oito linhas previstas, e registrar a assinatura do morador responsável como campo de assinatura.
+- Organizar o código em `src/components/census/questionnaires/` (tipos, lógica, gestão/editor, pré-visualização e estilos); manter a definição inicial como seed JSONB idempotente na migration versionada em `supabase/migrations/`, evitando duas cópias do formulário. Reutilizar o shell e a identidade visual do Censo/Frotas; não criar uma nova rota pública.

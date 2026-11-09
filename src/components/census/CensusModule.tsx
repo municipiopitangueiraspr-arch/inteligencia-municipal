@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, groupLotSaveAssignments, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
+import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -41,22 +43,6 @@ type MapImport = {
 type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type CensusNoticeTone = 'success' | 'error' | 'info'
-type CensusWriteConfirmationProps = { title: string; description: string; confirmLabel: string; onCancel: () => void; onConfirm: () => void }
-
-function CensusWriteConfirmation({ title, description, confirmLabel, onCancel, onConfirm }: CensusWriteConfirmationProps) {
-  return <div className="census-confirmation-backdrop">
-    <section className="census-confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="census-confirmation-title" aria-describedby="census-confirmation-description" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onCancel() } }}>
-      <span className="census-confirmation-icon"><ShieldCheck size={23} /></span>
-      <span className="fleet-kicker">CONFIRMAÇÃO NECESSÁRIA</span>
-      <h2 id="census-confirmation-title">{title}</h2>
-      <p id="census-confirmation-description">{description}</p>
-      <div className="census-confirmation-actions">
-        <button type="button" className="fleet-secondary-button" autoFocus onClick={onCancel}>Cancelar</button>
-        <button type="button" className="fleet-primary-button" onClick={onConfirm}><ShieldCheck size={16} />{confirmLabel}</button>
-      </div>
-    </section>
-  </div>
-}
 
 const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
@@ -123,9 +109,10 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
   return <div className="fleet-shell census-shell">
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Censo Municipal</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação do Censo Municipal">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => setView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong><small>Preparação territorial aberta</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
     <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1></div><div className="fleet-header-actions"><span className="fleet-protected"><ShieldCheck size={16} /> Ambiente aberto de desenvolvimento</span></div></header><div className="fleet-content census-content">
-      {view !== 'dwg' && view !== 'zones' && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ESTRUTURA DO CENSO</span><h2>{navItems.find((item) => item.id === view)?.label}</h2><p>{view === 'overview' ? 'Acompanhe e organize as próximas etapas do Censo Municipal.' : 'Esta área será conectada ao mapa preparado nas próximas etapas.'}</p></div></div><div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon"><MapPinned size={21} /></span><strong>{view === 'overview' ? 'Comece pelo território' : 'Estrutura em preparação'}</strong><span>{view === 'overview' ? 'Prepare o mapa municipal ou organize as zonas e os ACS para iniciar o trabalho.' : 'Conclua a preparação territorial antes de iniciar esta etapa.'}</span><button type="button" className="fleet-primary-button" onClick={() => setView('dwg')}>{view === 'overview' ? 'Preparar mapa' : 'Abrir preparação do mapa'}</button></div></section>}
+      {view !== 'dwg' && view !== 'zones' && view !== 'forms' && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ESTRUTURA DO CENSO</span><h2>{navItems.find((item) => item.id === view)?.label}</h2><p>{view === 'overview' ? 'Acompanhe e organize as próximas etapas do Censo Municipal.' : 'Esta área será conectada ao mapa preparado nas próximas etapas.'}</p></div></div><div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon"><MapPinned size={21} /></span><strong>{view === 'overview' ? 'Comece pelo território' : 'Estrutura em preparação'}</strong><span>{view === 'overview' ? 'Prepare o mapa municipal ou organize as zonas e os ACS para iniciar o trabalho.' : 'Conclua a preparação territorial antes de iniciar esta etapa.'}</span><button type="button" className="fleet-primary-button" onClick={() => setView('dwg')}>{view === 'overview' ? 'Preparar mapa' : 'Abrir preparação do mapa'}</button></div></section>}
       {view === 'zones' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'dwg' && <MapPreparationWorkspace />}
+      {view === 'forms' && <QuestionnairesManagement />}
 
     </div></main>
   </div>
