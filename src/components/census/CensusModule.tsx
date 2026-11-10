@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, Upload, UsersRound } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
@@ -73,6 +73,8 @@ async function fetchTerritoryLots(db: NonNullable<typeof supabase>, importId: st
 
 export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps) {
   const [view, setView] = useState<CensusSection>('overview')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [profile, setProfile] = useState<{ name: string; photo: string | null }>({ name: userEmail || 'Usuário autenticado', photo: null })
   const [zones, setZones] = useState<CensusZone[]>([])
   const loadZones = async () => {
     if (!supabase) return
@@ -80,11 +82,29 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
     setZones((data || []) as CensusZone[])
   }
   useEffect(() => { void loadZones() }, [])
+  useEffect(() => {
+    let mounted = true
+    const loadProfile = async () => {
+      if (!supabase) return
+      const { data } = await supabase.auth.getUser()
+      const authUser = data.user
+      if (!authUser || !mounted) return
+      const metadata = authUser.user_metadata || {}
+      const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || authUser.email || 'Usuário autenticado'
+      const photo = String(metadata.avatar_url || metadata.picture || metadata.photo_url || '').trim() || null
+      if (mounted) setProfile({ name, photo })
+    }
+    void loadProfile()
+    return () => { mounted = false }
+  }, [userEmail])
+
+  const selectView = (nextView: CensusSection) => { setView(nextView); setMenuOpen(false) }
+  const profileInitials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
 
   return <div className="fleet-shell census-shell">
-    <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Censo Municipal</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação do Censo Municipal">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => setView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
-    <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1></div></header><div className="fleet-content census-content">
-      {view === 'overview' && <CensusOverview onOpen={setView} />}
+    <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Censo Municipal</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação do Censo Municipal">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
+    <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu do Censo" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
+      {view === 'overview' && <CensusOverview onOpen={selectView} />}
       {view === 'families' && <CensusFamiliesVisits onOpenTerritory={() => setView('territory')} />}
       {view === 'territory' && <CensusTerritory onOpenQuestionnaires={() => setView('forms')} />}
       {view === 'zones' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
