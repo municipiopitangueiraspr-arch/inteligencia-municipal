@@ -40,3 +40,10 @@
 .census-workspace-svg polygon{paint-order:stroke fill}
 
 .census-workspace-svg polygon:hover{stroke:none;stroke-width:0}
+
+/* Destaque do lote selecionado: elevação visual sem moldura ou contorno externo */
+.census-workspace-svg polygon{transform-box:fill-box;transform-origin:center;transform:scale(.994);transition:filter .18s ease,transform .18s ease,fill .12s ease}
+.census-workspace-svg polygon:hover{stroke:none!important;stroke-width:0!important;filter:brightness(1.12) saturate(1.1);transform:scale(.998)}
+.census-workspace-svg polygon.census-lot-selected{stroke:none!important;stroke-width:0!important;filter:brightness(1.2) saturate(1.22) drop-shadow(0 2px 1px #163f4a40);transform:scale(1.006);animation:census-selected-lot-pulse-prep 1.55s ease-in-out infinite;transform-origin:center}
+@keyframes census-selected-lot-pulse-prep{0%,100%{filter:brightness(1.16) saturate(1.18) drop-shadow(0 1px 1px #163f4a38)}50%{filter:brightness(1.38) saturate(1.42) drop-shadow(0 3px 2px #163f4a64)}}
+@media(prefers-reduced-motion:reduce){.census-workspace-svg polygon.census-lot-selected{animation:none;transition:none}}
