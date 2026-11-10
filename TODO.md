@@ -197,4 +197,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Ter uma tela separada para incluir e acompanhar indicações de lotes da Secretaria para o dia, incluindo lotes sem domicílio cadastrado, identificadas como prioridade administrativa e não como necessidade hospitalar.
 - [x] Persistir as visitas/retornos e as indicações em estruturas separadas no Supabase, preservando o RLS atualmente restrito a administradores.
 - [x] Build e lint passaram sem erros; a migration `202611102336_add_medical_priority_queue.sql` está aplicada no Supabase com RLS ativo e sem privilégio de exclusão para `authenticated`.
-- [ ] Comitar e enviar as alterações para `main`; acompanhar o workflow do Pages e verificar a versão pública.
+- [x] Commit `1c69d5a` enviado à `main`; workflow Pages `42926114360` concluiu com sucesso; página e bundle confirmados em HTTP 200 com os textos de visitas, retornos e indicações. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
