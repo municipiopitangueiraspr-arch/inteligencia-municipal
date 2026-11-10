@@ -137,3 +137,10 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Preservar o acesso às dez secretarias e os módulos já atribuídos, mantendo a tela de login, a autenticação e a responsividade.
 - [x] Validar o build local.
 - [x] Publicar o hall atualizado no GitHub Pages para teste remoto.
+
+## Refinamento visual dos cards das secretarias
+- [x] Manter a limpeza geral do hall e ajustar somente os cards das secretarias para se aproximarem do visual vertical da versão anterior.
+- [x] Centralizar o ícone dentro de cada card e posicionar o nome da secretaria logo abaixo dele, com uma ação de acesso clara.
+- [x] Preservar as dez secretarias e a navegação para os módulos já atribuídos.
+- [x] Validar o build local.
+- [ ] Publicar o refinamento no GitHub Pages para teste remoto.

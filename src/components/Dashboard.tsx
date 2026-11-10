@@ -86,16 +86,76 @@ const modules = [
 type ModuleId = (typeof modules)[number]['id']
 
 const secretariats = [
-  { id: 'administration', title: 'Administração e Finanças', icon: Landmark },
-  { id: 'agriculture', title: 'Agricultura e Meio Ambiente', icon: Sprout },
-  { id: 'social', title: 'Assistência Social', icon: HeartHandshake },
-  { id: 'culture', title: 'Cultura e Turismo', icon: Compass },
-  { id: 'development', title: 'Desenvolvimento Econômico', icon: TrendingUp },
-  { id: 'education', title: 'Educação', icon: GraduationCap },
-  { id: 'sports', title: 'Esporte e Lazer', icon: Dumbbell },
-  { id: 'works', title: 'Obras, Planejamento e Urbanismo', icon: Construction },
-  { id: 'health', title: 'Saúde', icon: HeartPulse },
-  { id: 'security', title: 'Segurança Pública e Trânsito', icon: ShieldCheck },
+  {
+    id: 'administration',
+    title: 'Administração e Finanças',
+    description: 'Gestão administrativa, financeira e dos recursos municipais.',
+    icon: Landmark,
+    tone: 'administration',
+  },
+  {
+    id: 'agriculture',
+    title: 'Agricultura e Meio Ambiente',
+    description: 'Desenvolvimento rural, agricultura e cuidado ambiental.',
+    icon: Sprout,
+    tone: 'agriculture',
+  },
+  {
+    id: 'social',
+    title: 'Assistência Social',
+    description: 'Políticas de proteção e atendimento social.',
+    icon: HeartHandshake,
+    tone: 'social',
+  },
+  {
+    id: 'culture',
+    title: 'Cultura e Turismo',
+    description: 'Ações culturais, turismo e valorização do município.',
+    icon: Compass,
+    tone: 'culture',
+  },
+  {
+    id: 'development',
+    title: 'Desenvolvimento Econômico',
+    description: 'Iniciativas de desenvolvimento e fortalecimento econômico.',
+    icon: TrendingUp,
+    tone: 'development',
+  },
+  {
+    id: 'education',
+    title: 'Educação',
+    description: 'Gestão e acompanhamento das ações educacionais.',
+    icon: GraduationCap,
+    tone: 'education',
+  },
+  {
+    id: 'sports',
+    title: 'Esporte e Lazer',
+    description: 'Atividades esportivas, recreação e lazer.',
+    icon: Dumbbell,
+    tone: 'sports',
+  },
+  {
+    id: 'works',
+    title: 'Obras, Planejamento e Urbanismo',
+    description: 'Obras, planejamento territorial e desenvolvimento urbano.',
+    icon: Construction,
+    tone: 'works',
+  },
+  {
+    id: 'health',
+    title: 'Saúde',
+    description: 'Serviços, planejamento e informações municipais de saúde.',
+    icon: HeartPulse,
+    tone: 'health',
+  },
+  {
+    id: 'security',
+    title: 'Segurança Pública e Trânsito',
+    description: 'Segurança pública, mobilidade e trânsito municipal.',
+    icon: ShieldCheck,
+    tone: 'security',
+  },
 ] as const
 
 type SecretariatId = (typeof secretariats)[number]['id']
@@ -198,17 +258,18 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onLogout }: Da
               </div>
 
               <div className="secretariat-grid">
-                {secretariats.map(({ id, title, icon: Icon }) => (
+                {secretariats.map(({ id, title, description, icon: Icon, tone }) => (
                   <button
                     key={id}
-                    className="secretariat-card"
+                    className={`secretariat-card secretariat-card--${tone}`}
                     type="button"
-                    aria-label={`Abrir ${title}`}
+                    aria-label={`Acessar secretaria: ${title}`}
                     onClick={() => setSelectedSecretariatId(id)}
                   >
                     <span className="secretariat-card-icon"><Icon size={25} strokeWidth={1.9} aria-hidden="true" /></span>
                     <span className="secretariat-card-title">{title}</span>
-                    <span className="secretariat-card-action" aria-hidden="true"><ArrowRight size={18} /></span>
+                    <span className="secretariat-card-description">{description}</span>
+                    <span className="secretariat-card-action">Acessar secretaria <ArrowRight size={16} aria-hidden="true" /></span>
                   </button>
                 ))}
               </div>
