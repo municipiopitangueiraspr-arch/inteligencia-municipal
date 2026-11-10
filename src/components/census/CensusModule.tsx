@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Minus, Move, Plus, RotateCcw, Save, ShieldCheck, Upload, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
-import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, groupLotSaveAssignments, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
+import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, groupLotSaveAssignments, mergeSelectedLotKeys, parseDxfLotBoundaries, selectLotKeysInRect, shouldStartMapPan, withLotIds, zoomMapViewAtOffset } from './mapLogic'
 import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
 import { CensusTerritory } from './territory/CensusTerritory'
 import '../FleetModule.css'
@@ -54,46 +54,6 @@ const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard
   { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
 ]
-
-function areaOf(points: Point[]) {
-  return Math.abs(points.reduce((sum, point, index) => {
-    const next = points[(index + 1) % points.length]
-    return sum + point[0] * next[1] - next[0] * point[1]
-  }, 0) / 2)
-}
-function parseDxf(text: string) {
-  const lines = text.replace(/\r/g, '').split('\n').map((line) => line.trim())
-  const polylines: Array<{ handle: string; layer: string; closed: boolean; points: Point[] }> = []
-  let entity: { type: string; handle: string; layer: string; closed: boolean; points: Point[] } | null = null
-  const flush = () => {
-    if (!entity) return
-    if (entity.type === 'LWPOLYLINE') polylines.push({ handle: entity.handle || `entity-${polylines.length + 1}`, layer: entity.layer, closed: entity.closed, points: entity.points })
-  }
-  for (let i = 0; i < lines.length - 1; i += 2) {
-    const code = lines[i]; const value = lines[i + 1]
-    if (code === '0') { flush(); entity = { type: value, handle: '', layer: '', closed: false, points: [] }; continue }
-    if (!entity) continue
-    if (code === '5') entity.handle = value
-    if (code === '8') entity.layer = value
-    if (entity.type === 'LWPOLYLINE') {
-      if (code === '70') entity.closed = (Number(value) & 1) === 1
-      if (code === '10') {
-        const x = Number(value); const nextCode = lines[i + 2]; const y = nextCode === '20' ? Number(lines[i + 3]) : NaN
-        if (Number.isFinite(x) && Number.isFinite(y)) { entity.points.push([x, y]); i += 2 }
-      }
-    }
-  }
-  flush()
-  const candidates = polylines.filter((polyline) => polyline.layer.trim().toLowerCase() === 'lotes urbanos')
-  const source = candidates.filter((polyline) => isImportableLotGeometry(polyline.layer, polyline.closed, polyline.points))
-  const lots: Lot[] = source.map((polyline) => {
-    const area = polyline.points.length >= 3 ? areaOf(polyline.points) : 0
-    return { source_handle: polyline.handle, label: null, layer_name: polyline.layer, geometry: polyline.points, area, is_valid: true, problem_reasons: [], zone_number: null }
-  })
-  const allPoints = lots.flatMap((lot) => lot.geometry)
-  const bbox = allPoints.length ? { minX: Math.min(...allPoints.map((point) => point[0])), minY: Math.min(...allPoints.map((point) => point[1])), maxX: Math.max(...allPoints.map((point) => point[0])), maxY: Math.max(...allPoints.map((point) => point[1])) } : null
-  return { lots, bbox, sourceLayer: source[0]?.layer || candidates[0]?.layer || 'Lotes Urbanos', ignoredGeometryCount: candidates.length - source.length }
-}
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
   for (let index = 0; index < values.length; index += size) await callback(values.slice(index, index + size))
 }
@@ -249,8 +209,8 @@ function MapPreparationWorkspace() {
   const [noticeTone, setNoticeTone] = useState<CensusNoticeTone>('success')
   const [pendingWrite, setPendingWrite] = useState<'import' | 'save' | null>(null)
   const [activeWrite, setActiveWrite] = useState<'import' | 'save' | null>(null)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [mapView, setMapView] = useState({ zoom: 1, pan: { x: 0, y: 0 } })
+  const { zoom, pan } = mapView
   const [dragging, setDragging] = useState(false)
   const [areaSelectMode, setAreaSelectMode] = useState(false)
   const [isAreaSelecting, setIsAreaSelecting] = useState(false)
@@ -283,7 +243,13 @@ function MapPreparationWorkspace() {
 
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
-      setZoom((current) => Math.min(24, Math.max(0.65, current * (event.deltaY < 0 ? 1.15 : 1 / 1.15))))
+      const bounds = viewport.getBoundingClientRect()
+      const anchor = {
+        x: event.clientX - (bounds.left + bounds.width / 2),
+        y: event.clientY - (bounds.top + bounds.height / 2),
+      }
+      const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
+      setMapView((current) => zoomMapViewAtOffset(current, factor, anchor))
     }
 
     viewport.addEventListener('wheel', handleWheel, { passive: false })
@@ -362,7 +328,7 @@ function MapPreparationWorkspace() {
       return
     }
     if (!dragging) return
-    setPan({ x: dragStart.current.panX + event.clientX - dragStart.current.x, y: dragStart.current.panY + event.clientY - dragStart.current.y })
+    setMapView((current) => ({ ...current, pan: { x: dragStart.current.panX + event.clientX - dragStart.current.x, y: dragStart.current.panY + event.clientY - dragStart.current.y } }))
   }
   function finishPointerAction(event: React.PointerEvent<HTMLDivElement>) {
     const gesture = areaGestureRef.current
@@ -389,8 +355,8 @@ function MapPreparationWorkspace() {
     setDragging(false)
     clearAreaRectOverlay()
   }
-  function zoomBy(factor: number) { setZoom((current) => Math.min(24, Math.max(0.65, current * factor))) }
-  function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setSelectedLotKeys([]); setAreaSelectMode(false); cancelPointerAction() }
+  function zoomBy(factor: number) { setMapView((current) => zoomMapViewAtOffset(current, factor, { x: 0, y: 0 })) }
+  function resetView() { setMapView({ zoom: 1, pan: { x: 0, y: 0 } }); setSelectedLotKeys([]); setAreaSelectMode(false); cancelPointerAction() }
   function toggleAreaSelectMode() {
     if (areaSelectMode) {
       setAreaSelectMode(false)
@@ -419,12 +385,12 @@ function MapPreparationWorkspace() {
     setSaving(true); setActiveWrite('import'); setNotice('')
     try {
       if (!/\.dxf$/i.test(file.name)) throw new Error('Selecione um arquivo DXF ASCII.')
-      const parsed = parseDxf(await file.text())
+      const parsed = parseDxfLotBoundaries(await file.text())
       if (!parsed.lots.length) throw new Error('A camada Lotes Urbanos não contém polígonos fechados com área válida.')
       const id = crypto.randomUUID(); const path = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const upload = await db.storage.from('census-maps').upload(path, file, { contentType: file.type || 'application/dxf', upsert: false })
       if (upload.error) throw new Error(upload.error.message)
-      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, division_saved_at: null, raw_metadata: { parser: 'client-dxf-geometry-only-v2', ignored_geometry_count: parsed.ignoredGeometryCount } }
+      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, division_saved_at: null, raw_metadata: { parser: 'client-dxf-boundaries-v3', ignored_geometry_count: parsed.ignoredGeometryCount } }
       const inserted = await db.from('census_map_imports').insert(record)
       if (inserted.error) throw new Error(inserted.error.message)
       const rows = withLotIds(parsed.lots, () => crypto.randomUUID()).map((lot) => ({ ...lot, import_id: id, zone_id: null }))
@@ -494,7 +460,7 @@ function MapPreparationWorkspace() {
       {notice && <div className={`census-workspace-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'info' ? <MapPinned size={16} /> : <CheckCircle2 size={16} />}{notice}</div>}
       {loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={18} /> Carregando mapa…</div> : <div className="census-workspace-grid">
         <div className={`census-workspace-map${saving ? ' saving' : ''}`}>
-          <div className="census-map-toolbar"><span><Move size={14} /> {areaSelectMode ? 'Arraste da esquerda para a direita para incluir lotes inteiros; da direita para a esquerda para incluir os que cruzam a área. Esc cancela.' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para zoom'}</span><div><button type="button" className={`census-area-selection-toggle${areaSelectMode ? ' active' : ''}`} aria-pressed={areaSelectMode} disabled={saving} onClick={toggleAreaSelectMode}><Move size={14} /><span>{areaSelectMode ? 'Sair da seleção por área' : 'Selecionar por área'}</span></button><button type="button" disabled={saving} onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" disabled={saving} onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" disabled={saving} onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div>
+          <div className="census-map-toolbar"><span><Move size={14} /> {areaSelectMode ? 'Arraste da esquerda para a direita para incluir lotes inteiros; da direita para a esquerda para incluir os que cruzam a área. Esc cancela.' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para aproximar no cursor'}</span><div><button type="button" className={`census-area-selection-toggle${areaSelectMode ? ' active' : ''}`} aria-pressed={areaSelectMode} disabled={saving} onClick={toggleAreaSelectMode}><Move size={14} /><span>{areaSelectMode ? 'Sair da seleção por área' : 'Selecionar por área'}</span></button><button type="button" disabled={saving} onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" disabled={saving} onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" disabled={saving} onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div>
           <div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}${areaSelectMode ? ' area-select-mode' : ''}${isAreaSelecting ? ' area-selecting' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishPointerAction} onPointerCancel={cancelPointerAction}>
             {bbox ? <svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { const zone = zones.find((item) => item.id === lot.zone_id); const assigned = Boolean(zone); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={selected ? '#e59a22' : assigned ? zone?.color || '#2c7892' : '#7da6aa'} strokeWidth={selected ? 3 : 1} vectorEffect="non-scaling-stroke" onClick={(event) => { event.stopPropagation(); if (!areaSelectMode && !saving) assignLot(lot, event.ctrlKey || event.metaKey) }}><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}
           </div>

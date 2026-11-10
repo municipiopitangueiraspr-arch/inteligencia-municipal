@@ -27,9 +27,11 @@ try {
     groupLotSaveAssignments,
     isImportableLotGeometry,
     mergeSelectedLotKeys,
+    parseDxfLotBoundaries,
     selectLotKeysInRect,
     shouldStartMapPan,
     withLotIds,
+    zoomMapViewAtOffset,
   } = requireFromHere(join(outputDir, 'mapLogic.js'))
 
   const square = [[0, 0], [10, 0], [10, 10], [0, 10]]
@@ -37,6 +39,39 @@ try {
   assert.equal(isImportableLotGeometry('Lotes Urbanos', false, square), false, 'polilinha aberta é ignorada')
   assert.equal(isImportableLotGeometry('Sistema_Viario', true, square), false, 'outras camadas não viram lotes')
   assert.equal(isImportableLotGeometry('Lotes Urbanos', true, [[0, 0], [1, 1], [2, 2]]), false, 'área zero é ignorada')
+
+  const dxfFixture = [
+    '0', 'SECTION', '2', 'BLOCKS',
+    '0', 'LWPOLYLINE', '5', 'BLOCK-ONLY', '8', 'Lotes Urbanos', '90', '4', '70', '1', '10', '100', '20', '100', '10', '110', '20', '100', '10', '110', '20', '110', '10', '100', '20', '110',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES',
+    '0', 'LWPOLYLINE', '5', 'LOT-A', '8', 'Lotes Urbanos', '90', '4', '70', '1', '10', '0', '20', '0', '10', '10', '20', '0', '10', '10', '20', '10', '10', '0', '20', '10',
+    '0', 'HATCH', '8', 'Lotes Urbanos', '1', 'SOLID',
+    '0', 'MTEXT', '8', 'Lotes Urbanos', '1', 'Rótulo que não deve virar atributo',
+    '0', 'LWPOLYLINE', '5', 'OPEN', '8', 'Lotes Urbanos', '90', '4', '70', '0', '10', '20', '20', '20', '10', '30', '20', '20', '10', '30', '20', '30', '10', '20', '20', '30',
+    '0', 'LWPOLYLINE', '5', 'ZERO', '8', 'Lotes Urbanos', '90', '3', '70', '1', '10', '40', '20', '40', '10', '41', '20', '41', '10', '42', '20', '42',
+    '0', 'LWPOLYLINE', '5', 'ROAD', '8', 'Sistema_Viario', '90', '4', '70', '1', '10', '50', '20', '50', '10', '60', '20', '50', '10', '60', '20', '60', '10', '50', '20', '60',
+    '0', 'ENDSEC', '0', 'EOF',
+  ].join('\n')
+  const parsedDxf = parseDxfLotBoundaries(dxfFixture)
+  assert.equal(parsedDxf.lots.length, 1, 'somente o contorno fechado no ENTITIES e na camada de lotes é importado')
+  assert.equal(parsedDxf.ignoredGeometryCount, 2, 'polilinhas abertas e sem área são contadas como geometria ignorada')
+  assert.equal(parsedDxf.lots[0].source_handle, 'LOT-A', 'o handle CAD permanece apenas como chave técnica')
+  assert.equal(parsedDxf.lots[0].label, null, 'textos do DXF não são importados como atributo do lote')
+  assert.deepEqual(parsedDxf.lots[0].geometry, square, 'o registro contém apenas os pontos do contorno')
+  assert.deepEqual(parsedDxf.bbox, { minX: 0, minY: 0, maxX: 10, maxY: 10 }, 'o enquadramento é derivado dos contornos aceitos')
+
+  const unpannedView = { zoom: 1, pan: { x: 0, y: 0 } }
+  const cursorAnchor = { x: 160, y: -75 }
+  const zoomedAtCursor = zoomMapViewAtOffset(unpannedView, 2, cursorAnchor)
+  assert.deepEqual(zoomedAtCursor, { zoom: 2, pan: { x: -160, y: 75 } }, 'o zoom no cursor ajusta o pan para preservar o ponto observado')
+  const pannedView = { zoom: 3, pan: { x: -72, y: 31 } }
+  const pannedZoom = zoomMapViewAtOffset(pannedView, 1.5, { x: 180, y: -60 })
+  assert.equal(pannedZoom.zoom, 4.5, 'zoom conserva o fator aplicado')
+  assert.ok(Math.abs((180 - pannedView.pan.x) / pannedView.zoom - (180 - pannedZoom.pan.x) / pannedZoom.zoom) < 1e-9, 'o ponto horizontal sob o cursor não deriva')
+  assert.ok(Math.abs((-60 - pannedView.pan.y) / pannedView.zoom - (-60 - pannedZoom.pan.y) / pannedZoom.zoom) < 1e-9, 'o ponto vertical sob o cursor não deriva')
+  assert.equal(zoomMapViewAtOffset(unpannedView, 1000, { x: 0, y: 0 }).zoom, 64, 'zoom máximo é limitado a 64x')
+  assert.equal(zoomMapViewAtOffset({ zoom: 0.7, pan: { x: 0, y: 0 } }, 0.01, { x: 0, y: 0 }).zoom, 0.65, 'zoom mínimo continua limitado')
 
   let nextId = 0
   const importedLots = withLotIds([
@@ -91,7 +126,7 @@ try {
   assert.throws(() => groupLotSaveAssignments([{ source_handle: 'missing-id' }]), /sem UUID/, 'save não pode transformar uma atribuição parcial em inserção')
   assert.throws(() => groupLotSaveAssignments([{ id: 'same', source_handle: 'A' }, { id: 'same', source_handle: 'B' }]), /repetidos/, 'IDs repetidos são rejeitados antes da gravação')
 
-  console.log('PASS: geometria, IDs, clique individual, seleção múltipla, cores, pan e seleção por área (janela/cruzamento).')
+  console.log('PASS: parser de contornos, zoom no cursor, IDs, clique individual, seleção múltipla, cores, pan e seleção por área (janela/cruzamento).')
 } finally {
   rmSync(outputDir, { recursive: true, force: true })
 }

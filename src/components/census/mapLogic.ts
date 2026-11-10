@@ -1,4 +1,6 @@
 export type MapLotPoint = readonly [number, number]
+export type MapViewState = { zoom: number; pan: { x: number; y: number } }
+export type MapViewAnchor = { x: number; y: number }
 
 export type MapLotAssignment = {
   id?: string
@@ -11,6 +13,26 @@ export type MapZoneColor = { id: string; color: string }
 export type MapSelectionRect = { left: number; top: number; right: number; bottom: number }
 export type MapPolygonForSelection = { key: string; points: MapLotPoint[] }
 export type LotSaveGroup = { zoneId: string | null; lotIds: string[] }
+export type DxfLotBoundary = {
+  id?: string
+  source_handle: string
+  label: null
+  layer_name: string
+  geometry: [number, number][]
+  area: number
+  is_valid: true
+  problem_reasons: string[]
+  zone_number: null
+}
+export type DxfLotParseResult = {
+  lots: DxfLotBoundary[]
+  bbox: { minX: number; minY: number; maxX: number; maxY: number } | null
+  sourceLayer: string
+  ignoredGeometryCount: number
+}
+
+export const MIN_MAP_ZOOM = 0.65
+export const MAX_MAP_ZOOM = 64
 
 export function getLotKey(lot: MapLotAssignment) {
   return lot.id || lot.source_handle
@@ -54,6 +76,19 @@ export function shouldStartMapPan(targetIsLot: boolean) {
   return !targetIsLot
 }
 
+export function zoomMapViewAtOffset(view: MapViewState, factor: number, anchor: MapViewAnchor): MapViewState {
+  const safeFactor = Number.isFinite(factor) && factor > 0 ? factor : 1
+  const zoom = Math.min(MAX_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, view.zoom * safeFactor))
+  const ratio = zoom / view.zoom
+  return {
+    zoom,
+    pan: {
+      x: anchor.x - (anchor.x - view.pan.x) * ratio,
+      y: anchor.y - (anchor.y - view.pan.y) * ratio,
+    },
+  }
+}
+
 export function isImportableLotGeometry(layer: string, closed: boolean, points: MapLotPoint[]) {
   if (layer.trim().toLowerCase() !== 'lotes urbanos' || !closed || points.length < 3) return false
   const area = Math.abs(points.reduce((sum, point, index) => {
@@ -61,6 +96,105 @@ export function isImportableLotGeometry(layer: string, closed: boolean, points: 
     return sum + point[0] * next[1] - next[0] * point[1]
   }, 0) / 2)
   return area > 0
+}
+
+export function parseDxfLotBoundaries(text: string): DxfLotParseResult {
+  const lines = text.replace(/\r/g, '').split('\n').map((line) => line.trim())
+  const polylines: Array<{ handle: string; layer: string; closed: boolean; points: [number, number][] }> = []
+  let section = ''
+  let waitingForSectionName = false
+  let entity: { type: string; handle: string; layer: string; closed: boolean; points: [number, number][] } | null = null
+
+  const flush = () => {
+    if (entity?.type === 'LWPOLYLINE') {
+      polylines.push({ handle: entity.handle, layer: entity.layer, closed: entity.closed, points: entity.points })
+    }
+  }
+
+  for (let i = 0; i < lines.length - 1; i += 2) {
+    const code = lines[i]
+    const value = lines[i + 1]
+
+    if (code === '0' && value === 'SECTION') {
+      flush()
+      entity = null
+      waitingForSectionName = true
+      continue
+    }
+    if (waitingForSectionName && code === '2') {
+      section = value.toUpperCase()
+      waitingForSectionName = false
+      continue
+    }
+    if (code === '0' && value === 'ENDSEC') {
+      flush()
+      entity = null
+      section = ''
+      waitingForSectionName = false
+      continue
+    }
+    if (code === '0') {
+      flush()
+      entity = section === 'ENTITIES' ? { type: value, handle: '', layer: '', closed: false, points: [] } : null
+      continue
+    }
+    if (!entity || section !== 'ENTITIES') continue
+
+    if (code === '5') entity.handle = value
+    if (code === '8') entity.layer = value
+    if (entity.type === 'LWPOLYLINE') {
+      if (code === '70') entity.closed = (Number(value) & 1) === 1
+      if (code === '10') {
+        const x = Number(value)
+        const nextCode = lines[i + 2]
+        const y = nextCode === '20' ? Number(lines[i + 3]) : NaN
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          entity.points.push([x, y])
+          i += 2
+        }
+      }
+    }
+  }
+  flush()
+
+  const candidates = polylines.filter((polyline) => polyline.layer.trim().toLowerCase() === 'lotes urbanos')
+  const source = candidates.filter((polyline) => isImportableLotGeometry(polyline.layer, polyline.closed, polyline.points))
+  const lots: DxfLotBoundary[] = source.map((polyline, index) => {
+    const area = Math.abs(polyline.points.reduce((sum, point, pointIndex) => {
+      const next = polyline.points[(pointIndex + 1) % polyline.points.length]
+      return sum + point[0] * next[1] - next[0] * point[1]
+    }, 0) / 2)
+    return {
+      source_handle: polyline.handle || `entity-${index + 1}`,
+      label: null,
+      layer_name: polyline.layer,
+      geometry: polyline.points,
+      area,
+      is_valid: true,
+      problem_reasons: [],
+      zone_number: null,
+    }
+  })
+
+  let bbox: DxfLotParseResult['bbox'] = null
+  for (const lot of lots) {
+    for (const [x, y] of lot.geometry) {
+      if (!bbox) bbox = { minX: x, minY: y, maxX: x, maxY: y }
+      else {
+        bbox.minX = Math.min(bbox.minX, x)
+        bbox.minY = Math.min(bbox.minY, y)
+        bbox.maxX = Math.max(bbox.maxX, x)
+        bbox.maxY = Math.max(bbox.maxY, y)
+      }
+    }
+  }
+
+  return {
+    lots,
+    bbox,
+    sourceLayer: source[0]?.layer || candidates[0]?.layer || 'Lotes Urbanos',
+    ignoredGeometryCount: candidates.length - source.length,
+  }
 }
 
 function pointInRect(point: MapLotPoint, rect: MapSelectionRect) {
