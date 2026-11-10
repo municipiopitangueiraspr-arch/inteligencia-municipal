@@ -180,4 +180,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 ## Retorno do Censo para a Secretaria de Saúde
 - [x] Ao abrir o Censo Municipal a partir de Saúde, o botão “Voltar ao painel” deve retornar à tela de módulos da Secretaria de Saúde, preservando essa seleção enquanto o módulo estiver aberto.
 - [x] O botão “Secretarias” da tela de módulos deve limpar a seleção preservada e retornar ao hall de secretarias.
-- [x] Validar build e lint; a publicação no GitHub Pages segue pendente até o workflow concluir.
+- [x] Validar build e lint; workflow do Pages concluído com sucesso e bundle público confirmado.
