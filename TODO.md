@@ -175,4 +175,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Não registrar nomes de pacientes, diagnósticos, respostas clínicas ou anotações clínicas nesta primeira versão.
 - [x] Restringir esta versão a administradores ativos, no hall e no RLS do Supabase, até que o acesso da equipe médica seja definido explicitamente.
 - [x] Aplicar o backend no Supabase e validar build, lint e acesso RLS.
-- [ ] Publicar o frontend no GitHub Pages para teste da equipe.
+- [x] Publicar o frontend no GitHub Pages para teste da equipe; workflow concluído e página/bundle público confirmados.
