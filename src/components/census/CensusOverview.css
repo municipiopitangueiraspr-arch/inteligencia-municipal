@@ -100,3 +100,29 @@
     font-size: 16px;
   }
 }
+
+
+/* Refinamento de leitura rápida — mantém os mesmos números e projeções */
+.census-overview-funnel-row>div:first-child{font-size:13px;line-height:1.4}
+.census-overview-funnel-row b{font-size:16px}
+.census-overview-funnel-track{height:15px}
+.census-overview-funnel-note{font-size:12px;line-height:1.45}
+.census-overview-forecast-row{grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 12px}
+.census-overview-forecast-row>span{grid-column:1;grid-row:1;font-size:12px}
+.census-overview-forecast-row>strong{grid-column:2;grid-row:1/span 2;max-width:190px;text-align:right;font-size:15px}
+.census-overview-forecast-row>small{grid-column:1;grid-row:2;font-size:11px}
+.census-overview-forecast-note{font-size:11px;line-height:1.55}
+.census-overview-metric small{font-size:11px;line-height:1.35}
+.census-overview-context-copy strong{font-size:13px}
+.census-overview-context-copy span{font-size:12px;line-height:1.45}
+.census-overview-zone>div:first-child{font-size:13px}
+.census-overview-zone b{font-size:12px}
+.census-overview-zone small,.census-overview-activity-row small{font-size:11px}
+.census-overview-activity-row strong{font-size:13px}
+.census-overview-activity-status{display:inline-flex;align-items:center;justify-content:center;min-width:78px;padding:5px 8px;border-radius:999px;font-size:11px!important;line-height:1.2}
+.census-overview-activity-status.completed{background:#e4f5eb;color:#287a56!important}
+.census-overview-activity-status.no_contact{background:#ffebea;color:#a64439!important}
+.census-overview-activity-status.in_progress{background:#fff1d9;color:#966715!important}
+.census-overview-activity-status.cancelled{background:#eef3f3;color:#61777b!important}
+.census-overview-quick-actions button{min-height:44px;font-size:13px}
+@media(max-width:650px){.census-overview-forecast-row>strong{grid-column:1;grid-row:2;max-width:none;text-align:left}.census-overview-forecast-row>small{grid-row:3}.census-overview-activity-status{min-width:68px;padding:5px 6px;font-size:10px!important}}

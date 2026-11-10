@@ -245,11 +245,11 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                         <small>Se mantido o ritmo recente: {estimatedDate(forecast.daysRemaining)}</small>
                       </>
                     )}
-                    {forecast.daysRemaining === null && <small>A previsão aparece após atividade em pelo menos 3 dias diferentes ao longo de uma semana, nos últimos 30 dias.</small>}
+
                   </div>
                 ))}
               </div>
-              <p className="census-overview-forecast-note">Projeções calculadas pelo histórico de registros no Supabase; são estimativas, não prazos garantidos.</p>
+              <p className="census-overview-forecast-note">Estimativa baseada no ritmo dos registros no Supabase; exige atividade em pelo menos 3 dias distintos ao longo de uma semana, nos últimos 30 dias. Não é prazo garantido.</p>
             </section>
           </div>
 
@@ -286,7 +286,7 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                 <div className="census-overview-activity-row" key={visit.id}>
                   <span className={`census-overview-activity-dot ${visit.status.toLowerCase()}`} />
                   <div><strong>{visit.household}</strong><small>{visit.acs} · {fmtDate(visit.created_at)}</small></div>
-                  <b>{visit.status === 'COMPLETED' ? 'Concluída' : visit.status === 'NO_CONTACT' ? 'Sem contato' : visit.status === 'IN_PROGRESS' ? 'Em andamento' : 'Cancelada'}</b>
+                  <b className={`census-overview-activity-status ${visit.status.toLowerCase()}`}>{visit.status === 'COMPLETED' ? 'Concluída' : visit.status === 'NO_CONTACT' ? 'Sem contato' : visit.status === 'IN_PROGRESS' ? 'Em andamento' : 'Cancelada'}</b>
                 </div>
               )) : <div className="census-overview-empty">Ainda não há visitas registradas.</div>}
             </section>

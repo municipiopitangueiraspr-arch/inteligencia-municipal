@@ -198,3 +198,13 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Persistir as visitas/retornos e as indicações em estruturas separadas no Supabase, preservando o RLS atualmente restrito a administradores.
 - [x] Build e lint passaram sem erros; a migration `202611102336_add_medical_priority_queue.sql` está aplicada no Supabase com RLS ativo e sem privilégio de exclusão para `authenticated`.
 - [x] Commit `1c69d5a` enviado à `main`; workflow Pages `42926114360` concluiu com sucesso; página e bundle confirmados em HTTP 200 com os textos de visitas, retornos e indicações. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
+
+
+## Refinamento visual de Saúde da Família/ACS
+
+- [x] Na Visão Geral, melhorar a hierarquia, o tamanho e a leitura rápida das etapas, previsões e estados existentes, reduzindo textos repetidos sem alterar cálculos, indicadores ou dados.
+- [x] Em Famílias e visitas, organizar visualmente os indicadores e registros existentes, tornar a tabela legível em tablet sem rolagem horizontal e facilitar a leitura dos filtros e estados sem remover informação nem alterar ações.
+- [x] No Mapa territorial, dar destaque ao modo ativo, à legenda e ao lote selecionado/focado, melhorar contraste, controles de toque e leitura no tablet preservando cores, filtros, dados e operações atuais.
+- [x] Nas confirmações e mensagens de gravação, reforçar hierarquia visual, legibilidade, diferenciação de sucesso/erro e clareza da ação, preservando textos essenciais e o fluxo de confirmação existente.
+- [x] Não criar funções, indicadores, métricas, tabelas ou regras de acesso; manter os dados, cálculos, autenticação e RLS atuais. Como a mudança é só de apresentação, não alterar schema nem gravar dados de teste no Supabase.
+- [ ] Validar build e lint, enviar a alteração para `main`, acompanhar GitHub Actions e confirmar o frontend atualizado no GitHub Pages para teste remoto.

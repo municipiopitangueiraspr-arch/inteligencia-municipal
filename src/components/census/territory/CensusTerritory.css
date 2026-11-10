@@ -241,3 +241,27 @@
 
 /* O foco nativo do SVG desenha um retângulo sobre o bounding box; o foco visual é o pulso interno. */
 .census-territory-svg polygon:focus,.census-territory-svg polygon:focus-visible{outline:none!important;outline-width:0!important;stroke:none!important;stroke-width:0!important;-webkit-tap-highlight-color:transparent}
+
+
+/* Mais contraste e leitura semântica, preservando os estados atuais do mapa */
+.census-territory-badges span{font-size:12px}
+.census-territory-toolbar{font-size:12px;line-height:1.4}
+.census-territory-legend{gap:8px 12px;font-size:11px;line-height:1.4}
+.census-territory-legend i{width:13px;height:13px}
+.census-map-mode-tabs button,.census-map-pending-toggle{font-size:12px}
+.census-map-metrics span{font-size:11px;line-height:1.3}
+.census-territory-panel-header h3{font-size:20px}
+.census-territory-lot-meta{font-size:11px}
+.census-territory-panel-notice,.census-territory-panel-error{font-size:12px;line-height:1.5}
+.census-territory-acs-heading strong,.census-household-available-forms>div>strong{font-size:12px}
+.census-territory-acs-heading small,.census-territory-acs-list small,.census-household-available-forms>div>small{font-size:11px}
+.census-territory-acs-list strong,.census-territory-acs-empty{font-size:12px}
+.census-household-card>header strong{font-size:14px}
+.census-household-card>header small,.census-household-meta,.census-household-history>summary{font-size:11px}
+.census-household-summary small{font-size:10px}
+.census-visit-row-heading strong,.census-response-history-link strong{font-size:12px}
+.census-visit-row-heading small,.census-response-history-link small{font-size:10px}
+.census-territory-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
+.census-workspace-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
+@media(max-width:1100px){.census-map-mode-tabs button,.census-map-pending-toggle{min-height:44px;padding:10px 13px}.census-territory-toolbar button{width:44px;height:44px;min-width:44px}.census-territory-badges span{min-height:42px}}
+@media(max-width:850px){.census-territory-legend{max-width:calc(100% - 16px);max-height:28vh;overflow:auto;padding:10px 12px}.census-territory-panel-header{padding:16px}.census-territory-panel-scroll{gap:14px;padding:14px}}

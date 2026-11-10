@@ -50,3 +50,18 @@
 
 /* O foco nativo do SVG desenha um retângulo sobre o bounding box; o foco visual é o pulso interno. */
 .census-workspace-svg polygon:focus,.census-workspace-svg polygon:focus-visible{outline:none!important;outline-width:0!important;stroke:none!important;stroke-width:0!important;-webkit-tap-highlight-color:transparent}
+
+
+/* Confirmações, mensagens e navegação: hierarquia visual acessível */
+.census-confirmation-dialog{width:min(100%,480px);padding:28px}
+.census-confirmation-icon{width:52px;height:52px;margin-bottom:16px}
+.census-confirmation-dialog h2{font-size:23px;line-height:1.25}
+.census-confirmation-dialog p{font-size:14px;line-height:1.6}
+.census-confirmation-actions{gap:11px;margin-top:24px}
+.census-confirmation-actions button{min-height:46px;padding-inline:17px;font-size:13px}
+.census-write-progress{font-size:14px;line-height:1.5}
+.census-workspace-notice,.census-territory-notice{align-items:flex-start;padding:13px 15px;font-size:13px;line-height:1.55}
+.census-workspace-notice svg,.census-territory-notice svg{flex:none;margin-top:1px}
+.census-mobile-menu-button{width:44px;height:44px}
+@media(max-width:1100px){.census-shell>.fleet-sidebar .fleet-back{min-height:44px;padding-inline:12px}.census-mobile-menu button{min-height:44px;font-size:13px}}
+@media(max-width:600px){.census-confirmation-dialog{padding:21px}.census-confirmation-dialog h2{font-size:21px}.census-confirmation-actions button{min-height:46px}.census-write-progress{font-size:13px}}
