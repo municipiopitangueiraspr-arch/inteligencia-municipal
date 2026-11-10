@@ -7,6 +7,7 @@ import { Dashboard } from './components/Dashboard'
 import { GovernancePanel } from './components/GovernancePanel'
 import { FleetModule } from './components/FleetModule'
 import { CensusModule } from './components/census/CensusModule'
+import { MedicalVisitsModule } from './components/census/MedicalVisitsModule'
 import { SupplierPortal } from './components/SupplierPortal'
 import { SupplierAccessRequest } from './components/SupplierAccessRequest'
 import type { Station } from './components/FleetResources'
@@ -14,13 +15,13 @@ import './App.css'
 
 const assetBase = import.meta.env.BASE_URL
 type SupplierContext = { station: Station; role: string; vehicleId: string | null; accessAvailable: boolean; accessReason: string | null }
-type ActiveArea = 'dashboard' | 'fleet' | 'census' | 'governance'
+type ActiveArea = 'dashboard' | 'fleet' | 'census' | 'medical-visits' | 'governance'
 const activeAreaStorageKey = 'inteligencia-municipal.active-area'
 
 function getInitialActiveArea(): ActiveArea {
   try {
     const stored = window.sessionStorage.getItem(activeAreaStorageKey)
-    return stored === 'fleet' || stored === 'census' || stored === 'governance' ? stored : 'dashboard'
+    return stored === 'fleet' || stored === 'census' || stored === 'medical-visits' || stored === 'governance' ? stored : 'dashboard'
   } catch { return 'dashboard' }
 }
 
@@ -153,8 +154,9 @@ function App() {
   if (signedIn) {
     if (activeArea === 'fleet') return <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
     if (activeArea === 'census') return <CensusModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
+    if (activeArea === 'medical-visits') return <MedicalVisitsModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
     if (activeArea === 'governance') return <GovernancePanel userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} />
+    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenMedicalVisits={() => setActiveArea('medical-visits')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} />
   }
   if (showFirstAccess && supplierMode) return <SupplierAccessRequest onBack={() => setShowFirstAccess(false)} />
 

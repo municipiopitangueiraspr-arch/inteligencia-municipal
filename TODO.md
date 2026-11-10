@@ -167,3 +167,12 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Calcular as estimativas com os timestamps reais do Supabase dos últimos 30 dias e somente mostrar prazo quando houver atividade em pelo menos 3 dias distintos ao longo de uma semana; sem essa base, informar claramente que a previsão ainda não pode ser calculada.
 - [x] Manter o alvo de domicílios explicitamente baseado na estimativa de um domicílio por lote, já usada pelo painel, e preservar os totais e gráficos existentes.
 - [x] Validar build e lint e publicar o frontend no GitHub Pages para teste remoto.
+
+## Módulo de Visitas Médicas
+- [x] Criar um módulo independente, com mapa de visitas médicas, registro de visita e acompanhamento de retornos.
+- [x] Reutilizar o mapa e a identificação dos lotes do Censo, mas manter registros, cores, métricas e estados médicos em tabelas separadas das visitas e respostas dos ACS.
+- [x] Permitir registrar lote, data da visita, situação operacional e data de retorno; permitir acompanhar retornos pendentes e marcar um retorno como realizado ou cancelado.
+- [x] Não registrar nomes de pacientes, diagnósticos, respostas clínicas ou anotações clínicas nesta primeira versão.
+- [x] Restringir esta versão a administradores ativos, no hall e no RLS do Supabase, até que o acesso da equipe médica seja definido explicitamente.
+- [x] Aplicar o backend no Supabase e validar build, lint e acesso RLS.
+- [ ] Publicar o frontend no GitHub Pages para teste da equipe.

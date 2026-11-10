@@ -21,6 +21,7 @@ type DashboardProps = {
   userEmail?: string
   onOpenFleet: () => void
   onOpenCensus: () => void
+  onOpenMedicalVisits: () => void
   onOpenGovernance: () => void
   onLogout: () => void
 }
@@ -34,7 +35,7 @@ const moduleToneById: Record<string, string> = {
   acts: 'official',
 }
 
-export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernance, onLogout }: DashboardProps) {
+export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenGovernance, onLogout }: DashboardProps) {
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [secretariatModules, setSecretariatModules] = useState<MunicipalSecretariatModule[]>([])
@@ -94,12 +95,13 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernan
     ? secretariatModules
       .filter((mapping) => mapping.secretariat_id === selectedSecretariat.id)
       .map((mapping) => modules.find((module) => module.id === mapping.module_id))
-      .filter((module): module is MunicipalModule => Boolean(module))
+      .filter((module): module is MunicipalModule => Boolean(module) && (module?.id !== 'medical-visits' || canManageGovernance))
     : []
 
   const openModule = (id: string) => {
     if (id === 'fleet') onOpenFleet()
     if (id === 'census') onOpenCensus()
+    if (id === 'medical-visits') onOpenMedicalVisits()
   }
 
   return (
@@ -153,7 +155,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernan
                 <div className={`module-grid${selectedSecretariat.id === 'health' ? ' module-grid--health' : ''}`} aria-label={`Módulos de ${selectedSecretariat.name}`}>
                   {visibleModules.map((module) => {
                     const Icon = getMunicipalIcon(module.icon_name)
-                    const hasRoute = module.id === 'fleet' || module.id === 'census'
+                    const hasRoute = module.id === 'fleet' || module.id === 'census' || (module.id === 'medical-visits' && canManageGovernance)
                     const canOpen = module.is_ready && hasRoute
                     return (
                       <button
