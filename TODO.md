@@ -187,3 +187,14 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Atualizar a marca no topo e os textos de identificação do módulo nas telas internas e navegação móvel.
 - [x] Validar build/lint e aplicar a alteração de rótulo do catálogo Supabase.
 - [x] Publicar o frontend no Pages e confirmar a versão pública para teste da equipe; workflow concluído e bundle atualizado confirmado.
+
+## Preparação do módulo Visitas Médicas
+- [x] Usar a mesma estrutura de cabeçalho e menu lateral de Saúde da Família/ACS, começando por “Visão geral” vazia.
+- [x] Na tela de visitas, permitir acompanhar e selecionar no mapa os lotes e registrar uma visita por lote, independentemente de cadastro de domicílio.
+- [x] Colorir lotes nunca visitados de vermelho, lotes visitados sem retorno necessário de verde e lotes com retorno necessário de azul.
+- [x] Disponibilizar um formulário padrão inicial para registrar uma visita, com agendamento automático do retorno quando houver data prevista; manter os campos operacionais sem dados clínicos ou identificação pessoal nesta etapa.
+- [x] Ter tela de acompanhamento dos retornos para consultar próximos retornos e gerir os retornos pendentes.
+- [x] Ter uma tela separada para incluir e acompanhar indicações de lotes da Secretaria para o dia, incluindo lotes sem domicílio cadastrado, identificadas como prioridade administrativa e não como necessidade hospitalar.
+- [x] Persistir as visitas/retornos e as indicações em estruturas separadas no Supabase, preservando o RLS atualmente restrito a administradores.
+- [x] Build e lint passaram sem erros; a migration `202611102336_add_medical_priority_queue.sql` está aplicada no Supabase com RLS ativo e sem privilégio de exclusão para `authenticated`.
+- [ ] Comitar e enviar as alterações para `main`; acompanhar o workflow do Pages e verificar a versão pública.
