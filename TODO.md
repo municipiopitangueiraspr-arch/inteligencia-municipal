@@ -143,4 +143,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Centralizar o ícone dentro de cada card e posicionar o nome da secretaria logo abaixo dele, com uma ação de acesso clara.
 - [x] Preservar as dez secretarias e a navegação para os módulos já atribuídos.
 - [x] Validar o build local.
-- [ ] Publicar o refinamento no GitHub Pages para teste remoto.
+- [x] Publicar o refinamento no GitHub Pages para teste remoto.
