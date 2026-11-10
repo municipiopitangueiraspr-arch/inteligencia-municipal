@@ -136,4 +136,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Reduzir poluição e redundância no hall, incluindo repetição de brasões, identificação do produto, títulos/subtítulos e rótulos de seção; manter uma marca institucional e uma instrução principal claras.
 - [x] Preservar o acesso às dez secretarias e os módulos já atribuídos, mantendo a tela de login, a autenticação e a responsividade.
 - [x] Validar o build local.
-- [ ] Publicar o hall atualizado no GitHub Pages para teste remoto.
+- [x] Publicar o hall atualizado no GitHub Pages para teste remoto.
