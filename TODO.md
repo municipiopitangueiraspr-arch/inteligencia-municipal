@@ -153,4 +153,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Os perfis e vínculos com secretarias/módulos são dados cadastrais nesta etapa; não criam regras de acesso por perfil ou secretaria, e as atribuições de módulos são registradas sem bloquear nem ampliar os acessos atuais.
 - [x] O novo perfil municipal não substitui o campo legado de perfil usado pelos módulos existentes; as políticas atuais de Frotas e Censo permanecem inalteradas.
 - [x] Build e lint concluídos; a estrutura aditiva foi aplicada ao Supabase e a Edge Function de convite municipal está implantada.
-- [ ] Publicar o frontend atualizado e disponibilizar o hall de Governança no GitHub Pages para teste remoto.
+- [x] Publicar o frontend atualizado e disponibilizar o hall de Governança no GitHub Pages para teste remoto.
