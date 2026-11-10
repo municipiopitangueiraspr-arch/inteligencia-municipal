@@ -286,7 +286,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
               <aside className="governance-policy-note" role="note">
                 <CircleAlert size={20} aria-hidden="true" />
-              <p><strong>Etapa cadastral:</strong> perfis e vínculos com secretarias/módulos ficam registrados no Supabase, mas não filtram o acesso aos módulos. Somente o perfil Administrador permite abrir este painel; as permissões atuais de Frotas, Censo e demais módulos permanecem como estão.</p>
+              <p><strong>Etapa cadastral:</strong> perfis e vínculos com secretarias/módulos ficam registrados no Supabase, mas não filtram o acesso aos módulos. Somente o perfil Administrador permite abrir este painel; as permissões atuais de Frotas, Saúde da Família/ACS e demais módulos permanecem como estão.</p>
               </aside>
 
               {message && <div className={`governance-message governance-message--${message.type}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.type === 'success' ? <Check size={17} /> : <CircleAlert size={17} />}{message.text}</div>}

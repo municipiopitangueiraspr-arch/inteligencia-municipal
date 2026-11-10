@@ -79,7 +79,7 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
 
   const load = async () => {
     if (!supabase) {
-      setError('O banco do Censo não está disponível nesta sessão.')
+      setError('O serviço de dados da Saúde da Família/ACS não está disponível nesta sessão.')
       setLoading(false)
       return
     }
@@ -208,7 +208,7 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
             <section className="fleet-panel census-overview-funnel census-overview-hero">
               <div className="census-overview-title">
                 <div>
-                  <span className="fleet-kicker">ACOMPANHAMENTO DO CENSO</span>
+                  <span className="fleet-kicker">SAÚDE DA FAMÍLIA/ACS</span>
                   <h3>Até onde o trabalho já avançou?</h3>
                   <p className="census-overview-intro">Cada etapa mostra quantos lotes já passaram pelo processo, do mapa até o questionário enviado.</p>
                 </div>

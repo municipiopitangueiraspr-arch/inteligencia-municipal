@@ -53,7 +53,7 @@ export function QuestionnairesManagement() {
   const [backendReady, setBackendReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savingAction, setSavingAction] = useState<'save' | 'status' | null>(null)
-  const [notice, setNotice] = useState(supabase ? '' : 'O banco do Censo não está disponível nesta sessão.')
+  const [notice, setNotice] = useState(supabase ? '' : 'O serviço de dados da Saúde da Família/ACS não está disponível nesta sessão.')
   const [noticeTone, setNoticeTone] = useState<NoticeTone>(supabase ? 'info' : 'error')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
@@ -247,7 +247,7 @@ export function QuestionnairesManagement() {
   }
 
   const confirmationDetails = confirmation?.kind === 'save'
-    ? { title: isNew ? 'Criar este questionário?' : 'Salvar as alterações?', description: `“${draft?.title || 'Questionário sem título'}” será gravado no Censo Municipal como ${statusLabels[draft?.status || 'DRAFT'].toLocaleLowerCase('pt-BR')}.`, confirmLabel: isNew ? 'Criar questionário' : 'Salvar alterações' }
+    ? { title: isNew ? 'Criar este questionário?' : 'Salvar as alterações?', description: `“${draft?.title || 'Questionário sem título'}” será salvo na Saúde da Família/ACS com o status ${statusLabels[draft?.status || 'DRAFT'].toLocaleLowerCase('pt-BR')}.`, confirmLabel: isNew ? 'Criar questionário' : 'Salvar alterações' }
     : confirmation?.kind === 'status'
       ? { title: confirmation.status === 'ACTIVE' ? 'Ativar este questionário?' : 'Inativar este questionário?', description: `“${draft?.title || 'Questionário sem título'}” ficará ${confirmation.status === 'ACTIVE' ? 'disponível como ativo' : 'inativo e preservado no sistema'}.`, confirmLabel: confirmation.status === 'ACTIVE' ? 'Ativar questionário' : 'Inativar questionário' }
       : confirmation?.kind === 'discard'
@@ -281,7 +281,7 @@ export function QuestionnairesManagement() {
       </aside>
 
       <div className="questionnaire-workspace">
-        {!draft && !loading && <div className="fleet-panel questionnaire-empty-state"><span className="questionnaire-empty-icon"><FileText size={24} /></span><h3>Comece seu primeiro questionário</h3><p>Crie um formulário ou carregue a ficha inicial do Censo para editar e ativar.</p><button type="button" className="fleet-primary-button" onClick={startNewQuestionnaire} disabled={!backendReady}><Plus size={15} />Criar questionário</button></div>}
+        {!draft && !loading && <div className="fleet-panel questionnaire-empty-state"><span className="questionnaire-empty-icon"><FileText size={24} /></span><h3>Comece seu primeiro questionário</h3><p>Crie um formulário ou carregue a ficha inicial da Saúde da Família/ACS para editar e ativar.</p><button type="button" className="fleet-primary-button" onClick={startNewQuestionnaire} disabled={!backendReady}><Plus size={15} />Criar questionário</button></div>}
         {draft && <>
           <div className="fleet-panel questionnaire-editor-toolbar">
             <div className="questionnaire-editor-title"><span className={`questionnaire-status ${statusClass(draft.status)}`}>{statusLabels[draft.status]}</span><h3>{isNew ? 'Novo questionário' : draft.title || 'Questionário sem título'}</h3><small>{dirty ? 'Alterações não salvas' : `Atualizado em ${formatDate(draft.updated_at)}`}</small></div>
@@ -369,7 +369,7 @@ function QuestionnairePreview({ form, onClose }: { form: QuestionnaireRecord; on
   return <aside className="questionnaire-preview-panel">
     <div className="questionnaire-preview-heading"><span><Eye size={16} />Pré-visualização</span><button type="button" aria-label="Fechar pré-visualização" onClick={onClose}><X size={16} /></button></div>
     <div className="questionnaire-preview-note"><ShieldCheck size={15} /><span>Prévia visual. Nenhuma resposta é coletada ou salva.</span></div>
-    <div className="questionnaire-preview-scroll"><div className="questionnaire-preview-form"><span className="fleet-kicker">CENSO MUNICIPAL</span><h3>{form.title || 'Título do questionário'}</h3>{form.subtitle && <h4>{form.subtitle}</h4>}{form.description && <p className="questionnaire-preview-description">{form.description}</p>}
+    <div className="questionnaire-preview-scroll"><div className="questionnaire-preview-form"><span className="fleet-kicker">SAÚDE DA FAMÍLIA/ACS</span><h3>{form.title || 'Título do questionário'}</h3>{form.subtitle && <h4>{form.subtitle}</h4>}{form.description && <p className="questionnaire-preview-description">{form.description}</p>}
       {form.form_schema.sections.map((section, sectionIndex) => <section className="questionnaire-preview-section" key={section.id}><h4>{section.title || `Seção ${sectionIndex + 1}`}</h4>{section.description && <p>{section.description}</p>}{section.questions.map((question) => <PreviewQuestion key={question.id} question={question} />)}</section>)}
     </div></div>
   </aside>

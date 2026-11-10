@@ -125,7 +125,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
 
   const loadMap = useCallback(async () => {
     const db = supabase
-    if (!db) { setMapError('O banco do Censo não está disponível nesta sessão.'); setLoading(false); return }
+    if (!db) { setMapError('O serviço de dados da Saúde da Família/ACS não está disponível nesta sessão.'); setLoading(false); return }
     setLoading(true)
     setMapError('')
     try {
@@ -202,7 +202,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       const { data: canAccess, error: accessError } = await db.rpc('census_user_can_access_lot', { p_lot_id: lot.id })
       if (accessError) throw new Error(`Não foi possível verificar o acesso ao lote: ${accessError.message}`)
       if (canAccess !== true) {
-        if (requestId === requestRef.current) setPanelError('Este lote não está associado à sua zona de atuação. Se você acredita que deveria ter acesso, fale com o administrador do Censo.')
+        if (requestId === requestRef.current) setPanelError('Este lote não está associado à sua zona de atuação. Se você acredita que deveria ter acesso, fale com o administrador do módulo Saúde da Família/ACS.')
         return
       }
       const [lotAcsResult, managerResult] = await Promise.all([
@@ -491,7 +491,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   return <section className="census-territory" aria-busy={loading || writing}>
     <div className="census-territory-heading"><div className="census-territory-badges"><span><MapPinned size={15} />{lots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
-    {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando no Censo Municipal… Aguarde.</span></div>}
+    {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
       <div className="census-map-mode-tabs" role="tablist" aria-label="Modo de visualização do mapa">
         <button type="button" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapMode('zones'); setShowOnlyPending(false) }}><MapPinned size={15} />Divisão por zonas</button>

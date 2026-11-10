@@ -181,3 +181,9 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Ao abrir o Censo Municipal a partir de Saúde, o botão “Voltar ao painel” deve retornar à tela de módulos da Secretaria de Saúde, preservando essa seleção enquanto o módulo estiver aberto.
 - [x] O botão “Secretarias” da tela de módulos deve limpar a seleção preservada e retornar ao hall de secretarias.
 - [x] Validar build e lint; workflow do Pages concluído com sucesso e bundle público confirmado.
+
+## Nome do módulo Saúde da Família/ACS
+- [x] Renomear o card do hall e o rótulo no catálogo para “Saúde da Família/ACS”, preservando o identificador técnico existente.
+- [x] Atualizar a marca no topo e os textos de identificação do módulo nas telas internas e navegação móvel.
+- [x] Validar build/lint e aplicar a alteração de rótulo do catálogo Supabase.
+- [ ] Publicar o frontend no Pages e confirmar a versão pública para teste da equipe.

@@ -46,7 +46,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL')
 
   const load = async () => {
-    if (!supabase) { setError('O banco do Censo não está disponível nesta sessão.'); setLoading(false); return }
+    if (!supabase) { setError('O serviço de dados da Saúde da Família/ACS não está disponível nesta sessão.'); setLoading(false); return }
     const db = supabase
     setLoading(true); setError('')
     try {
@@ -156,7 +156,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
       </div>
       <section className="census-family-visual-grid" aria-label="Visão visual da cobertura territorial">
         <article className="fleet-panel census-family-coverage-card">
-          <div className="census-family-section-heading"><div><span className="fleet-kicker">COBERTURA TERRITORIAL</span><h3>Avanço do Censo</h3></div><Target size={19} /></div>
+          <div className="census-family-section-heading"><div><span className="fleet-kicker">COBERTURA TERRITORIAL</span><h3>Acompanhamento territorial</h3></div><Target size={19} /></div>
           <div className="census-family-coverage-body"><div className="census-family-donut" style={{ '--coverage': `${visualMetrics.coverage}%` } as CSSProperties}><div><strong>{visualMetrics.coverage}%</strong><small>cobertura</small></div></div><div className="census-family-coverage-copy"><strong>{visualMetrics.completed.toLocaleString('pt-BR')} de {metrics.households.toLocaleString('pt-BR')}</strong><span>lotes com visita concluída; lotes sem cadastro são considerados domicílios presumidos</span><div className="census-family-mini-stats"><span><i className="done" />Concluídos <b>{visualMetrics.completed}</b></span><span><i className="waiting" />Sem visita <b>{visualMetrics.noVisit}</b></span><span><i className="attention" />Sem contato <b>{visualMetrics.noContact}</b></span><span><i className="registered" />Cadastros reais <b>{visualMetrics.registered}</b></span></div></div></div>
         </article>
         <article className="fleet-panel census-family-status-chart">
