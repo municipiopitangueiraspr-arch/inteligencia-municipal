@@ -124,4 +124,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Os demais cards de secretaria continuam disponíveis, mesmo sem módulos atribuídos nesta etapa; a navegação não cria permissões nem altera as regras existentes de acesso ou dados do Supabase.
 - [x] A tela de login e o fluxo de autenticação permanecem inalterados.
 - [x] O build TypeScript/Vite passa após a mudança.
-- [ ] O front-end atualizado é publicado no GitHub Pages para teste remoto.
+- [x] O front-end atualizado é publicado no GitHub Pages para teste remoto.
