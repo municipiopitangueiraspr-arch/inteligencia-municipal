@@ -159,4 +159,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Na Secretaria de Saúde, exibir Censo Municipal como primeiro card e Visitas Médicas como segundo card, identificado como em preparação e sem ação funcional.
 - [x] Em telas largas, a área de módulos da Saúde usa uma grade de quatro colunas para permitir adicionar módulos ao lado dos existentes; adaptar a quantidade de colunas para tablet e celular.
 - [x] Manter os demais módulos e secretarias inalterados; build e lint concluídos, e catálogo confirmado no Supabase.
-- [ ] Publicar o frontend no GitHub Pages para teste remoto.
+- [x] Publicar o frontend no GitHub Pages para teste remoto.
