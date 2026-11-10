@@ -173,6 +173,8 @@ try {
   assert.match(moduleCss, /census-selected-lot-pulse-prep/, 'Preparar mapa destaca o lote selecionado com pulso')
   assert.match(territoryCss, /polygon\.selected\{stroke:none!important/, 'Mapa territorial não cria moldura no lote selecionado')
   assert.match(moduleCss, /polygon\.census-lot-selected\{stroke:none!important/, 'Preparar mapa não cria moldura no lote selecionado')
+  assert.match(territoryCss, /polygon:focus,\.census-territory-svg polygon:focus-visible\{outline:none!important/, 'Mapa territorial remove o retângulo nativo de foco')
+  assert.match(moduleCss, /polygon:focus,\.census-workspace-svg polygon:focus-visible\{outline:none!important/, 'Preparar mapa remove o retângulo nativo de foco')
   assert.match(territoryCode, /Aplicar questionário/, 'Dossiê oferece aplicação de questionário por domicílio')
   assert.match(territoryCode, /Adicionar domicílio/, 'Dossiê permite adicionar mais de um domicílio no lote')
   assert.doesNotMatch(territoryCode, /census-household-visit-button.*Registrar visita/, 'Ação principal do domicílio não é mais registrar visita')
