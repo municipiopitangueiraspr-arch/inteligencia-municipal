@@ -125,7 +125,7 @@ try {
   assert.doesNotMatch(lotAcsMigration, /\bdrop\s+table\b|\btruncate\b/i, 'migration do vínculo preserva os registros existentes')
   assert.match(territoryCode, /census_get_lot_acs/)
   assert.match(territoryCode, /census_assign_acs_to_lot/)
-  assert.match(territoryCode, /Questionários ativos pendentes/)
+  assert.match(territoryCode, /Aplicar questionário/)
   assert.match(territoryCode, /fetchAllPages<TerritoryLot>/)
   assert.match(territoryCode, /fetchAllPages<Household>/)
   assert.match(censusModuleCode, /\.from\('census_territory_map_imports'\)/, 'Preparar mapa consulta a mesma origem publicada do Mapa territorial')
@@ -166,6 +166,10 @@ try {
   assert.match(territoryCode, /status === 'answered' \|\| status === 'partial' \? zone\?\.color/, 'Lote respondido usa a cor da própria zona')
   assert.match(territoryCode, /stroke=\{isSelected \? '#153f4a' : '#ffffff'\}/, 'Mapa territorial separa visualmente lotes adjacentes')
   assert.match(censusModuleCode, /stroke=\{selected \? '#e59a22' : '#ffffff'\}/, 'Preparar mapa separa visualmente lotes adjacentes')
+  assert.match(territoryCode, /census-territory-selected-overlay/, 'Lote selecionado recebe contorno superior sem sombra invasiva')
+  assert.match(territoryCode, /Aplicar questionário/, 'Dossiê oferece aplicação de questionário por domicílio')
+  assert.match(territoryCode, /Adicionar domicílio/, 'Dossiê permite adicionar mais de um domicílio no lote')
+  assert.doesNotMatch(territoryCode, /census-household-visit-button.*Registrar visita/, 'Ação principal do domicílio não é mais registrar visita')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

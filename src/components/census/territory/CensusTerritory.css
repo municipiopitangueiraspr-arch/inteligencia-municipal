@@ -226,3 +226,8 @@
 
 /* Separação visual entre limites de lotes adjacentes */
 .census-territory-svg polygon{paint-order:stroke fill}
+
+.census-territory-svg polygon.selected{filter:none}
+.census-territory-svg polygon.census-territory-selected-overlay{filter:none;pointer-events:none}
+
+.census-household-available-forms select{width:100%;min-height:38px;padding:8px 10px;border:1px solid #cfe0df;border-radius:8px;background:#fff;color:#3b6970;font:inherit;font-size:10px;font-weight:800}
