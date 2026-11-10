@@ -159,6 +159,10 @@ try {
   assert.match(territoryCode, /census-map-metrics/, 'Mapa Territorial exibe indicadores de cobertura')
   assert.match(territoryCode, /showOnlyPending/, 'Mapa Territorial permite mostrar somente pendências')
   assert.match(territoryCode, /coverageResponses/, 'Mapa Territorial calcula cobertura pelas respostas reais')
+  assert.match(territoryCode, /type VisitMapStatus = 'completed' \| 'in_progress' \| 'no_contact' \| 'no_visit' \| 'cancelled'/, 'Situação das visitas possui estados próprios')
+  assert.match(territoryCode, /visitStatusByLot/, 'Situação das visitas é calculada sem respostas de questionários')
+  assert.match(territoryCode, /mapMode === 'visits' \? visitStatusColors/, 'Modo visitas usa cores próprias')
+  assert.match(territoryCode, /mapMode === 'questionnaire' && <div className="census-map-filter-row"/, 'Seletor de questionário aparece apenas na cobertura')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
