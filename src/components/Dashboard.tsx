@@ -28,6 +28,7 @@ type DashboardProps = {
 const moduleToneById: Record<string, string> = {
   fleet: 'fleet',
   census: 'census',
+  'medical-visits': 'health',
   atas: 'records',
   compras: 'procurement',
   acts: 'official',
@@ -149,7 +150,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernan
               </div>
 
               {visibleModules.length > 0 ? (
-                <div className="module-grid" aria-label={`Módulos de ${selectedSecretariat.name}`}>
+                <div className={`module-grid${selectedSecretariat.id === 'health' ? ' module-grid--health' : ''}`} aria-label={`Módulos de ${selectedSecretariat.name}`}>
                   {visibleModules.map((module) => {
                     const Icon = getMunicipalIcon(module.icon_name)
                     const hasRoute = module.id === 'fleet' || module.id === 'census'

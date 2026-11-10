@@ -300,6 +300,10 @@
   gap: 14px;
 }
 
+.module-grid--health {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .module-card {
   position: relative;
   min-width: 0;
@@ -339,6 +343,7 @@
 
 .module-card--fleet { --module-accent: #24789b; --module-soft: #e7f3f7; --module-ink: #1c6684; }
 .module-card--census { --module-accent: #21856d; --module-soft: #e8f5ef; --module-ink: #1d755f; }
+.module-card--health { --module-accent: #21856d; --module-soft: #e8f5ef; --module-ink: #1d755f; }
 .module-card--records { --module-accent: #7b68a8; --module-soft: #f0edfa; --module-ink: #695b91; }
 .module-card--procurement { --module-accent: #b47e1e; --module-soft: #fff5df; --module-ink: #926515; }
 .module-card--official { --module-accent: #b75f55; --module-soft: #fff0ed; --module-ink: #985147; }
@@ -508,8 +513,17 @@
   .department-heading { gap: 12px; padding-bottom: 17px; }
   .department-heading-icon { width: 52px; height: 52px; flex-basis: 52px; border-radius: 14px; }
   .module-grid { grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .module-grid--health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .module-card { min-height: 205px; padding: 18px; }
   .secretariat-empty { min-height: 195px; padding: 24px 17px; }
+}
+
+@media (min-width: 761px) and (max-width: 980px) {
+  .module-grid--health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .module-grid--health { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

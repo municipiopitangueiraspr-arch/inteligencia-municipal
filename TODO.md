@@ -154,3 +154,9 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] O novo perfil municipal não substitui o campo legado de perfil usado pelos módulos existentes; as políticas atuais de Frotas e Censo permanecem inalteradas.
 - [x] Build e lint concluídos; a estrutura aditiva foi aplicada ao Supabase e a Edge Function de convite municipal está implantada.
 - [x] Publicar o frontend atualizado e disponibilizar o hall de Governança no GitHub Pages para teste remoto.
+
+## Secretaria de Saúde: grade de módulos
+- [x] Na Secretaria de Saúde, exibir Censo Municipal como primeiro card e Visitas Médicas como segundo card, identificado como em preparação e sem ação funcional.
+- [x] Em telas largas, a área de módulos da Saúde usa uma grade de quatro colunas para permitir adicionar módulos ao lado dos existentes; adaptar a quantidade de colunas para tablet e celular.
+- [x] Manter os demais módulos e secretarias inalterados; build e lint concluídos, e catálogo confirmado no Supabase.
+- [ ] Publicar o frontend no GitHub Pages para teste remoto.
