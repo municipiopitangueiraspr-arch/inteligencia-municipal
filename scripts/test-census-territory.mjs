@@ -23,6 +23,7 @@ try {
   const focusHookCode = readFileSync('src/components/census/territory/useCensusDialogFocus.ts', 'utf8')
   const confirmationCode = readFileSync('src/components/census/CensusWriteConfirmation.tsx', 'utf8')
   const mapPreparationCode = readFileSync('src/components/census/CensusModule.tsx', 'utf8')
+  const familiesCode = readFileSync('src/components/census/CensusFamiliesVisits.tsx', 'utf8')
   const questions = [
     { id: 'name', label: 'Nome', type: 'short_text', required: true, validation: { minLength: 2, maxLength: 60 } },
     { id: 'people', label: 'Pessoas', type: 'number', required: true, validation: { min: 1, max: 20 } },
@@ -130,6 +131,12 @@ try {
   assert.match(mapPreparationCode, /\.from\('census_territory_map_lots'\)/, 'Preparar mapa consulta os mesmos lotes publicados do Mapa territorial')
   assert.match(mapPreparationCode, /fetchTerritoryLots\(supabase, current\.id\)/, 'Preparar mapa pagina os lotes publicados sem limite arbitrário de 5.000')
   assert.match(mapPreparationCode, /status', 'DRAFT'/, 'Preparar mapa mantém fallback para rascunho recém-importado')
+  assert.match(mapPreparationCode, /CensusFamiliesVisits/, 'a navegação abre o painel de Famílias e Visitas')
+  assert.match(familiesCode, /census_households/, 'o painel consulta domicílios no Supabase')
+  assert.match(familiesCode, /census_visits/, 'o painel consulta visitas no Supabase')
+  assert.match(familiesCode, /census_questionnaire_responses/, 'o painel consulta respostas de questionários no Supabase')
+  assert.match(familiesCode, /Resumo por zona/, 'o painel mostra resumo por zona')
+  assert.match(familiesCode, /Resumo por ACS/, 'o painel mostra resumo por ACS')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
