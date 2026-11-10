@@ -134,7 +134,9 @@
 }
 
 .logout-button:focus-visible,
-.module-card:focus-visible {
+.module-card:focus-visible,
+.secretariat-card:focus-visible,
+.secretariat-back-button:focus-visible {
   outline: 3px solid #f0bd54;
   outline-offset: 3px;
 }
@@ -227,6 +229,10 @@
   padding: 42px 0 24px;
 }
 
+.secretariat-section {
+  padding: 42px 0 24px;
+}
+
 .section-heading {
   display: flex;
   align-items: end;
@@ -255,12 +261,110 @@
 }
 
 .module-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
   align-items: stretch;
   gap: 17px;
 }
+
+.secretariat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+
+.secretariat-card {
+  position: relative;
+  min-width: 0;
+  min-height: 232px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid #e0e8eb;
+  border-top: 4px solid var(--secretariat-accent, #1b6684);
+  border-radius: 14px;
+  color: inherit;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(16, 42, 67, 0.035);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.secretariat-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--secretariat-accent, #1b6684) 38%, #e0e8eb);
+  box-shadow: 0 14px 26px rgba(16, 42, 67, 0.11);
+}
+
+.secretariat-card--administration { --secretariat-accent: #23789b; --secretariat-soft: #e7f3f7; --secretariat-ink: #1c6684; }
+.secretariat-card--agriculture { --secretariat-accent: #648c49; --secretariat-soft: #eef5e8; --secretariat-ink: #55783d; }
+.secretariat-card--social { --secretariat-accent: #bd657d; --secretariat-soft: #faedf1; --secretariat-ink: #a44d66; }
+.secretariat-card--culture { --secretariat-accent: #8064a4; --secretariat-soft: #f1edf8; --secretariat-ink: #70548f; }
+.secretariat-card--development { --secretariat-accent: #b47e1e; --secretariat-soft: #fff5df; --secretariat-ink: #926515; }
+.secretariat-card--education { --secretariat-accent: #3979a4; --secretariat-soft: #eaf2f8; --secretariat-ink: #326d94; }
+.secretariat-card--sports { --secretariat-accent: #328777; --secretariat-soft: #e8f5f1; --secretariat-ink: #267362; }
+.secretariat-card--works { --secretariat-accent: #8a7055; --secretariat-soft: #f4f0eb; --secretariat-ink: #745b42; }
+.secretariat-card--health { --secretariat-accent: #21856d; --secretariat-soft: #e8f5ef; --secretariat-ink: #1d755f; }
+.secretariat-card--security { --secretariat-accent: #5e6faa; --secretariat-soft: #eef0f9; --secretariat-ink: #4b5d98; }
+
+.secretariat-card-icon {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--secretariat-accent) 14%, transparent);
+  border-radius: 16px;
+  color: var(--secretariat-ink, #1b6684);
+  background: var(--secretariat-soft, #e6f3f6);
+}
+
+.secretariat-card-title {
+  display: block;
+  margin-top: 17px;
+  color: #1d3c50;
+  font: 800 16px/1.3 'Manrope', sans-serif;
+  letter-spacing: -0.2px;
+}
+
+.secretariat-card-description {
+  display: block;
+  margin-top: 6px;
+  color: #778b94;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.secretariat-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+  color: var(--secretariat-ink, #1b6684);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.secretariat-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 17px;
+  padding: 7px 0;
+  border: 0;
+  color: #55717e;
+  background: transparent;
+  font: 700 12px 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.secretariat-back-button:hover { color: #0b526f; }
 
 .module-card {
   position: relative;
@@ -306,6 +410,8 @@
 .module-card--records { --module-accent: #7b68a8; --module-soft: #f0edfa; --module-ink: #695b91; }
 .module-card--procurement { --module-accent: #b47e1e; --module-soft: #fff5df; --module-ink: #926515; }
 .module-card--official { --module-accent: #b75f55; --module-soft: #fff0ed; --module-ink: #985147; }
+
+.hero-mark svg { color: #fff; }
 
 .module-card-top {
   width: 100%;
@@ -393,6 +499,43 @@
   font-weight: 700;
 }
 
+.secretariat-empty {
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  border: 1px dashed #cfdbdf;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.secretariat-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  color: #64818d;
+  background: #edf3f4;
+}
+
+.secretariat-empty h3 {
+  margin: 15px 0 5px;
+  color: #29485a;
+  font: 800 16px 'Manrope', sans-serif;
+}
+
+.secretariat-empty p {
+  max-width: 430px;
+  margin: 0;
+  color: #7a8e96;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .dashboard-footer {
   width: min(100% - 48px, 1160px);
   display: flex;
@@ -448,10 +591,14 @@
   .hero-strip::after { right: -140px; }
 
   .module-section { padding-top: 30px; }
+  .secretariat-section { padding-top: 30px; }
   .section-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .section-heading h2 { font-size: 20px; }
-  .module-grid { gap: 12px; }
-  .module-card { min-width: 100%; max-width: none; min-height: 210px; padding: 19px; }
+  .module-grid,
+  .secretariat-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .module-card { min-width: 0; max-width: none; min-height: 210px; padding: 19px; }
+  .secretariat-card { min-height: 205px; padding: 19px; }
+  .secretariat-empty { min-height: 205px; padding: 25px 18px; }
 
   .dashboard-footer {
     width: min(100% - 32px, 1160px);
@@ -463,6 +610,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .module-card,
+  .secretariat-card,
+  .secretariat-back-button,
   .logout-button { transition: none; }
   .module-card:not(:disabled):hover { transform: none; }
+  .secretariat-card:hover { transform: none; }
 }
