@@ -194,3 +194,17 @@
 }
 
 .census-territory-heading{justify-content:flex-end;min-height:30px;margin-bottom:12px}
+
+/* Tablet touch ergonomics */
+@media (max-width:1100px){
+  .census-territory-toolbar button{width:42px;height:42px;min-width:42px}
+  .census-territory-toolbar>div{gap:8px}
+  .census-territory-badges span{min-height:38px;padding:9px 12px}
+}
+@media (max-width:850px){
+  .census-territory-viewport{height:62vh;min-height:480px}
+  .census-territory-panel-scroll{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+}
+
+.census-signature-pad{height:180px;touch-action:none}
+@media(max-width:760px){.census-signature-pad{height:200px}}

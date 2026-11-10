@@ -146,6 +146,12 @@ try {
   assert.match(censusModuleCode, /avatar_url|photo_url/, 'o perfil aceita foto do usuário autenticado')
   assert.match(censusModuleCode, /census-mobile-menu/, 'o Censo possui menu compacto para telas menores')
   assert.doesNotMatch(censusModuleCode, /from\('census_acs'\).*full_name.*authUser\.email/, 'ACS não é usado como usuário alternativo')
+  assert.match(territoryCode, /pointerMapRef/, 'Mapa territorial acompanha múltiplos dedos')
+  assert.match(territoryCode, /pinchRef/, 'Mapa territorial possui pinch-to-zoom')
+  assert.match(territoryCode, /pendingLotRef/, 'Mapa territorial permite iniciar pan sobre um lote')
+  assert.match(censusModuleCode, /pointerMapRef/, 'Preparar mapa acompanha múltiplos dedos')
+  assert.match(censusModuleCode, /pinchRef/, 'Preparar mapa possui pinch-to-zoom')
+  assert.match(censusModuleCode, /pendingLotKeyRef/, 'Preparar mapa diferencia toque de pan sobre lote')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

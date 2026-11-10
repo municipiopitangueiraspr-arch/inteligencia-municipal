@@ -105,6 +105,11 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const [noticeTone, setNoticeTone] = useState<NoticeTone>('info')
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const panStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 })
+  const pointerMapRef = useRef(new Map<number, { x: number; y: number }>())
+  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null)
+  const pinchWasActiveRef = useRef(false)
+  const pendingLotRef = useRef<TerritoryLot | null>(null)
+  const movedRef = useRef(false)
   const requestRef = useRef(0)
   const closeVisitDialog = useCallback(() => setVisitDraft(null), [])
   const visitDialogRef = useCensusDialogFocus(Boolean(visitDraft), closeVisitDialog)
@@ -239,16 +244,48 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   }, [responses])
 
   function startPan(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.target instanceof Element && event.target.closest('[data-lot-id]')) return
-    setDragging(true)
+    const target = event.target instanceof Element ? event.target.closest('[data-lot-id]') : null
+    const targetLot = target ? lots.find((lot) => lot.id === target.getAttribute('data-lot-id')) || null : null
+    pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointerMapRef.current.size === 2) {
+      const points = [...pointerMapRef.current.values()]
+      pinchRef.current = { distance: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y), zoom }
+      pinchWasActiveRef.current = true
+      movedRef.current = true
+      setDragging(false)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      return
+    }
+    pendingLotRef.current = targetLot
+    movedRef.current = false
     panStartRef.current = { x: event.clientX, y: event.clientY, startX: pan.x, startY: pan.y }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   function movePan(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!dragging) return
+    pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointerMapRef.current.size >= 2 && pinchRef.current) {
+      const points = [...pointerMapRef.current.values()]
+      const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+      if (pinchRef.current.distance > 0) setZoom(Math.min(24, Math.max(0.65, pinchRef.current.zoom * distance / pinchRef.current.distance)))
+      return
+    }
+    const distance = Math.hypot(event.clientX - panStartRef.current.x, event.clientY - panStartRef.current.y)
+    if (distance < 8) return
+    if (!dragging) setDragging(true)
+    movedRef.current = true
     setPan({ x: panStartRef.current.startX + event.clientX - panStartRef.current.x, y: panStartRef.current.startY + event.clientY - panStartRef.current.y })
   }
-  function finishPan() { setDragging(false) }
+  function finishPan(event: ReactPointerEvent<HTMLDivElement>) {
+    const lot = pendingLotRef.current
+    const wasTap = !movedRef.current && !pinchWasActiveRef.current && pointerMapRef.current.size === 1
+    pointerMapRef.current.delete(event.pointerId)
+    if (wasTap && lot) selectLot(lot)
+    if (pointerMapRef.current.size < 2) pinchRef.current = null
+    if (!pointerMapRef.current.size) pinchWasActiveRef.current = false
+    pendingLotRef.current = null
+    movedRef.current = false
+    setDragging(false)
+  }
   function resetMap() { setZoom(1); setPan({ x: 0, y: 0 }) }
 
   function requestHouseholdSave() {
@@ -377,7 +414,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
                 const zone = zones.find((item) => item.id === lot.zone_id)
                 const isSelected = selectedLot?.id === lot.id
                 const mapCode = getMapLotCode(lot.label, lot.source_handle, index + 1)
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={isSelected ? '#153f4a' : zone?.color || '#8aaeb1'} strokeWidth={isSelected ? 3 : 1} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}`} className={isSelected ? 'selected' : ''} onClick={(event) => { event.stopPropagation(); selectLot(lot) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}`}</title></polygon>
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={isSelected ? '#153f4a' : zone?.color || '#8aaeb1'} strokeWidth={isSelected ? 3 : 1} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}`}</title></polygon>
               })}
             </svg>
             <div className="census-territory-legend">{zones.map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}{zone.active ? '' : ' · inativa'}</span>)}<span><i className="unassigned" />Sem zona</span></div>
