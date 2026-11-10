@@ -162,8 +162,8 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Publicar o frontend no GitHub Pages para teste remoto.
 
 ## Censo: remover rótulo e estimar prazo de conclusão
-- [ ] Remover do card Censo Municipal no hall o rótulo de status “Estrutura inicial”; manter o status “Em preparação” no card Visitas Médicas.
-- [ ] Na Visão Geral, ao lado do acompanhamento “Até onde o trabalho já avançou?”, exibir estimativas de conclusão para domicílios confirmados, lotes com visita concluída e lotes com questionário enviado.
-- [ ] Calcular as estimativas com os timestamps reais do Supabase dos últimos 30 dias e somente mostrar prazo quando houver atividade em pelo menos 3 dias distintos ao longo de uma semana; sem essa base, informar claramente que a previsão ainda não pode ser calculada.
-- [ ] Manter o alvo de domicílios explicitamente baseado na estimativa de um domicílio por lote, já usada pelo painel, e preservar os totais e gráficos existentes.
-- [ ] Validar build e lint e publicar o frontend no GitHub Pages para teste remoto.
+- [x] Remover do card Censo Municipal no hall o rótulo de status “Estrutura inicial”; manter o status “Em preparação” no card Visitas Médicas.
+- [x] Na Visão Geral, ao lado do acompanhamento “Até onde o trabalho já avançou?”, exibir estimativas de conclusão para domicílios confirmados, lotes com visita concluída e lotes com questionário enviado.
+- [x] Calcular as estimativas com os timestamps reais do Supabase dos últimos 30 dias e somente mostrar prazo quando houver atividade em pelo menos 3 dias distintos ao longo de uma semana; sem essa base, informar claramente que a previsão ainda não pode ser calculada.
+- [x] Manter o alvo de domicílios explicitamente baseado na estimativa de um domicílio por lote, já usada pelo painel, e preservar os totais e gráficos existentes.
+- [x] Validar build e lint e publicar o frontend no GitHub Pages para teste remoto.
