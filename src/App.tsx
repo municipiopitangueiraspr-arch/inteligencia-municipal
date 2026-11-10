@@ -136,6 +136,8 @@ function App() {
 
   const logout = async () => {
     if (supabase) await supabase.auth.signOut()
+    try { window.sessionStorage.removeItem('inteligencia-municipal.selected-secretariat') }
+    catch { /* Storage may be unavailable; logout remains unaffected. */ }
     setSignedIn(false)
     setActiveArea('dashboard')
     setDisplayName('')

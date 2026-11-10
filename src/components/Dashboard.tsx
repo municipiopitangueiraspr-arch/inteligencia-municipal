@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import './Dashboard.css'
 
 const assetBase = import.meta.env.BASE_URL
+const selectedSecretariatStorageKey = 'inteligencia-municipal.selected-secretariat'
 
 type DashboardProps = {
   userEmail?: string
@@ -42,7 +43,10 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   const [canManageGovernance, setCanManageGovernance] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [selectedSecretariatId, setSelectedSecretariatId] = useState<string | null>(null)
+  const [selectedSecretariatId, setSelectedSecretariatId] = useState<string | null>(() => {
+    try { return window.sessionStorage.getItem(selectedSecretariatStorageKey) }
+    catch { return null }
+  })
 
   useEffect(() => {
     let mounted = true
@@ -90,6 +94,18 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
     return () => { mounted = false }
   }, [])
 
+  const selectSecretariat = (id: string) => {
+    setSelectedSecretariatId(id)
+    try { window.sessionStorage.setItem(selectedSecretariatStorageKey, id) }
+    catch { /* If storage is unavailable, navigation still works for this view. */ }
+  }
+
+  const returnToSecretariats = () => {
+    setSelectedSecretariatId(null)
+    try { window.sessionStorage.removeItem(selectedSecretariatStorageKey) }
+    catch { /* If storage is unavailable, navigation still works for this view. */ }
+  }
+
   const selectedSecretariat = secretariats.find((secretariat) => secretariat.id === selectedSecretariatId)
   const visibleModules = selectedSecretariat
     ? secretariatModules
@@ -131,9 +147,11 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
 
       <main className="dashboard-main">
         <div className="dashboard-content">
-          {selectedSecretariat ? (
+          {selectedSecretariatId && loading ? (
+            <section className="department-view" role="status"><div className="secretariat-empty"><p>Carregando módulos da secretaria…</p></div></section>
+          ) : selectedSecretariat ? (
             <section className="department-view" aria-labelledby="departmentTitle">
-              <button className="secretariat-back-button" type="button" onClick={() => setSelectedSecretariatId(null)}>
+              <button className="secretariat-back-button" type="button" onClick={returnToSecretariats}>
                 <ArrowLeft size={17} aria-hidden="true" />
                 Secretarias
               </button>
@@ -220,7 +238,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
                         className={`secretariat-card secretariat-card--${secretariat.id}`}
                         type="button"
                         aria-label={`Acessar secretaria: ${secretariat.name}`}
-                        onClick={() => setSelectedSecretariatId(secretariat.id)}
+                        onClick={() => selectSecretariat(secretariat.id)}
                       >
                         <span className="secretariat-card-icon"><Icon size={25} strokeWidth={1.9} aria-hidden="true" /></span>
                         <span className="secretariat-card-title">{secretariat.name}</span>
