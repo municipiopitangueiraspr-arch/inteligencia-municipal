@@ -35,3 +35,6 @@
   .census-workspace-map{grid-template-rows:auto minmax(500px,62vh)}
   .census-workspace-zones{max-height:none}
 }
+
+/* Separação visual entre limites de lotes adjacentes */
+.census-workspace-svg polygon{paint-order:stroke fill}

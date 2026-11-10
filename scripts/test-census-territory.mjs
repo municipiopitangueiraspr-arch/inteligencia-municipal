@@ -163,6 +163,9 @@ try {
   assert.match(territoryCode, /visitStatusByLot/, 'Situação das visitas é calculada sem respostas de questionários')
   assert.match(territoryCode, /mapMode === 'visits' \? visitStatusColors/, 'Modo visitas usa cores próprias')
   assert.match(territoryCode, /mapMode === 'questionnaire' && <div className="census-map-filter-row"/, 'Seletor de questionário aparece apenas na cobertura')
+  assert.match(territoryCode, /status === 'answered' \|\| status === 'partial' \? zone\?\.color/, 'Lote respondido usa a cor da própria zona')
+  assert.match(territoryCode, /stroke=\{isSelected \? '#153f4a' : '#ffffff'\}/, 'Mapa territorial separa visualmente lotes adjacentes')
+  assert.match(censusModuleCode, /stroke=\{selected \? '#e59a22' : '#ffffff'\}/, 'Preparar mapa separa visualmente lotes adjacentes')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

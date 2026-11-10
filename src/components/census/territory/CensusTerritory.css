@@ -223,3 +223,6 @@
 .census-map-metrics span{color:#748a8e;font-size:9px;font-weight:800}
 .census-map-empty-filter{display:flex;align-items:center;gap:7px;padding:9px 10px;border-radius:9px;background:#f2f8f7;color:#618087;font-size:11px}
 @media(max-width:760px){.census-map-mode-tabs{display:grid;grid-template-columns:1fr}.census-map-mode-tabs button{justify-content:flex-start}.census-map-filter-row{align-items:stretch;flex-direction:column}.census-map-filter-row label{align-items:stretch;flex-direction:column}.census-map-filter-row select{min-width:0}.census-map-pending-toggle{width:100%}.census-map-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Separação visual entre limites de lotes adjacentes */
+.census-territory-svg polygon{paint-order:stroke fill}
