@@ -262,6 +262,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   function movePan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!pointerMapRef.current.has(event.pointerId)) return
     pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     if (pointerMapRef.current.size >= 2 && pinchRef.current) {
       const points = [...pointerMapRef.current.values()]

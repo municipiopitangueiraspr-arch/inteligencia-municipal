@@ -152,6 +152,8 @@ try {
   assert.match(censusModuleCode, /pointerMapRef/, 'Preparar mapa acompanha múltiplos dedos')
   assert.match(censusModuleCode, /pinchRef/, 'Preparar mapa possui pinch-to-zoom')
   assert.match(censusModuleCode, /pendingLotKeyRef/, 'Preparar mapa diferencia toque de pan sobre lote')
+  assert.match(territoryCode, /function movePan\(event: ReactPointerEvent<HTMLDivElement>\) \{\s*if \(!pointerMapRef\.current\.has\(event\.pointerId\)\) return/, 'Mapa territorial só move após pointer-down')
+  assert.match(censusModuleCode, /function moveDrag\(event: React\.PointerEvent<HTMLDivElement>\) \{\s*if \(!pointerMapRef\.current\.has\(event\.pointerId\)\) return/, 'Preparar mapa só move após pointer-down')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

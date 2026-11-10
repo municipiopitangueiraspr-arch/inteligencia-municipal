@@ -378,6 +378,7 @@ function MapPreparationWorkspace() {
     dragStart.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; event.currentTarget.setPointerCapture(event.pointerId)
   }
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (!pointerMapRef.current.has(event.pointerId)) return
     pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     const gesture = areaGestureRef.current
     if (areaSelectMode && gesture) {
