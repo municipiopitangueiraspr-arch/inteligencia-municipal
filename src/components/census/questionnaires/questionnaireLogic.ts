@@ -23,6 +23,7 @@ export function createEmptyQuestionnaire(): QuestionnaireRecord {
     subtitle: '',
     description: '',
     status: 'DRAFT',
+    version: 1,
     form_schema: { sections: [] },
     created_at: '',
     updated_at: '',

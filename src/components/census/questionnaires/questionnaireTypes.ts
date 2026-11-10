@@ -62,6 +62,7 @@ export type QuestionnaireRecord = {
   subtitle: string
   description: string
   status: QuestionnaireStatus
+  version: number
   form_schema: QuestionnaireSchema
   created_at: string
   updated_at: string

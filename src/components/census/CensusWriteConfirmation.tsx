@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react'
+import { useCensusDialogFocus } from './territory/useCensusDialogFocus'
 
 export type CensusWriteConfirmationProps = {
   title: string
@@ -9,8 +10,10 @@ export type CensusWriteConfirmationProps = {
 }
 
 export function CensusWriteConfirmation({ title, description, confirmLabel, onCancel, onConfirm }: CensusWriteConfirmationProps) {
+  const dialogRef = useCensusDialogFocus(true, onCancel)
+
   return <div className="census-confirmation-backdrop">
-    <section className="census-confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="census-confirmation-title" aria-describedby="census-confirmation-description" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onCancel() } }}>
+    <section ref={dialogRef} tabIndex={-1} className="census-confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="census-confirmation-title" aria-describedby="census-confirmation-description">
       <span className="census-confirmation-icon"><ShieldCheck size={23} /></span>
       <span className="fleet-kicker">CONFIRMAÇÃO NECESSÁRIA</span>
       <h2 id="census-confirmation-title">{title}</h2>

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { assignLotToZone, assignLotsToZone, getLotFillColor, getLotKey, groupLotSaveAssignments, isImportableLotGeometry, mergeSelectedLotKeys, selectLotKeysInRect, shouldStartMapPan, withLotIds } from './mapLogic'
 import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
+import { CensusTerritory } from './territory/CensusTerritory'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -39,6 +40,7 @@ type MapImport = {
   bbox: { minX: number; minY: number; maxX: number; maxY: number } | null
   updated_at: string
   published_at: string | null
+  division_saved_at: string | null
 }
 type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
@@ -109,7 +111,8 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
   return <div className="fleet-shell census-shell">
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Censo Municipal</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação do Censo Municipal">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => setView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'U').toUpperCase()}</span><div><strong>{userEmail || 'Usuário autenticado'}</strong><small>Preparação territorial aberta</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
     <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1></div><div className="fleet-header-actions"><span className="fleet-protected"><ShieldCheck size={16} /> Ambiente aberto de desenvolvimento</span></div></header><div className="fleet-content census-content">
-      {view !== 'dwg' && view !== 'zones' && view !== 'forms' && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ESTRUTURA DO CENSO</span><h2>{navItems.find((item) => item.id === view)?.label}</h2><p>{view === 'overview' ? 'Acompanhe e organize as próximas etapas do Censo Municipal.' : 'Esta área será conectada ao mapa preparado nas próximas etapas.'}</p></div></div><div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon"><MapPinned size={21} /></span><strong>{view === 'overview' ? 'Comece pelo território' : 'Estrutura em preparação'}</strong><span>{view === 'overview' ? 'Prepare o mapa municipal ou organize as zonas e os ACS para iniciar o trabalho.' : 'Conclua a preparação territorial antes de iniciar esta etapa.'}</span><button type="button" className="fleet-primary-button" onClick={() => setView('dwg')}>{view === 'overview' ? 'Preparar mapa' : 'Abrir preparação do mapa'}</button></div></section>}
+      {(view === 'overview' || view === 'families') && <section className="fleet-section fleet-page-section"><div className="fleet-page-heading"><div><span className="fleet-kicker">ESTRUTURA DO CENSO</span><h2>{navItems.find((item) => item.id === view)?.label}</h2><p>{view === 'overview' ? 'Acompanhe e organize as próximas etapas do Censo Municipal.' : 'As visitas e os questionários são registrados no dossiê do domicílio, dentro do Mapa territorial.'}</p></div></div><div className="fleet-resource-placeholder census-coming-soon"><span className="fleet-resource-icon"><MapPinned size={21} /></span><strong>{view === 'overview' ? 'Comece pelo território' : 'Acesse o dossiê pelo mapa'}</strong><span>{view === 'overview' ? 'Abra o mapa territorial para consultar lotes, domicílios e visitas, ou prepare o mapa municipal.' : 'Selecione um lote no mapa territorial e abra o domicílio para iniciar uma visita ou continuar um questionário.'}</span><button type="button" className="fleet-primary-button" onClick={() => setView(view === 'overview' ? 'dwg' : 'territory')}>{view === 'overview' ? 'Preparar mapa' : 'Abrir mapa territorial'}</button></div></section>}
+      {view === 'territory' && <CensusTerritory onOpenQuestionnaires={() => setView('forms')} />}
       {view === 'zones' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'dwg' && <MapPreparationWorkspace />}
       {view === 'forms' && <QuestionnairesManagement />}
@@ -261,7 +264,7 @@ function MapPreparationWorkspace() {
     if (!supabase) { setLoading(false); return }
     setLoading(true)
     const [{ data: imports }, { data: zoneRows }] = await Promise.all([
-      supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at').in('status', ['DRAFT', 'PUBLISHED']).order('updated_at', { ascending: false }).limit(1),
+      supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at,division_saved_at').in('status', ['DRAFT', 'PUBLISHED']).order('updated_at', { ascending: false }).limit(1),
       supabase.from('census_zones').select('id,name,color,active').eq('active', true).order('created_at').limit(100),
     ])
     const nextZones = (zoneRows || []) as CensusZone[]
@@ -421,12 +424,12 @@ function MapPreparationWorkspace() {
       const id = crypto.randomUUID(); const path = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const upload = await db.storage.from('census-maps').upload(path, file, { contentType: file.type || 'application/dxf', upsert: false })
       if (upload.error) throw new Error(upload.error.message)
-      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, raw_metadata: { parser: 'client-dxf-geometry-only-v2', ignored_geometry_count: parsed.ignoredGeometryCount } }
+      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, division_saved_at: null, raw_metadata: { parser: 'client-dxf-geometry-only-v2', ignored_geometry_count: parsed.ignoredGeometryCount } }
       const inserted = await db.from('census_map_imports').insert(record)
       if (inserted.error) throw new Error(inserted.error.message)
       const rows = withLotIds(parsed.lots, () => crypto.randomUUID()).map((lot) => ({ ...lot, import_id: id, zone_id: null }))
       await chunks(rows, 100, async (chunk) => { const result = await db.from('census_map_lots').insert(chunk); if (result.error) throw new Error(result.error.message) })
-      setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null } as MapImport); setLots(rows as Lot[]); setFile(null); resetView(); setNoticeTone('success'); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} polígonos fechados reconhecidos como lotes.${parsed.ignoredGeometryCount ? ` ${parsed.ignoredGeometryCount.toLocaleString('pt-BR')} elemento(s) sem geometria válida foram ignorados.` : ''} Mapa importado com sucesso.`)
+      setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null, division_saved_at: null } as MapImport); setLots(rows as Lot[]); setFile(null); resetView(); setNoticeTone('success'); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} polígonos fechados reconhecidos como lotes.${parsed.ignoredGeometryCount ? ` ${parsed.ignoredGeometryCount.toLocaleString('pt-BR')} elemento(s) sem geometria válida foram ignorados.` : ''} Mapa importado com sucesso.`)
     } catch (error) { setNoticeTone('error'); setNotice(error instanceof Error ? error.message : 'Não foi possível importar o mapa.') }
     finally { setSaving(false); setActiveWrite(null) }
   }
@@ -447,6 +450,9 @@ function MapPreparationWorkspace() {
       const missingIds = lotIds.filter((id) => !existingIds.has(id))
       if (missingIds.length) throw new Error(`${missingIds.length.toLocaleString('pt-BR')} lote(s) não foram localizados nesta importação. Nenhuma alteração foi enviada ao banco; recarregue o mapa e tente novamente.`)
 
+      const invalidated = await db.from('census_map_imports').update({ division_saved_at: null }).eq('id', mapImport.id).select('id').single()
+      if (invalidated.error) throw new Error(`Não foi possível suspender a divisão publicada durante a atualização: ${invalidated.error.message}`)
+
       for (const group of groups) {
         await chunks(group.lotIds, 100, async (chunkIds) => {
           const { data, error } = await db.from('census_map_lots').update({ zone_id: group.zoneId, zone_number: null }).eq('import_id', mapImport.id).in('id', chunkIds).select('id')
@@ -455,8 +461,10 @@ function MapPreparationWorkspace() {
           if (updatedIds.size !== chunkIds.length) throw new Error(`A atualização alcançou ${updatedIds.size} de ${chunkIds.length} lotes após a conferência. Recarregue o mapa e confira a divisão; uma parte pode já ter sido salva.`)
         })
       }
-      const result = await db.from('census_map_imports').update({ status: 'DRAFT', published_at: null }).eq('id', mapImport.id)
+      const savedAt = new Date().toISOString()
+      const result = await db.from('census_map_imports').update({ status: 'DRAFT', published_at: null, division_saved_at: savedAt }).eq('id', mapImport.id).select('id').single()
       if (result.error) throw new Error(result.error.message)
+      setMapImport((current) => current ? { ...current, updated_at: savedAt, division_saved_at: savedAt } : current)
       setNoticeTone('success'); setNotice('Divisão salva com sucesso como rascunho.')
     } catch (error) { setNoticeTone('error'); setNotice(error instanceof Error ? error.message : 'Não foi possível salvar a divisão.') }
     finally { setSaving(false); setActiveWrite(null) }
