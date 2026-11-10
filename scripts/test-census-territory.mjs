@@ -24,6 +24,7 @@ try {
   const confirmationCode = readFileSync('src/components/census/CensusWriteConfirmation.tsx', 'utf8')
   const mapPreparationCode = readFileSync('src/components/census/CensusModule.tsx', 'utf8')
   const familiesCode = readFileSync('src/components/census/CensusFamiliesVisits.tsx', 'utf8')
+  const overviewCode = readFileSync('src/components/census/CensusOverview.tsx', 'utf8')
   const questions = [
     { id: 'name', label: 'Nome', type: 'short_text', required: true, validation: { minLength: 2, maxLength: 60 } },
     { id: 'people', label: 'Pessoas', type: 'number', required: true, validation: { min: 1, max: 20 } },
@@ -137,6 +138,10 @@ try {
   assert.match(familiesCode, /census_questionnaire_responses/, 'o painel consulta respostas de questionários no Supabase')
   assert.match(familiesCode, /Resumo por zona/, 'o painel mostra resumo por zona')
   assert.match(familiesCode, /Resumo por ACS/, 'o painel mostra resumo por ACS')
+  assert.match(overviewCode, /census_map_lots/, 'a visão geral consulta lotes do mapa')
+  assert.match(overviewCode, /census_visits/, 'a visão geral consulta visitas')
+  assert.match(overviewCode, /Funil de execução/, 'a visão geral mostra o funil de progresso')
+  assert.match(overviewCode, /Alertas prioritários/, 'a visão geral mostra alertas acionáveis')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
