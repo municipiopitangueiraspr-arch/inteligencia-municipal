@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronDown, ClipboardCheck, FileText, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, ShieldCheck, UsersRound, X } from 'lucide-react'
+import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, ChevronDown, ClipboardCheck, Eye, FileText, Filter, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, ShieldCheck, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { CensusWriteConfirmation } from '../CensusWriteConfirmation'
 import { getLotFillColor } from '../mapLogic'
@@ -23,6 +23,8 @@ type HouseholdSummary = { household_id: string; lot_id: string; visit_count: num
 type Visit = { id: string; household_id: string; visit_date: string; status: 'IN_PROGRESS' | 'COMPLETED' | 'NO_CONTACT' | 'CANCELLED'; notes: string; created_at: string; completed_at: string | null; acs_id: string | null }
 type FormSnapshot = Pick<QuestionnaireRecord, 'id' | 'slug' | 'title' | 'subtitle' | 'description' | 'version' | 'form_schema'>
 type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; status: 'DRAFT' | 'SUBMITTED'; submitted_at: string | null; created_at: string; questionnaire_version: number; questionnaire_snapshot: FormSnapshot }
+type MapMode = 'zones' | 'questionnaire' | 'visits'
+type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'cancelled'
 type ResponseEditorState = { responseId: string | null; visitId: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type VisitDraft = { household: Household; visitDate: string; notes: string; questionnaireId: string }
 type PendingWrite =
@@ -79,6 +81,12 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const [activeForms, setActiveForms] = useState<QuestionnaireRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [mapError, setMapError] = useState('')
+  const [mapMode, setMapMode] = useState<MapMode>('zones')
+  const [coverageFormId, setCoverageFormId] = useState('')
+  const [showOnlyPending, setShowOnlyPending] = useState(false)
+  const [coverageHouseholds, setCoverageHouseholds] = useState<Household[]>([])
+  const [coverageVisits, setCoverageVisits] = useState<Visit[]>([])
+  const [coverageResponses, setCoverageResponses] = useState<ResponseMeta[]>([])
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -135,10 +143,21 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       if (!current) { setLots([]); return }
       const lotRows = await fetchAllPages<TerritoryLot>((from, to) => db.from('census_territory_map_lots').select(mapSelect).eq('import_id', current.id).order('source_handle').order('id').range(from, to))
       setLots(lotRows)
+      const lotIds = lotRows.map((lot) => lot.id)
+      const householdRows = (await Promise.all(splitIntoBatches(lotIds).map((batch) => fetchAllPages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,active,created_at').in('lot_id', batch).eq('active', true).order('created_at').order('id').range(from, to))))).flat()
+      setCoverageHouseholds(householdRows)
+      const householdIds = householdRows.map((item) => item.id)
+      const visitRows = householdIds.length ? (await Promise.all(splitIntoBatches(householdIds).map((batch) => fetchAllPages<Visit>((from, to) => db.from('census_visits').select('id,household_id,visit_date,status,notes,created_at,completed_at,acs_id').in('household_id', batch).order('visit_date', { ascending: false }).order('id').range(from, to))))).flat() : []
+      setCoverageVisits(visitRows)
+      const visitIds = visitRows.map((item) => item.id)
+      const responseRows = visitIds.length ? (await Promise.all(splitIntoBatches(visitIds).map((batch) => fetchAllPages<ResponseMeta>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,questionnaire_id,status,submitted_at,created_at,questionnaire_version,questionnaire_snapshot').in('visit_id', batch).order('created_at', { ascending: false }).order('id').range(from, to))))).flat() : []
+      setCoverageResponses(responseRows)
+      if (!coverageFormId && formsResult.data?.[0]?.id) setCoverageFormId(formsResult.data[0].id)
     } catch (error) {
       setMapError(error instanceof Error ? error.message : 'Não foi possível carregar o mapa territorial.')
       setMapImport(null)
       setLots([])
+      setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([])
     } finally { setLoading(false) }
   }, [])
 
@@ -242,6 +261,52 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     for (const response of responses) grouped.set(response.visit_id, [...(grouped.get(response.visit_id) || []), response])
     return grouped
   }, [responses])
+  const coverageByLot = useMemo(() => {
+    const householdByLot = new Map<string, Household[]>()
+    for (const household of coverageHouseholds) householdByLot.set(household.lot_id, [...(householdByLot.get(household.lot_id) || []), household])
+    const visitsByHousehold = new Map<string, Visit[]>()
+    for (const visit of coverageVisits) visitsByHousehold.set(visit.household_id, [...(visitsByHousehold.get(visit.household_id) || []), visit])
+    const responsesByVisit = new Map<string, ResponseMeta[]>()
+    for (const response of coverageResponses) responsesByVisit.set(response.visit_id, [...(responsesByVisit.get(response.visit_id) || []), response])
+    const result = new Map<string, CoverageStatus>()
+    for (const lot of lots) {
+      const households = householdByLot.get(lot.id) || []
+      if (!households.length) { result.set(lot.id, 'no_visit'); continue }
+      const states = households.map((household) => {
+        const householdVisits = visitsByHousehold.get(household.id) || []
+        const formResponses = householdVisits.flatMap((visit) => responsesByVisit.get(visit.id) || []).filter((response) => response.questionnaire_id === coverageFormId)
+        if (formResponses.some((response) => response.status === 'SUBMITTED')) return 'answered' as const
+        if (formResponses.some((response) => response.status === 'DRAFT')) return 'draft' as const
+        const latest = householdVisits[0]
+        if (!latest) return 'no_visit' as const
+        if (latest.status === 'IN_PROGRESS') return 'in_progress' as const
+        if (latest.status === 'NO_CONTACT') return 'no_contact' as const
+        if (latest.status === 'COMPLETED') return 'questionnaire_pending' as const
+        return 'cancelled' as const
+      })
+      if (states.every((state) => state === 'answered')) result.set(lot.id, 'answered')
+      else if (states.some((state) => state === 'answered')) result.set(lot.id, 'partial')
+      else if (states.some((state) => state === 'draft')) result.set(lot.id, 'draft')
+      else if (states.some((state) => state === 'in_progress')) result.set(lot.id, 'in_progress')
+      else if (states.some((state) => state === 'questionnaire_pending')) result.set(lot.id, 'questionnaire_pending')
+      else if (states.some((state) => state === 'no_contact')) result.set(lot.id, 'no_contact')
+      else if (states.some((state) => state === 'no_visit')) result.set(lot.id, 'no_visit')
+      else result.set(lot.id, 'cancelled')
+    }
+    return result
+  }, [coverageFormId, coverageHouseholds, coverageResponses, coverageVisits, lots])
+  const mapStatus = (lot: TerritoryLot): CoverageStatus => coverageByLot.get(lot.id) || 'no_visit'
+  const mapStatusLabels: Record<CoverageStatus, string> = { answered: 'Respondido', partial: 'Parcial', draft: 'Rascunho', questionnaire_pending: 'Questionário pendente', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', cancelled: 'Cancelada' }
+  const statusColors: Record<CoverageStatus, string> = { answered: '#2d8a62', partial: '#4d9b91', draft: '#786ac2', questionnaire_pending: '#d19a32', in_progress: '#d67b36', no_contact: '#c2603d', no_visit: '#a9b8ba', cancelled: '#8f8583' }
+  const activeMapForm = activeForms.find((form) => form.id === coverageFormId)
+  const mapMetrics = useMemo(() => {
+    const statuses = lots.map((lot) => mapStatus(lot))
+    const answered = statuses.filter((status) => status === 'answered').length
+    const pending = statuses.length - answered
+    const visited = statuses.filter((status) => !['no_visit'].includes(status)).length
+    const noContact = statuses.filter((status) => status === 'no_contact').length
+    return { answered, pending, visited, noContact, coverage: statuses.length ? Math.round((answered / statuses.length) * 1000) / 10 : 0 }
+  }, [coverageByLot, lots])
 
   function startPan(event: ReactPointerEvent<HTMLDivElement>) {
     const target = event.target instanceof Element ? event.target.closest('[data-lot-id]') : null
@@ -373,6 +438,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
           if (form) setResponseEditor({ responseId: null, visitId: data.id, form: formSnapshot(form), answers: {}, status: 'DRAFT', readOnly: false })
         }
         if (selectedLot) await loadDossier(selectedLot)
+        await loadMap()
         setNoticeTone('success'); setNotice('Visita registrada. Preencha o questionário ou continue depois pelo histórico.')
       }
       if (action.kind === 'response') {
@@ -388,6 +454,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
         }
         setResponseEditor(null)
         if (selectedLot) await loadDossier(selectedLot)
+        await loadMap()
         setNoticeTone(visitWarning ? 'info' : 'success')
         setNotice(`${action.status === 'SUBMITTED' ? 'Respostas enviadas' : 'Rascunho salvo'} com sucesso.${visitWarning}`)
       }
@@ -405,20 +472,34 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     <div className="census-territory-heading"><div className="census-territory-badges"><span><MapPinned size={15} />{lots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando no Censo Municipal… Aguarde.</span></div>}
+    <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
+      <div className="census-map-mode-tabs" role="tablist" aria-label="Modo de visualização do mapa">
+        <button type="button" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapMode('zones'); setShowOnlyPending(false) }}><MapPinned size={15} />Divisão por zonas</button>
+        <button type="button" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => setMapMode('questionnaire')}><BarChart3 size={15} />Cobertura do questionário</button>
+        <button type="button" className={mapMode === 'visits' ? 'active' : ''} onClick={() => setMapMode('visits')}><ClipboardCheck size={15} />Situação das visitas</button>
+      </div>
+      {mapMode !== 'zones' && <div className="census-map-filter-row"><label><FileText size={14} />Questionário<select value={coverageFormId} onChange={(event) => setCoverageFormId(event.target.value)}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label><button type="button" className={`census-map-pending-toggle${showOnlyPending ? ' active' : ''}`} onClick={() => setShowOnlyPending((current) => !current)} disabled={!coverageFormId}><Filter size={14} />{showOnlyPending ? 'Mostrar todos os lotes' : 'Mostrar somente pendentes'}</button></div>}
+      {mapMode !== 'zones' && coverageFormId && <div className="census-map-metrics"><div><strong>{mapMetrics.coverage}%</strong><span>Cobertura</span></div><div><strong>{mapMetrics.answered.toLocaleString('pt-BR')}</strong><span>Respondidos</span></div><div><strong>{mapMetrics.pending.toLocaleString('pt-BR')}</strong><span>Pendentes</span></div><div><strong>{mapMetrics.noContact.toLocaleString('pt-BR')}</strong><span>Sem contato</span></div></div>}
+      {mapMode !== 'zones' && !coverageFormId && <div className="census-map-empty-filter"><Eye size={16} />Selecione um questionário para colorir o mapa pela cobertura.</div>}
+    </section>
     <div className={`census-territory-workspace${selectedLot ? ' with-panel' : ''}`}>
       <div className="census-territory-map-card">
-        <div className="census-territory-toolbar"><span><MapPinned size={15} />Clique em um lote · arraste para mover · role para ampliar</span><div><button type="button" onClick={() => setZoom((current) => Math.min(24, current * 1.25))} aria-label="Aumentar zoom" disabled={loading || !lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(0.65, current / 1.25))} aria-label="Reduzir zoom" disabled={loading || !lots.length}><Minus size={16} /></button><button type="button" onClick={resetMap} aria-label="Restaurar mapa" disabled={loading || !lots.length}><RotateCcw size={15} /></button></div></div>
+        <div className="census-territory-toolbar"><span><MapPinned size={15} />{mapMode === 'zones' ? 'Cores representam zonas' : activeMapForm ? `${mapMode === 'questionnaire' ? 'Cobertura de' : 'Visitas —'} ${activeMapForm.title}` : 'Selecione um questionário'} · clique para abrir o dossiê · arraste para mover</span><div><button type="button" onClick={() => setZoom((current) => Math.min(24, current * 1.25))} aria-label="Aumentar zoom" disabled={loading || !lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(0.65, current / 1.25))} aria-label="Reduzir zoom" disabled={loading || !lots.length}><Minus size={16} /></button><button type="button" onClick={resetMap} aria-label="Restaurar mapa" disabled={loading || !lots.length}><RotateCcw size={15} /></button></div></div>
         <div ref={viewportRef} className={`census-territory-viewport${dragging ? ' dragging' : ''}`} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan}>
           {loading ? <div className="census-territory-empty"><LoaderCircle className="spin" size={23} /><strong>Carregando o mapa preparado…</strong></div> : mapError ? <div className="census-territory-empty error"><AlertCircle size={24} /><strong>Não foi possível abrir o mapa</strong><span>{mapError}</span><button type="button" className="fleet-secondary-button" onClick={() => void loadMap()}>Tentar novamente</button></div> : !mapImport ? <div className="census-territory-empty"><MapPinned size={25} /><strong>Nenhum mapa preparado</strong><span>Importe e salve a divisão em Preparar mapa para iniciar o trabalho territorial.</span></div> : !lots.length ? <div className="census-territory-empty"><ShieldCheck size={25} /><strong>Nenhum lote disponível para esta conta</strong><span>Confirme se o mapa foi salvo e se sua conta está vinculada a uma zona ativa.</span></div> : <>
             <svg className="census-territory-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="list" aria-label="Mapa territorial com lotes autorizados">
               {lots.map((lot, index) => {
                 const zone = zones.find((item) => item.id === lot.zone_id)
+                const status = mapStatus(lot)
+                const pending = status !== 'answered'
+                if (showOnlyPending && mapMode !== 'zones' && !pending) return null
                 const isSelected = selectedLot?.id === lot.id
                 const mapCode = getMapLotCode(lot.label, lot.source_handle, index + 1)
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke={isSelected ? '#153f4a' : zone?.color || '#8aaeb1'} strokeWidth={isSelected ? 3 : 1} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}`}</title></polygon>
+                const fill = mapMode === 'zones' || !coverageFormId ? getLotFillColor(lot, zones) : statusColors[status]
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={fill} stroke={isSelected ? '#153f4a' : zone?.color || '#8aaeb1'} strokeWidth={isSelected ? 3 : 1} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? `, ${mapStatusLabels[status]}` : ''}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? ` · ${mapStatusLabels[status]}` : ''}`}</title></polygon>
               })}
             </svg>
-            <div className="census-territory-legend">{zones.map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}{zone.active ? '' : ' · inativa'}</span>)}<span><i className="unassigned" />Sem zona</span></div>
+            <div className="census-territory-legend">{mapMode === 'zones' ? <>{zones.map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}{zone.active ? '' : ' · inativa'}</span>)}<span><i className="unassigned" />Sem zona</span></> : Object.entries(mapStatusLabels).filter(([status]) => mapMode === 'visits' ? ['in_progress', 'no_contact', 'no_visit', 'questionnaire_pending', 'cancelled'].includes(status) : true).map(([status, label]) => <span key={status}><i style={{ background: statusColors[status as CoverageStatus] }} />{label}</span>)}</div>
           </>}
         </div>
       </div>

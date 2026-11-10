@@ -208,3 +208,18 @@
 
 .census-signature-pad{height:180px;touch-action:none}
 @media(max-width:760px){.census-signature-pad{height:200px}}
+
+.census-map-insights{display:grid;gap:10px;margin-bottom:12px;padding:12px;border:1px solid #d8e6e7;border-radius:14px;background:#fff}
+.census-map-mode-tabs{display:flex;flex-wrap:wrap;gap:7px}
+.census-map-mode-tabs button,.census-map-pending-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid #d5e4e4;border-radius:9px;background:#f8fbfb;color:#4e7076;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
+.census-map-mode-tabs button:hover,.census-map-mode-tabs button.active,.census-map-pending-toggle.active{border-color:#4d8992;background:#eaf6f5;color:#1f6872}
+.census-map-filter-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.census-map-filter-row label{display:flex;align-items:center;gap:7px;color:#557278;font-size:11px;font-weight:800}
+.census-map-filter-row select{min-width:220px;padding:9px 10px;border:1px solid #d2e1e2;border-radius:8px;background:#fff;color:#315d65;font:inherit;font-weight:600}
+.census-map-pending-toggle:disabled{opacity:.5;cursor:not-allowed}
+.census-map-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.census-map-metrics>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #e1ebeb;border-radius:9px;background:#f8fbfb}
+.census-map-metrics strong{color:#246e77;font:800 18px 'Manrope',sans-serif}
+.census-map-metrics span{color:#748a8e;font-size:9px;font-weight:800}
+.census-map-empty-filter{display:flex;align-items:center;gap:7px;padding:9px 10px;border-radius:9px;background:#f2f8f7;color:#618087;font-size:11px}
+@media(max-width:760px){.census-map-mode-tabs{display:grid;grid-template-columns:1fr}.census-map-mode-tabs button{justify-content:flex-start}.census-map-filter-row{align-items:stretch;flex-direction:column}.census-map-filter-row label{align-items:stretch;flex-direction:column}.census-map-filter-row select{min-width:0}.census-map-pending-toggle{width:100%}.census-map-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}

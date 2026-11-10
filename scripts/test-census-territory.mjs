@@ -154,6 +154,11 @@ try {
   assert.match(censusModuleCode, /pendingLotKeyRef/, 'Preparar mapa diferencia toque de pan sobre lote')
   assert.match(territoryCode, /function movePan\(event: ReactPointerEvent<HTMLDivElement>\) \{\s*if \(!pointerMapRef\.current\.has\(event\.pointerId\)\) return/, 'Mapa territorial só move após pointer-down')
   assert.match(censusModuleCode, /function moveDrag\(event: React\.PointerEvent<HTMLDivElement>\) \{\s*if \(!pointerMapRef\.current\.has\(event\.pointerId\)\) return/, 'Preparar mapa só move após pointer-down')
+  assert.match(territoryCode, /type MapMode = 'zones' \| 'questionnaire' \| 'visits'/, 'Mapa Territorial possui os três modos de visualização')
+  assert.match(territoryCode, /census-map-mode-tabs/, 'Mapa Territorial exibe seletor dos modos')
+  assert.match(territoryCode, /census-map-metrics/, 'Mapa Territorial exibe indicadores de cobertura')
+  assert.match(territoryCode, /showOnlyPending/, 'Mapa Territorial permite mostrar somente pendências')
+  assert.match(territoryCode, /coverageResponses/, 'Mapa Territorial calcula cobertura pelas respostas reais')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
