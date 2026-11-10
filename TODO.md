@@ -88,7 +88,19 @@
 - [x] O editor permite cadastrar título/subtítulo/descrição, adicionar/remover/reordenar seções e perguntas, editar rótulos e textos de ajuda, definir obrigatoriedade, tipo de resposta, opções e validações adequadas ao tipo.
 - [x] Tipos oferecidos incluem texto curto e longo, número, moeda, data, sim/não, escolha única e múltipla, tabela repetível e assinatura; a pré-visualização mostra os controles correspondentes sem enviar respostas.
 - [x] Antes de salvar alterações ou ativar/inativar, aparece confirmação; enquanto grava, os controles ficam bloqueados e uma indicação visual mostra carregamento e o resultado de sucesso ou erro.
-- [ ] A migration `202611091853_census_questionnaires.sql` ainda precisa ser aplicada ao Supabase; ela cria a tabela/RLS e insere a ficha inicial em `Rascunho`, pronta para revisão e ativação.
+- [x] A migration `202611091853_census_questionnaires.sql` foi aplicada ao Supabase; ela cria a tabela/RLS e insere a ficha inicial em `Rascunho`, pronta para revisão e ativação.
 - [x] A ficha inicial tem o título `FICHA DE CADASTRO E ACOMPANHAMENTO DOMICILIAR`, subtítulo `Levantamento Socioeconômico, Habitacional e de Saúde Familiar`, campos de identificação, as quatro seções e as perguntas/opções do Google Doc fornecido.
 - [x] A pergunta 1.2 representa os oito moradores com colunas `Nome / Parentesco do Morador` e `Idade`, incluindo a primeira linha `Responsável`; o encerramento inclui `Assinatura do Morador Responsável`.
 - [x] Os dados de resposta dos domicílios não são coletados nesta tela de gestão; o banco armazena apenas a definição do questionário.
+
+## Mapa territorial, domicílios, visitas e respostas
+- [ ] A tela `Mapa territorial` carrega a última divisão salva e apresenta cada lote com a cor da sua zona; pan e zoom permanecem acessíveis, e um clique em lote abre/atualiza o painel lateral sem navegar para fora do mapa.
+- [ ] Um lote pode conter mais de um domicílio; cada domicílio fica vinculado ao lote, cada visita ao domicílio e cada resposta à visita e ao questionário utilizado.
+- [ ] A migration cria estrutura para domicílios, visitas e respostas; as respostas guardam valores JSONB e snapshot/version do questionário usado, preservando o histórico quando o formulário for editado. Não apagar domicílios, visitas ou respostas por exclusão do mapa/questionário.
+- [ ] O painel lateral mostra zona e identificação do lote, domicílios, quantidade de moradores quando conhecida, faixa de renda, quantidade de questionários concluídos e data da visita mais recente; valores exatos de renda, respostas de saúde, nomes de moradores e assinaturas não são expostos no resumo do mapa.
+- [ ] A tela permite cadastrar um domicílio e iniciar uma visita, escolher um questionário ativo, preencher respostas por seção e tipo, validar campos obrigatórios e limites, salvar rascunho e enviar; questionários inativos/rascunho não podem iniciar novas respostas.
+- [ ] A pergunta de tabela permite registrar moradores até o limite definido e a pergunta de assinatura captura traços; respostas submetidas ficam somente para leitura e uma correção exige nova visita.
+- [ ] O dossiê exibe histórico de visitas e respostas; usuários autorizados podem continuar rascunhos e abrir respostas submetidas sem alterar o snapshot do questionário.
+- [ ] RLS permite acesso apenas a administradores municipais e ACS ativos cuja conta autenticada corresponda ao cadastro ACS e esteja vinculada à zona do lote; usuários sem esse vínculo não leem nem gravam dados sensíveis, e nenhuma tabela/view é acessível a `anon`.
+- [ ] Toda escrita de domicílio, visita ou resposta exige confirmação visual, exibe carregamento enquanto grava e informa sucesso/erro; testes não criam dados pessoais no banco compartilhado.
+- [x] Testes sintéticos de validação das respostas, seleção do mapa e gestão de questionários, build TypeScript/Vite, lint direcionado (sem erros; com avisos preexistentes de `set-state-in-effect`) e análise sintática das 122 instruções SQL passam; nenhuma resposta pessoal de teste foi gravada no banco compartilhado.

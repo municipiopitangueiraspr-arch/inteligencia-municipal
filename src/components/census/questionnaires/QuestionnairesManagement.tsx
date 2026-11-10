@@ -13,7 +13,7 @@ type PendingConfirmation =
   | { kind: 'status'; status: 'ACTIVE' | 'INACTIVE' }
   | { kind: 'discard'; destination: 'new' | 'close' | QuestionnaireRecord }
 
-const selectFields = 'id,slug,title,subtitle,description,status,form_schema,created_at,updated_at'
+const selectFields = 'id,slug,title,subtitle,description,status,version,form_schema,created_at,updated_at'
 const statusLabels: Record<QuestionnaireStatus, string> = { DRAFT: 'Rascunho', ACTIVE: 'Ativo', INACTIVE: 'Inativo' }
 const typeOptions = Object.entries(QUESTION_TYPE_LABELS) as Array<[QuestionType, string]>
 
