@@ -45,6 +45,7 @@ type MapImport = {
 type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type CensusNoticeTone = 'success' | 'error' | 'info'
+const TERRITORY_PAGE_SIZE = 1000
 
 const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
@@ -56,6 +57,16 @@ const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard
 ]
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
   for (let index = 0; index < values.length; index += size) await callback(values.slice(index, index + size))
+}
+async function fetchTerritoryLots(db: NonNullable<typeof supabase>, importId: string) {
+  const rows: Lot[] = []
+  for (let from = 0; ; from += TERRITORY_PAGE_SIZE) {
+    const { data, error } = await db.from('census_territory_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,zone_number,zone_id').eq('import_id', importId).order('source_handle').order('id').range(from, from + TERRITORY_PAGE_SIZE - 1)
+    if (error) throw new Error(`Não foi possível carregar os lotes publicados: ${error.message}`)
+    const page = (data || []) as Lot[]
+    rows.push(...page)
+    if (page.length < TERRITORY_PAGE_SIZE) return rows
+  }
 }
 
 export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps) {
@@ -223,16 +234,24 @@ function MapPreparationWorkspace() {
   const loadWorkspace = async () => {
     if (!supabase) { setLoading(false); return }
     setLoading(true)
-    const [{ data: imports }, { data: zoneRows }] = await Promise.all([
-      supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at,division_saved_at').in('status', ['DRAFT', 'PUBLISHED']).order('updated_at', { ascending: false }).limit(1),
+    const [{ data: territoryImports }, { data: zoneRows }] = await Promise.all([
+      supabase.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1),
       supabase.from('census_zones').select('id,name,color,active').eq('active', true).order('created_at').limit(100),
     ])
     const nextZones = (zoneRows || []) as CensusZone[]
     setZones(nextZones); setActiveZoneId((current) => current || nextZones[0]?.id || '')
-    const current = imports?.[0] as MapImport | undefined
+    let current = territoryImports?.[0] as MapImport | undefined
     if (current) {
-      const { data: rows } = await supabase.from('census_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id').eq('import_id', current.id).order('source_handle').limit(5000)
-      setMapImport(current); setLots((rows || []) as Lot[])
+      setMapImport(current); setLots(await fetchTerritoryLots(supabase, current.id))
+    } else {
+      const { data: imports } = await supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at,division_saved_at').eq('status', 'DRAFT').order('updated_at', { ascending: false }).limit(1)
+      current = imports?.[0] as MapImport | undefined
+      if (current) {
+        const { data: rows } = await supabase.from('census_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id').eq('import_id', current.id).order('source_handle').limit(5000)
+        setMapImport(current); setLots((rows || []) as Lot[])
+      } else {
+        setMapImport(null); setLots([])
+      }
     }
     setLoading(false)
   }

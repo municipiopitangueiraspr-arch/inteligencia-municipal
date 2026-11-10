@@ -126,6 +126,10 @@ try {
   assert.match(territoryCode, /Questionários ativos pendentes/)
   assert.match(territoryCode, /fetchAllPages<TerritoryLot>/)
   assert.match(territoryCode, /fetchAllPages<Household>/)
+  assert.match(mapPreparationCode, /\.from\('census_territory_map_imports'\)/, 'Preparar mapa consulta a mesma origem publicada do Mapa territorial')
+  assert.match(mapPreparationCode, /\.from\('census_territory_map_lots'\)/, 'Preparar mapa consulta os mesmos lotes publicados do Mapa territorial')
+  assert.match(mapPreparationCode, /fetchTerritoryLots\(supabase, current\.id\)/, 'Preparar mapa pagina os lotes publicados sem limite arbitrário de 5.000')
+  assert.match(mapPreparationCode, /status', 'DRAFT'/, 'Preparar mapa mantém fallback para rascunho recém-importado')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
