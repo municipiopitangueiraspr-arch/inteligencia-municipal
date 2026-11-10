@@ -166,10 +166,12 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernan
                       >
                         <span className="module-card-top">
                           <span className="module-icon"><Icon size={27} strokeWidth={1.8} aria-hidden="true" /></span>
-                          <span className={`module-status${module.is_ready ? ' module-status--active' : ''}`}>
-                            <span className="status-dot" aria-hidden="true" />
-                            {module.status_label}
-                          </span>
+                          {module.id !== 'census' && (
+                            <span className={`module-status${module.is_ready ? ' module-status--active' : ''}`}>
+                              <span className="status-dot" aria-hidden="true" />
+                              {module.status_label}
+                            </span>
+                          )}
                         </span>
                         <span className="module-card-title">{module.label}</span>
                         <span className="module-card-description">{module.description}</span>
