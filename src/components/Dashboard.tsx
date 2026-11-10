@@ -1,24 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
   Building2,
-  Compass,
-  Construction,
-  Dumbbell,
-  FileText,
-  GraduationCap,
-  HeartHandshake,
-  HeartPulse,
-  Landmark,
   LogOut,
-  MapPinned,
-  Package,
-  ShieldCheck,
-  Sprout,
-  TrendingUp,
-  Truck,
+  Settings,
 } from 'lucide-react'
+import type {
+  MunicipalModule,
+  MunicipalSecretariat,
+  MunicipalSecretariatModule,
+} from '../lib/municipal-catalog'
+import { getMunicipalIcon } from '../lib/municipal-catalog'
+import { supabase } from '../lib/supabase'
 import './Dashboard.css'
 
 const assetBase = import.meta.env.BASE_URL
@@ -27,147 +21,82 @@ type DashboardProps = {
   userEmail?: string
   onOpenFleet: () => void
   onOpenCensus: () => void
+  onOpenGovernance: () => void
   onLogout: () => void
 }
 
-const modules = [
-  {
-    id: 'fleet',
-    title: 'Gestão de Frotas',
-    description: 'Veículos, condutores e abastecimentos.',
-    icon: Truck,
-    status: 'Em implantação',
-    tone: 'fleet',
-    available: true,
-    secretariatId: 'administration',
-  },
-  {
-    id: 'census',
-    title: 'Censo Municipal',
-    description: 'Mapa e informações do território municipal.',
-    icon: MapPinned,
-    status: 'Estrutura inicial',
-    tone: 'census',
-    available: true,
-    secretariatId: 'health',
-  },
-  {
-    id: 'atas',
-    title: 'Atas e Pedidos',
-    description: 'Atas de registro de preços e solicitações.',
-    icon: FileText,
-    status: 'Em preparação',
-    tone: 'records',
-    available: false,
-    secretariatId: 'administration',
-  },
-  {
-    id: 'compras',
-    title: 'Compras Públicas',
-    description: 'Processos, contratos e aquisições.',
-    icon: Package,
-    status: 'Em preparação',
-    tone: 'procurement',
-    available: false,
-    secretariatId: 'administration',
-  },
-  {
-    id: 'acts',
-    title: 'Atos Oficiais',
-    description: 'Publicações e documentos municipais.',
-    icon: ShieldCheck,
-    status: 'Em preparação',
-    tone: 'official',
-    available: false,
-    secretariatId: 'administration',
-  },
-] as const
+const moduleToneById: Record<string, string> = {
+  fleet: 'fleet',
+  census: 'census',
+  atas: 'records',
+  compras: 'procurement',
+  acts: 'official',
+}
 
-type ModuleId = (typeof modules)[number]['id']
+export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenGovernance, onLogout }: DashboardProps) {
+  const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
+  const [modules, setModules] = useState<MunicipalModule[]>([])
+  const [secretariatModules, setSecretariatModules] = useState<MunicipalSecretariatModule[]>([])
+  const [canManageGovernance, setCanManageGovernance] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [selectedSecretariatId, setSelectedSecretariatId] = useState<string | null>(null)
 
-const secretariats = [
-  {
-    id: 'administration',
-    title: 'Administração e Finanças',
-    description: 'Gestão administrativa, financeira e dos recursos municipais.',
-    icon: Landmark,
-    tone: 'administration',
-  },
-  {
-    id: 'agriculture',
-    title: 'Agricultura e Meio Ambiente',
-    description: 'Desenvolvimento rural, agricultura e cuidado ambiental.',
-    icon: Sprout,
-    tone: 'agriculture',
-  },
-  {
-    id: 'social',
-    title: 'Assistência Social',
-    description: 'Políticas de proteção e atendimento social.',
-    icon: HeartHandshake,
-    tone: 'social',
-  },
-  {
-    id: 'culture',
-    title: 'Cultura e Turismo',
-    description: 'Ações culturais, turismo e valorização do município.',
-    icon: Compass,
-    tone: 'culture',
-  },
-  {
-    id: 'development',
-    title: 'Desenvolvimento Econômico',
-    description: 'Iniciativas de desenvolvimento e fortalecimento econômico.',
-    icon: TrendingUp,
-    tone: 'development',
-  },
-  {
-    id: 'education',
-    title: 'Educação',
-    description: 'Gestão e acompanhamento das ações educacionais.',
-    icon: GraduationCap,
-    tone: 'education',
-  },
-  {
-    id: 'sports',
-    title: 'Esporte e Lazer',
-    description: 'Atividades esportivas, recreação e lazer.',
-    icon: Dumbbell,
-    tone: 'sports',
-  },
-  {
-    id: 'works',
-    title: 'Obras, Planejamento e Urbanismo',
-    description: 'Obras, planejamento territorial e desenvolvimento urbano.',
-    icon: Construction,
-    tone: 'works',
-  },
-  {
-    id: 'health',
-    title: 'Saúde',
-    description: 'Serviços, planejamento e informações municipais de saúde.',
-    icon: HeartPulse,
-    tone: 'health',
-  },
-  {
-    id: 'security',
-    title: 'Segurança Pública e Trânsito',
-    description: 'Segurança pública, mobilidade e trânsito municipal.',
-    icon: ShieldCheck,
-    tone: 'security',
-  },
-] as const
+  useEffect(() => {
+    let mounted = true
+    const loadHall = async () => {
+      if (!supabase) {
+        if (mounted) {
+          setLoadError('O serviço de dados não está configurado. Entre em contato com o administrador.')
+          setLoading(false)
+        }
+        return
+      }
 
-type SecretariatId = (typeof secretariats)[number]['id']
+      // Associação de catálogo para organizar os cards por secretaria, igualmente visível a todos; não é uma permissão individual.
+      const [secretariatResult, moduleResult, mappingResult, adminResult] = await Promise.all([
+        supabase
+          .from('municipal_secretariats')
+          .select('id,name,description,icon_name,sort_order,is_active')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('municipal_modules')
+          .select('id,label,description,icon_name,is_ready,status_label,sort_order')
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('municipal_secretariat_modules')
+          .select('secretariat_id,module_id,sort_order')
+          .order('sort_order', { ascending: true }),
+        supabase.rpc('municipal_governance_is_admin'),
+      ])
 
-export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onLogout }: DashboardProps) {
-  const [selectedSecretariatId, setSelectedSecretariatId] = useState<SecretariatId | null>(null)
+      if (!mounted) return
+      const failures = [secretariatResult.error, moduleResult.error, mappingResult.error].filter(Boolean)
+      if (failures.length > 0) {
+        setLoadError('Não foi possível carregar as secretarias e os módulos. Tente atualizar a página.')
+      } else {
+        setSecretariats((secretariatResult.data || []) as unknown as MunicipalSecretariat[])
+        setModules((moduleResult.data || []) as unknown as MunicipalModule[])
+        setSecretariatModules((mappingResult.data || []) as unknown as MunicipalSecretariatModule[])
+      }
+      setCanManageGovernance(!adminResult.error && adminResult.data === true)
+      setLoading(false)
+    }
+
+    void loadHall()
+    return () => { mounted = false }
+  }, [])
+
   const selectedSecretariat = secretariats.find((secretariat) => secretariat.id === selectedSecretariatId)
   const visibleModules = selectedSecretariat
-    ? modules.filter((module) => module.secretariatId === selectedSecretariat.id)
+    ? secretariatModules
+      .filter((mapping) => mapping.secretariat_id === selectedSecretariat.id)
+      .map((mapping) => modules.find((module) => module.id === mapping.module_id))
+      .filter((module): module is MunicipalModule => Boolean(module))
     : []
 
-  const openModule = (id: ModuleId) => {
+  const openModule = (id: string) => {
     if (id === 'fleet') onOpenFleet()
     if (id === 'census') onOpenCensus()
   }
@@ -208,39 +137,48 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onLogout }: Da
 
               <div className="department-heading">
                 <span className="department-heading-icon" aria-hidden="true">
-                  <selectedSecretariat.icon size={30} strokeWidth={1.8} />
+                  {(() => {
+                    const Icon = getMunicipalIcon(selectedSecretariat.icon_name)
+                    return <Icon size={30} strokeWidth={1.8} />
+                  })()}
                 </span>
                 <div>
-                  <h1 id="departmentTitle">{selectedSecretariat.title}</h1>
+                  <h1 id="departmentTitle">{selectedSecretariat.name}</h1>
                   <p>Escolha um módulo para continuar.</p>
                 </div>
               </div>
 
               {visibleModules.length > 0 ? (
-                <div className="module-grid" aria-label={`Módulos de ${selectedSecretariat.title}`}>
-                  {visibleModules.map(({ id, title, description, icon: Icon, status, tone, available }) => (
-                    <button
-                      key={id}
-                      className={`module-card module-card--${tone}`}
-                      type="button"
-                      disabled={!available}
-                      onClick={() => openModule(id)}
-                    >
-                      <span className="module-card-top">
-                        <span className="module-icon"><Icon size={27} strokeWidth={1.8} aria-hidden="true" /></span>
-                        <span className={`module-status${available ? ' module-status--active' : ''}`}>
-                          <span className="status-dot" aria-hidden="true" />
-                          {status}
+                <div className="module-grid" aria-label={`Módulos de ${selectedSecretariat.name}`}>
+                  {visibleModules.map((module) => {
+                    const Icon = getMunicipalIcon(module.icon_name)
+                    const hasRoute = module.id === 'fleet' || module.id === 'census'
+                    const canOpen = module.is_ready && hasRoute
+                    return (
+                      <button
+                        key={module.id}
+                        className={`module-card module-card--${moduleToneById[module.id] || 'fleet'}`}
+                        type="button"
+                        disabled={!canOpen}
+                        aria-label={canOpen ? `Acessar ${module.label}` : `${module.label}, ${module.status_label}`}
+                        onClick={() => openModule(module.id)}
+                      >
+                        <span className="module-card-top">
+                          <span className="module-icon"><Icon size={27} strokeWidth={1.8} aria-hidden="true" /></span>
+                          <span className={`module-status${module.is_ready ? ' module-status--active' : ''}`}>
+                            <span className="status-dot" aria-hidden="true" />
+                            {module.status_label}
+                          </span>
                         </span>
-                      </span>
-                      <span className="module-card-title">{title}</span>
-                      <span className="module-card-description">{description}</span>
-                      <span className={`module-card-action${available ? '' : ' module-card-action--disabled'}`}>
-                        {available ? 'Acessar módulo' : 'Em breve'}
-                        {available && <ArrowRight size={17} aria-hidden="true" />}
-                      </span>
-                    </button>
-                  ))}
+                        <span className="module-card-title">{module.label}</span>
+                        <span className="module-card-description">{module.description}</span>
+                        <span className={`module-card-action${canOpen ? '' : ' module-card-action--disabled'}`}>
+                          {canOpen ? 'Acessar módulo' : 'Em breve'}
+                          {canOpen && <ArrowRight size={17} aria-hidden="true" />}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="secretariat-empty" role="status">
@@ -257,22 +195,50 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onLogout }: Da
                 <p>Escolha uma secretaria para acessar seus módulos.</p>
               </div>
 
-              <div className="secretariat-grid">
-                {secretariats.map(({ id, title, description, icon: Icon, tone }) => (
-                  <button
-                    key={id}
-                    className={`secretariat-card secretariat-card--${tone}`}
-                    type="button"
-                    aria-label={`Acessar secretaria: ${title}`}
-                    onClick={() => setSelectedSecretariatId(id)}
-                  >
-                    <span className="secretariat-card-icon"><Icon size={25} strokeWidth={1.9} aria-hidden="true" /></span>
-                    <span className="secretariat-card-title">{title}</span>
-                    <span className="secretariat-card-description">{description}</span>
-                    <span className="secretariat-card-action">Acessar secretaria <ArrowRight size={16} aria-hidden="true" /></span>
-                  </button>
-                ))}
-              </div>
+              {loading ? (
+                <div className="secretariat-empty" role="status"><p>Carregando secretarias…</p></div>
+              ) : loadError ? (
+                <div className="secretariat-empty" role="alert"><p>{loadError}</p></div>
+              ) : secretariats.length === 0 ? (
+                <div className="secretariat-empty" role="status">
+                  <span className="secretariat-empty-icon"><Building2 size={24} aria-hidden="true" /></span>
+                  <h2>Nenhuma secretaria ativa</h2>
+                  <p>Entre em contato com o administrador do sistema.</p>
+                </div>
+              ) : (
+                <div className="secretariat-grid">
+                  {secretariats.map((secretariat) => {
+                    const Icon = getMunicipalIcon(secretariat.icon_name)
+                    return (
+                      <button
+                        key={secretariat.id}
+                        className={`secretariat-card secretariat-card--${secretariat.id}`}
+                        type="button"
+                        aria-label={`Acessar secretaria: ${secretariat.name}`}
+                        onClick={() => setSelectedSecretariatId(secretariat.id)}
+                      >
+                        <span className="secretariat-card-icon"><Icon size={25} strokeWidth={1.9} aria-hidden="true" /></span>
+                        <span className="secretariat-card-title">{secretariat.name}</span>
+                        <span className="secretariat-card-description">{secretariat.description}</span>
+                        <span className="secretariat-card-action">Acessar secretaria <ArrowRight size={16} aria-hidden="true" /></span>
+                      </button>
+                    )
+                  })}
+                  {canManageGovernance && (
+                    <button
+                      className="secretariat-card governance-card"
+                      type="button"
+                      aria-label="Acessar Governança municipal"
+                      onClick={onOpenGovernance}
+                    >
+                      <span className="secretariat-card-icon"><Settings size={25} strokeWidth={1.9} aria-hidden="true" /></span>
+                      <span className="secretariat-card-title">Governança</span>
+                      <span className="secretariat-card-description">Configure secretarias, usuários e módulos.</span>
+                      <span className="secretariat-card-action">Acessar painel <ArrowRight size={16} aria-hidden="true" /></span>
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
           )}
         </div>

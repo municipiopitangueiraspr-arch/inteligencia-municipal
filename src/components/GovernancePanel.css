@@ -1,0 +1,881 @@
+.governance-shell,
+.governance-shell * {
+  box-sizing: border-box;
+}
+
+.governance-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: #214d56;
+  background: #f5f8f8;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.governance-header {
+  width: 100%;
+  border-bottom: 1px solid #dfeaea;
+  background: #fff;
+}
+
+.governance-header-inner {
+  width: min(100% - 48px, 1220px);
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 auto;
+}
+
+.governance-brand,
+.governance-header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.governance-brand {
+  gap: 11px;
+}
+
+.governance-brand-mark {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dce8e8;
+  border-radius: 13px;
+  background: #f7fbfb;
+}
+
+.governance-brand-mark img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.governance-brand strong,
+.governance-brand small {
+  display: block;
+}
+
+.governance-brand strong {
+  color: #173f48;
+  font: 800 14px 'Manrope', sans-serif;
+}
+
+.governance-brand small {
+  margin-top: 3px;
+  color: #698087;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.governance-header-actions {
+  gap: 12px;
+}
+
+.governance-user-email {
+  max-width: 280px;
+  overflow: hidden;
+  color: #496a70;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-logout,
+.governance-back,
+.governance-primary-button,
+.governance-secondary-button,
+.governance-edit-button,
+.governance-text-button,
+.governance-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 9px;
+  font: 700 12px 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.governance-logout,
+.governance-back,
+.governance-secondary-button,
+.governance-edit-button,
+.governance-text-button,
+.governance-close {
+  border: 1px solid #d9e5e5;
+  color: #496a70;
+  background: #fff;
+}
+
+.governance-logout {
+  min-height: 40px;
+  padding: 0 13px;
+}
+
+.governance-logout:hover,
+.governance-back:hover,
+.governance-secondary-button:hover,
+.governance-edit-button:hover,
+.governance-close:hover {
+  border-color: #8db8bb;
+  color: #175c69;
+  background: #eff8f7;
+}
+
+.governance-main {
+  width: 100%;
+  flex: 1;
+}
+
+.governance-content {
+  width: min(100% - 48px, 1160px);
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.governance-back {
+  min-height: 40px;
+  padding: 0 12px 0 10px;
+  margin-bottom: 22px;
+}
+
+.governance-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.governance-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: #39818a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+}
+
+.governance-heading h1 {
+  margin: 0;
+  color: #214d56;
+  font: 800 clamp(26px, 3vw, 34px)/1.2 'Manrope', sans-serif;
+  letter-spacing: -0.6px;
+}
+
+.governance-heading p {
+  margin: 8px 0 0;
+  color: #6d8388;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.governance-policy-note,
+.governance-assignment-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #ead8a6;
+  border-radius: 12px;
+  color: #6b5723;
+  background: #fff9e9;
+}
+
+.governance-policy-note {
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.governance-policy-note svg,
+.governance-assignment-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #a27b20;
+}
+
+.governance-policy-note p,
+.governance-assignment-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.governance-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.governance-message svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.governance-message--success {
+  border-color: #c7e4d7;
+  color: #236849;
+  background: #edf8f1;
+}
+
+.governance-message--error {
+  border-color: #edc9c4;
+  color: #93453e;
+  background: #fff2f0;
+}
+
+.governance-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid #dce8e8;
+  margin-bottom: 24px;
+}
+
+.governance-tabs button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  color: #6d8388;
+  background: transparent;
+  font: 700 12px 'DM Sans', sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.governance-tabs button:hover,
+.governance-tabs button.is-active {
+  color: #176876;
+}
+
+.governance-tabs button.is-active {
+  border-bottom-color: #2d7d8a;
+}
+
+.governance-tabs button span {
+  min-width: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #607980;
+  background: #edf3f3;
+  font-size: 10px;
+}
+
+.governance-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.governance-section-heading h2 {
+  margin: 0;
+  color: #214d56;
+  font: 800 21px 'Manrope', sans-serif;
+  letter-spacing: -0.3px;
+}
+
+.governance-section-heading p {
+  max-width: 690px;
+  margin: 6px 0 0;
+  color: #71858a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.governance-primary-button {
+  min-height: 42px;
+  flex: 0 0 auto;
+  padding: 0 15px;
+  border: 1px solid #236c78;
+  color: #fff;
+  background: #2d7d8a;
+  box-shadow: 0 3px 8px rgba(30, 100, 110, 0.12);
+}
+
+.governance-primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #1c5f6b;
+  background: #236c78;
+  box-shadow: 0 6px 13px rgba(30, 100, 110, 0.18);
+}
+
+.governance-primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.governance-secondary-button {
+  min-height: 42px;
+  padding: 0 15px;
+}
+
+.governance-secretariat-grid,
+.governance-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 14px;
+}
+
+.governance-secretariat-card,
+.governance-module-card {
+  min-width: 0;
+  border: 1px solid #dce8e8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(29, 78, 84, 0.035);
+}
+
+.governance-secretariat-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 190px;
+  padding: 17px;
+}
+
+.governance-secretariat-card.is-inactive {
+  background: #fafcfc;
+}
+
+.governance-secretariat-top,
+.governance-secretariat-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.governance-secretariat-icon,
+.governance-module-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #27717e;
+  background: #eaf5f2;
+}
+
+.governance-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 9px;
+  border: 1px solid #e3ebeb;
+  border-radius: 999px;
+  color: #71858e;
+  background: #f6f9f9;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.governance-status.is-active {
+  border-color: #c8e4d8;
+  color: #24745b;
+  background: #eaf7f0;
+}
+
+.governance-secretariat-card h3,
+.governance-module-card h3 {
+  margin: 13px 0 0;
+  color: #244e56;
+  font: 800 14px/1.35 'Manrope', sans-serif;
+}
+
+.governance-secretariat-card > p,
+.governance-module-card p {
+  margin: 6px 0 14px;
+  color: #71858a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.governance-secretariat-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #edf2f2;
+  color: #758990;
+  font-size: 11px;
+}
+
+.governance-text-button {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  color: #286d78;
+  background: transparent;
+}
+
+.governance-text-button:hover {
+  border-color: #cfe3e3;
+  background: #eff8f7;
+}
+
+.governance-user-list {
+  display: grid;
+  gap: 9px;
+}
+
+.governance-user-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(180px, 1fr) minmax(120px, 160px) minmax(130px, 170px) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.governance-user-avatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #2d7d8a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.governance-user-main {
+  min-width: 0;
+}
+
+.governance-user-main strong,
+.governance-user-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-user-main strong {
+  color: #244e56;
+  font: 800 12px 'Manrope', sans-serif;
+}
+
+.governance-user-main span,
+.governance-user-summary {
+  margin-top: 4px;
+  color: #74878d;
+  font-size: 11px;
+}
+
+.governance-profile-badge {
+  width: fit-content;
+  padding: 6px 9px;
+  border: 1px solid #d8e9e8;
+  border-radius: 999px;
+  color: #306d74;
+  background: #f0f8f7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.governance-user-summary {
+  white-space: nowrap;
+}
+
+.governance-edit-button {
+  min-height: 36px;
+  padding: 0 11px;
+}
+
+.governance-module-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 15px;
+}
+
+.governance-module-copy {
+  min-width: 0;
+}
+
+.governance-module-card h3 {
+  margin: 1px 0 0;
+}
+
+.governance-module-card p {
+  margin-bottom: 8px;
+}
+
+.governance-module-card > .governance-status {
+  grid-column: 2;
+  width: fit-content;
+}
+
+.governance-empty {
+  min-height: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  border: 1px dashed #c9dada;
+  border-radius: 13px;
+  color: #71858a;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.governance-empty--error {
+  margin-top: 12px;
+  border-color: #e6c7c2;
+  color: #7d4a44;
+  background: #fff8f7;
+}
+
+.governance-empty--error h1 {
+  margin: 3px 0 0;
+  color: #68403b;
+  font: 800 20px 'Manrope', sans-serif;
+}
+
+.governance-empty--error p {
+  max-width: 500px;
+  margin: 0;
+}
+
+.governance-overlay {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: rgba(15, 40, 45, 0.52);
+  backdrop-filter: blur(3px);
+}
+
+.governance-dialog {
+  width: min(100%, 600px);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  padding: 23px;
+  border: 1px solid #dce8e8;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 22px 70px rgba(13, 45, 52, 0.24);
+}
+
+.governance-dialog--wide {
+  width: min(100%, 850px);
+}
+
+.governance-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2f2;
+  margin-bottom: 18px;
+}
+
+.governance-dialog-heading .governance-eyebrow {
+  margin-bottom: 5px;
+}
+
+.governance-dialog-heading h2 {
+  margin: 0;
+  color: #214d56;
+  font: 800 21px 'Manrope', sans-serif;
+}
+
+.governance-close {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  padding: 0;
+}
+
+.governance-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.governance-form-grid--two {
+  margin-bottom: 16px;
+}
+
+.governance-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #415e64;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.governance-field--full {
+  grid-column: 1 / -1;
+}
+
+.governance-field input,
+.governance-field textarea,
+.governance-field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #d6e2e2;
+  border-radius: 9px;
+  color: #264f57;
+  background: #fff;
+  font: 500 12px 'DM Sans', sans-serif;
+}
+
+.governance-field textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.governance-field input:focus,
+.governance-field textarea:focus,
+.governance-field select:focus {
+  outline: 3px solid rgba(45, 125, 138, 0.18);
+  border-color: #5aa0a8;
+}
+
+.governance-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #375b63;
+  cursor: pointer;
+}
+
+.governance-check input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  margin: 1px 0 0;
+  accent-color: #2d7d8a;
+}
+
+.governance-check span,
+.governance-check strong,
+.governance-check small {
+  display: block;
+}
+
+.governance-check strong {
+  color: #375b63;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.governance-check small {
+  margin-top: 3px;
+  color: #7b8d91;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.governance-profile-field {
+  max-width: 360px;
+  margin: 16px 0;
+}
+
+.governance-field-hint {
+  color: #678087;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.governance-user-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #dce8e8;
+  border-radius: 10px;
+  background: #f8fbfb;
+}
+
+.governance-user-identity strong {
+  color: #244e56;
+  font: 800 13px 'Manrope', sans-serif;
+}
+
+.governance-user-identity span {
+  color: #71858a;
+  font-size: 11px;
+}
+
+.governance-assignment-note {
+  padding: 11px 13px;
+  margin: 16px 0;
+  border-color: #d5e6e5;
+  color: #41696e;
+  background: #f0f8f7;
+}
+
+.governance-assignment-note svg {
+  color: #39818a;
+}
+
+.governance-assignment-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.governance-check-group {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  margin: 0;
+}
+
+.governance-check-group legend {
+  padding: 0 5px;
+  color: #244e56;
+  font: 800 12px 'Manrope', sans-serif;
+}
+
+.governance-check-group > p {
+  margin: 1px 0 11px;
+  color: #7b8d91;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.governance-checkbox-list {
+  max-height: 240px;
+  display: grid;
+  gap: 1px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.governance-checkbox-list .governance-check {
+  padding: 8px 7px;
+  border-radius: 7px;
+}
+
+.governance-checkbox-list .governance-check:hover {
+  background: #f3f8f8;
+}
+
+.governance-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid #edf2f2;
+}
+
+.governance-shell button:focus-visible,
+.governance-shell input:focus-visible,
+.governance-shell select:focus-visible,
+.governance-shell textarea:focus-visible {
+  outline: 3px solid #d5a341;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .governance-user-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 10px 12px;
+  }
+
+  .governance-profile-badge,
+  .governance-user-summary {
+    grid-column: 2;
+  }
+
+  .governance-edit-button {
+    grid-column: 3;
+    grid-row: 1 / span 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .governance-header-inner,
+  .governance-content {
+    width: min(100% - 32px, 1160px);
+  }
+
+  .governance-header-inner {
+    min-height: 68px;
+  }
+
+  .governance-brand-mark {
+    width: 39px;
+    height: 39px;
+    flex-basis: 39px;
+  }
+
+  .governance-brand-mark img {
+    width: 30px;
+    height: 30px;
+  }
+
+  .governance-brand strong { font-size: 12px; }
+  .governance-user-email { display: none; }
+  .governance-logout { width: 40px; min-width: 40px; padding: 0; }
+  .governance-logout span { display: none; }
+  .governance-content { padding: 22px 0 34px; }
+  .governance-back { margin-bottom: 19px; }
+  .governance-heading { margin-bottom: 17px; }
+  .governance-heading p { font-size: 13px; }
+  .governance-policy-note { padding: 12px; }
+  .governance-tabs { gap: 1px; margin-bottom: 20px; }
+  .governance-tabs button { min-height: 44px; padding: 0 10px; font-size: 11px; }
+  .governance-section-heading { align-items: flex-start; flex-direction: column; }
+  .governance-section-heading h2 { font-size: 19px; }
+  .governance-primary-button { min-height: 40px; }
+  .governance-secretariat-grid,
+  .governance-module-grid { grid-template-columns: minmax(0, 1fr); }
+  .governance-user-row { grid-template-columns: 38px minmax(0, 1fr) auto; padding: 11px; }
+  .governance-user-avatar { width: 36px; height: 36px; }
+  .governance-edit-button { width: 38px; padding: 0; }
+  .governance-edit-button span { display: none; }
+  .governance-overlay { place-items: start center; padding: 10px; }
+  .governance-dialog { max-height: calc(100dvh - 20px); padding: 17px; border-radius: 13px; }
+  .governance-dialog-heading h2 { font-size: 19px; }
+  .governance-form-grid,
+  .governance-assignment-columns { grid-template-columns: minmax(0, 1fr); }
+  .governance-field--full { grid-column: auto; }
+  .governance-profile-field { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .governance-shell *,
+  .governance-shell *::before,
+  .governance-shell *::after { transition: none !important; }
+}

@@ -144,3 +144,13 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Preservar as dez secretarias e a navegação para os módulos já atribuídos.
 - [x] Validar o build local.
 - [x] Publicar o refinamento no GitHub Pages para teste remoto.
+
+## Painel de Governança e cadastros municipais
+- [x] Adicionar ao hall um card de Governança, acessível apenas a contas autenticadas com perfil administrador ativo; a regra deve ser verificada no banco/funções, não somente ocultada no frontend.
+- [x] Administradores podem cadastrar e editar secretarias com nome, descrição, ícone, ordem e situação ativa/inativa; não existe exclusão permanente, e o hall mostra somente secretarias ativas.
+- [x] Administradores podem convidar usuário por e-mail pelo Supabase Auth; o usuário completa o primeiro acesso e define a própria senha pelo fluxo existente.
+- [x] No painel, cada usuário pode ter uma ou mais secretarias, um perfil entre Administrador, Prefeito, Secretário e Administrativo, e atribuições de módulos escolhidas do catálogo, independentemente das secretarias associadas.
+- [x] Os perfis e vínculos com secretarias/módulos são dados cadastrais nesta etapa; não criam regras de acesso por perfil ou secretaria, e as atribuições de módulos são registradas sem bloquear nem ampliar os acessos atuais.
+- [x] O novo perfil municipal não substitui o campo legado de perfil usado pelos módulos existentes; as políticas atuais de Frotas e Censo permanecem inalteradas.
+- [x] Build e lint concluídos; a estrutura aditiva foi aplicada ao Supabase e a Edge Function de convite municipal está implantada.
+- [ ] Publicar o frontend atualizado e disponibilizar o hall de Governança no GitHub Pages para teste remoto.
