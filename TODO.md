@@ -104,3 +104,12 @@
 - [x] RLS permite acesso apenas a administradores municipais e ACS ativos cuja conta autenticada corresponda ao cadastro ACS e esteja vinculada à zona do lote; usuários sem esse vínculo não leem nem gravam dados sensíveis, e nenhuma tabela/view é acessível a `anon`.
 - [x] Toda escrita de domicílio, visita ou resposta exige confirmação visual, exibe carregamento enquanto grava e informa sucesso/erro; testes não criam dados pessoais no banco compartilhado.
 - [x] Testes sintéticos de validação das respostas, seleção do mapa e gestão de questionários, build TypeScript/Vite, lint direcionado (sem erros; com avisos de `set-state-in-effect`) e análise sintática das 122 instruções SQL passaram; nenhuma resposta pessoal de teste foi gravada no banco compartilhado. O PR #8 foi mesclado e o workflow Pages 42753046114 concluiu com sucesso; página pública e bundle responderam HTTP 200.
+
+
+## Dossiê do lote: código legível, ACS, domicílios e questionários
+- [ ] Ao clicar em um lote, o painel mostra a zona daquele lote, o ACS responsável se houver, a possibilidade administrativa de vincular um ACS especificamente àquele lote, o código legível do mapa (sem comandos de formatação CAD importados) e a quantidade de domicílios ativos vinculados ao lote.
+- [ ] A tela continua permitindo cadastrar um ou mais domicílios no lote, com identificação, confirmação antes da gravação e atualização imediata da quantidade e do dossiê após salvar.
+- [ ] Em cada domicílio, a tela oferece questionários ativos ainda não recebidos por aquele domicílio e permite iniciar uma visita já com o questionário escolhido; rascunhos e respostas submetidas contam como questionário já recebido e não são reapresentados como pendentes.
+- [ ] Se o domicílio já recebeu questionários, seu histórico permite abrir o snapshot e as respostas; respostas enviadas são somente leitura, e rascunhos existentes podem ser continuados sem alterar versões anteriores.
+- [ ] O vínculo direto ACS–lote persiste no Supabase, é administrável somente por administrador municipal e dá acesso ao lote ao ACS ativo cadastrado pelo mesmo e-mail autenticado sem revogar a cobertura existente por zona. Nenhuma leitura ou gravação é aberta a `anon`.
+- [ ] Os testes/build validam a limpeza do código importado, a apresentação do painel, o acesso por ACS direto ou por zona, o fluxo de questionários pendentes/histórico e a segurança da migration; os testes não gravam registros pessoais de demonstração no Supabase compartilhado.

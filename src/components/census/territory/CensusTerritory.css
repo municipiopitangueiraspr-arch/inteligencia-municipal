@@ -2,3 +2,193 @@
 @media(max-width:1100px){.census-territory-workspace.with-panel{grid-template-columns:minmax(0,1fr) 350px}.census-territory-viewport,.census-territory-panel{min-height:500px}}
 @media(max-width:850px){.census-territory-heading{flex-direction:column}.census-territory-badges{width:100%}.census-territory-workspace,.census-territory-workspace.with-panel{grid-template-columns:minmax(0,1fr)}.census-territory-viewport{height:58vh;min-height:420px}.census-territory-panel{position:fixed;right:0;bottom:0;left:0;z-index:70;max-height:78vh;min-height:0;border-radius:18px 18px 0 0;box-shadow:0 -14px 44px #102c3330}.census-territory-panel-scroll{max-height:calc(78vh - 70px)}.census-territory-toolbar{align-items:flex-start;flex-direction:column}.census-territory-toolbar>div{width:100%;justify-content:flex-end}.census-territory-toolbar>div button:first-child{margin-left:auto}.census-territory-legend{max-width:calc(100% - 16px);left:8px;bottom:8px}.census-response-sheet{width:100vw}.census-response-header{padding:15px}.census-response-scroll{padding:10px 12px 20px}.census-response-description,.census-response-context,.census-response-alert{margin-right:12px;margin-left:12px}.census-response-footer{align-items:flex-start;flex-direction:column;padding:10px 12px}.census-response-footer>div{width:100%}.census-response-footer button{flex:1}.census-visit-dialog{padding:16px}}
 @media(max-width:480px){.census-territory-heading h2{font-size:21px}.census-territory-badges span{font-size:10px}.census-territory-viewport{min-height:370px}.census-territory-panel-header{padding:13px}.census-territory-panel-scroll{padding:10px}.census-response-header h2{font-size:17px}.census-response-section{padding:11px}.census-response-footer button{font-size:9px}.census-visit-dialog>footer button{flex:1}}
+
+
+.census-territory-acs-card,
+.census-household-available-forms {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  background: #fbfdfd;
+}
+
+.census-territory-acs-heading,
+.census-territory-acs-list > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.census-territory-acs-heading > svg {
+  flex: none;
+  color: #347d87;
+}
+
+.census-territory-acs-heading > div,
+.census-territory-acs-list > div > span:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.census-territory-acs-heading strong,
+.census-household-available-forms > div > strong {
+  color: #315c64;
+  font-size: 11px;
+}
+
+.census-territory-acs-heading small,
+.census-territory-acs-list small,
+.census-household-available-forms > div > small {
+  color: #7d9094;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.census-territory-acs-list {
+  display: grid;
+  gap: 7px;
+}
+
+.census-territory-acs-avatar {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  flex: none;
+  border-radius: 50%;
+  background: #e8f3f2;
+  color: #347782;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.census-territory-acs-list strong {
+  overflow: hidden;
+  color: #3a5d64;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.census-territory-acs-empty,
+.census-household-all-forms-received {
+  margin: 0;
+  color: #75898d;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.census-territory-acs-link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #2b7782;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.census-territory-acs-link:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.census-territory-acs-form {
+  display: grid;
+  gap: 9px;
+  padding-top: 9px;
+  border-top: 1px solid #e1ebeb;
+}
+
+.census-territory-acs-form label {
+  display: grid;
+  gap: 5px;
+  color: #536f75;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.census-territory-acs-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px;
+  border: 1px solid #d1e0e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #264c54;
+  font: inherit;
+  font-size: 10px;
+}
+
+.census-territory-acs-form > small {
+  color: #829397;
+  font-size: 9px;
+}
+
+.census-territory-acs-form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.census-household-available-forms {
+  gap: 7px;
+  border-color: #cfe2df;
+  background: #f6fbfa;
+}
+
+.census-household-available-forms > div {
+  display: grid;
+  gap: 3px;
+}
+
+.census-household-available-forms > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #dbe9e8;
+  border-radius: 8px;
+  background: #fff;
+  color: #416a71;
+  text-align: left;
+  cursor: pointer;
+}
+
+.census-household-available-forms > button:hover:not(:disabled) {
+  border-color: #9fc3c4;
+  background: #f3faf9;
+}
+
+.census-household-available-forms > button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.census-household-available-forms > button > svg {
+  flex: none;
+  color: #46818a;
+}
+
+.census-household-available-forms > button > span {
+  overflow: hidden;
+  flex: 1;
+  color: #46676e;
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.census-household-available-forms > button > b {
+  flex: none;
+  color: #2d7781;
+  font-size: 9px;
+}

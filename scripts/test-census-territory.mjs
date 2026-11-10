@@ -10,12 +10,14 @@ const outputDir = mkdtempSync(join(tmpdir(), 'census-territory-test-'))
 try {
   execFileSync('npx', [
     'tsc', '--target', 'ES2022', '--module', 'commonjs', '--skipLibCheck', '--ignoreConfig',
-    '--outDir', outputDir, 'src/components/census/territory/questionnaireResponseLogic.ts',
+    '--outDir', outputDir, 'src/components/census/territory/questionnaireResponseLogic.ts', 'src/components/census/territory/lotDisplay.ts',
   ], { stdio: 'inherit' })
 
   const requireFromHere = createRequire(import.meta.url)
   const { countFilledTableRows, hasAnswer, validateQuestionnaireResponse } = requireFromHere(join(outputDir, 'territory/questionnaireResponseLogic.js'))
+  const { getMapLotCode, normalizeCadLabel } = requireFromHere(join(outputDir, 'territory/lotDisplay.js'))
   const migration = readFileSync('supabase/migrations/202611091915_census_households_visits_responses.sql', 'utf8')
+  const lotAcsMigration = readFileSync('supabase/migrations/202611100910_census_lot_acs_assignments.sql', 'utf8')
   const territoryCode = readFileSync('src/components/census/territory/CensusTerritory.tsx', 'utf8')
   const responseFormCode = readFileSync('src/components/census/territory/QuestionnaireResponseForm.tsx', 'utf8')
   const focusHookCode = readFileSync('src/components/census/territory/useCensusDialogFocus.ts', 'utf8')
@@ -40,6 +42,12 @@ try {
   assert.equal(countFilledTableRows(validAnswers.residents, questions[4]), 2, 'conta apenas linhas preenchidas da tabela')
   assert.equal(hasAnswer(validAnswers.signature), true, 'assinatura com traços não é vazia')
   assert.equal(hasAnswer({ strokes: [] }), false, 'assinatura sem traços é vazia')
+  assert.equal(normalizeCadLabel('\\fSegoe UI Black|i0|b1;\\H1.68674;40-A-REM-REM'), '40-A-REM-REM', 'remove formatação CAD e preserva o código legível')
+  assert.equal(normalizeCadLabel('\fSegoe UI Black|i0|b1;\\H1.68674;40-A-REM-REM'), '40-A-REM-REM', 'limpa o caractere de controle CAD quando ele é importado literalmente')
+  assert.equal(normalizeCadLabel('Lote {\\C7; 12\\PQuadra 3}'), 'Lote 12 Quadra 3', 'remove códigos inline e converte quebras CAD em espaços')
+  assert.equal(getMapLotCode('\\fArial;40-A-REM-REM', '1A2B', 1), '40-A-REM-REM', 'prioriza o rótulo legível do mapa')
+  assert.equal(getMapLotCode(null, '1A2B', 1), '1A2B', 'usa handle persistente quando não há rótulo')
+  assert.equal(getMapLotCode(null, null, 7), 'Lote 0007', 'usa ordinal apenas como último recurso')
 
   const missing = validateQuestionnaireResponse(form, {})
   assert.ok(missing.some((message) => message.includes('Nome')))
@@ -105,8 +113,21 @@ try {
   assert.match(migration, /grant select, insert, update on table public\.census_households, public\.census_visits, public\.census_questionnaire_responses to authenticated/i)
   assert.doesNotMatch(migration, /grant[^;]*\bdelete\b[^;]*to authenticated/i)
   assert.doesNotMatch(migration, /\bdrop\s+table\b|\btruncate\b/i, 'migration preserva estrutura e dados existentes')
+  assert.match(lotAcsMigration, /create table if not exists public\.census_lot_acs_assignments/i)
+  assert.match(lotAcsMigration, /create unique index if not exists census_lot_acs_assignments_one_active_per_lot_idx/i)
+  assert.match(lotAcsMigration, /create or replace function public\.census_user_can_access_lot[\s\S]*?census_lot_acs_assignments[\s\S]*?census_acs_zone_assignments/i)
+  assert.match(lotAcsMigration, /create or replace function public\.census_get_lot_acs/i)
+  assert.match(lotAcsMigration, /create or replace function public\.census_assign_acs_to_lot[\s\S]*?current_user_is_admin\(\)/i)
+  assert.match(lotAcsMigration, /grant execute on function public\.census_assign_acs_to_lot\(uuid, uuid\) to authenticated/i)
+  assert.match(lotAcsMigration, /revoke all on table public\.census_lot_acs_assignments from public, anon, authenticated/i)
+  assert.doesNotMatch(lotAcsMigration, /\bdrop\s+table\b|\btruncate\b/i, 'migration do vínculo preserva os registros existentes')
+  assert.match(territoryCode, /census_get_lot_acs/)
+  assert.match(territoryCode, /census_assign_acs_to_lot/)
+  assert.match(territoryCode, /Questionários ativos pendentes/)
+  assert.match(territoryCode, /fetchAllPages<TerritoryLot>/)
+  assert.match(territoryCode, /fetchAllPages<Household>/)
 
-  console.log('PASS: respostas válidas e inválidas, tabela, “Outro”, assinatura, RLS por zona, snapshot e histórico imutável.')
+  console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {
   rmSync(outputDir, { recursive: true, force: true })
 }
