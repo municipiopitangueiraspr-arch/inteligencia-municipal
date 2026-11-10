@@ -107,9 +107,13 @@
 
 
 ## Dossiê do lote: código legível, ACS, domicílios e questionários
-- [ ] Ao clicar em um lote, o painel mostra a zona daquele lote, o ACS responsável se houver, a possibilidade administrativa de vincular um ACS especificamente àquele lote, o código legível do mapa (sem comandos de formatação CAD importados) e a quantidade de domicílios ativos vinculados ao lote.
-- [ ] A tela continua permitindo cadastrar um ou mais domicílios no lote, com identificação, confirmação antes da gravação e atualização imediata da quantidade e do dossiê após salvar.
-- [ ] Em cada domicílio, a tela oferece questionários ativos ainda não recebidos por aquele domicílio e permite iniciar uma visita já com o questionário escolhido; rascunhos e respostas submetidas contam como questionário já recebido e não são reapresentados como pendentes.
-- [ ] Se o domicílio já recebeu questionários, seu histórico permite abrir o snapshot e as respostas; respostas enviadas são somente leitura, e rascunhos existentes podem ser continuados sem alterar versões anteriores.
-- [ ] O vínculo direto ACS–lote persiste no Supabase, é administrável somente por administrador municipal e dá acesso ao lote ao ACS ativo cadastrado pelo mesmo e-mail autenticado sem revogar a cobertura existente por zona. Nenhuma leitura ou gravação é aberta a `anon`.
-- [ ] Os testes/build validam a limpeza do código importado, a apresentação do painel, o acesso por ACS direto ou por zona, o fluxo de questionários pendentes/histórico e a segurança da migration; os testes não gravam registros pessoais de demonstração no Supabase compartilhado.
+- [x] Ao clicar em um lote, o painel mostra a zona daquele lote, o ACS responsável se houver, a possibilidade administrativa de vincular um ACS especificamente àquele lote, o código legível do mapa (sem comandos de formatação CAD importados) e a quantidade de domicílios ativos vinculados ao lote.
+- [x] A tela continua permitindo cadastrar um ou mais domicílios no lote, com identificação, confirmação antes da gravação e atualização imediata da quantidade e do dossiê após salvar.
+- [x] Em cada domicílio, a tela oferece questionários ativos ainda não recebidos por aquele domicílio e permite iniciar uma visita já com o questionário escolhido; rascunhos e respostas submetidas contam como questionário já recebido e não são reapresentados como pendentes.
+- [x] Se o domicílio já recebeu questionários, seu histórico permite abrir o snapshot e as respostas; respostas enviadas são somente leitura, e rascunhos existentes podem ser continuados sem alterar versões anteriores.
+- [x] O vínculo direto ACS–lote persiste no Supabase, é administrável somente por administrador municipal e dá acesso ao lote ao ACS ativo cadastrado pelo mesmo e-mail autenticado sem revogar a cobertura existente por zona. Nenhuma leitura ou gravação é aberta a `anon`.
+- [x] Os testes/build validam a limpeza do código importado, a apresentação do painel, o acesso por ACS direto ou por zona, o fluxo de questionários pendentes/histórico e a segurança da migration; os testes não gravam registros pessoais de demonstração no Supabase compartilhado.
+
+
+### Publicação desta solicitação
+Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051` finalizou com sucesso. A página pública e o bundle atualizado foram verificados via HTTP 200, incluindo as ações de ACS por lote e questionários ativos pendentes.
