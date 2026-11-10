@@ -125,3 +125,15 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] A tela de login e o fluxo de autenticação permanecem inalterados.
 - [x] O build TypeScript/Vite passa após a mudança.
 - [x] O front-end atualizado é publicado no GitHub Pages para teste remoto.
+
+## Auditoria de fontes de dados do sistema — adiada para outra etapa
+- [ ] Verificar as telas, rotas e chamadas de dados do front-end; todas as informações de negócio exibidas devem vir exclusivamente do Supabase, sem leituras em tempo real do Google Drive ou de outra fonte externa.
+- [ ] Identificar e corrigir, onde existir no código, uso de URLs/arquivos externos como fonte de conteúdo municipal; documentos usados para extrair dados não devem ser apresentados como dados importados apenas por manter um link para o Drive.
+- [ ] Separar no relatório dependências externas de autenticação/assets estáticos das chamadas que fornecem dados de negócio, com evidência por arquivo e linha para cada achado.
+
+## Hall da intranet: simplificação visual baseada no Censo Municipal
+- [x] Usar o Censo Municipal como referência de clareza, hierarquia visual e facilidade de uso para pessoas com diferentes níveis de familiaridade digital.
+- [x] Reduzir poluição e redundância no hall, incluindo repetição de brasões, identificação do produto, títulos/subtítulos e rótulos de seção; manter uma marca institucional e uma instrução principal claras.
+- [x] Preservar o acesso às dez secretarias e os módulos já atribuídos, mantendo a tela de login, a autenticação e a responsividade.
+- [x] Validar o build local.
+- [ ] Publicar o hall atualizado no GitHub Pages para teste remoto.
