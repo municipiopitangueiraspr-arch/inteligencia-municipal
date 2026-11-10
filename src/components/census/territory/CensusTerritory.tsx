@@ -364,7 +364,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const lotLabel = selectedLot ? getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex) : ''
 
   return <section className="census-territory" aria-busy={loading || writing}>
-    <div className="census-territory-heading"><div><span className="fleet-kicker">MAPA DE CAMPO</span><h2>Mapa territorial</h2><p>Escolha um lote para abrir o dossiê do território. O mapa mostra somente lotes permitidos para sua conta.</p></div><div className="census-territory-badges"><span><MapPinned size={15} />{lots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
+    <div className="census-territory-heading"><div className="census-territory-badges"><span><MapPinned size={15} />{lots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando no Censo Municipal… Aguarde.</span></div>}
     <div className={`census-territory-workspace${selectedLot ? ' with-panel' : ''}`}>

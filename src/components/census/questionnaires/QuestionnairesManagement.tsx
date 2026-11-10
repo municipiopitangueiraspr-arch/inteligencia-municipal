@@ -258,10 +258,7 @@ export function QuestionnairesManagement() {
   const questionCount = draft ? questionnaireQuestionCount(draft.form_schema) : 0
 
   return <section className="fleet-section fleet-page-section questionnaire-manager" aria-busy={loading || saving}>
-    <div className="fleet-page-heading questionnaire-page-heading">
-      <div><span className="fleet-kicker">CENSO MUNICIPAL</span><h2>Gestão de questionários</h2><p>Crie, revise e controle os formulários usados no trabalho de campo.</p></div>
-      <button type="button" className="fleet-primary-button questionnaire-new-button" onClick={startNewQuestionnaire} disabled={loading || saving || !backendReady}><FilePlus2 size={16} />Novo questionário</button>
-    </div>
+    <div className="questionnaire-page-actions"><button type="button" className="fleet-primary-button questionnaire-new-button" onClick={startNewQuestionnaire} disabled={loading || saving || !backendReady}><FilePlus2 size={16} />Novo questionário</button></div>
 
     {notice && <div className={`questionnaire-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={17} /> : noticeTone === 'success' ? <CheckCircle2 size={17} /> : <ClipboardList size={17} />}<span>{notice}</span>{noticeTone !== 'error' && <button type="button" aria-label="Fechar aviso" onClick={() => setNotice('')}><X size={15} /></button>}</div>}
     {saving && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>{savingAction === 'status' ? 'Atualizando o estado do questionário…' : 'Salvando a definição do questionário…'} Aguarde.</span></div>}

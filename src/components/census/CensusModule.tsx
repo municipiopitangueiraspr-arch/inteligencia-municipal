@@ -193,7 +193,6 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
   const zoneNameFor = (acsId: string) => assignments.filter((link) => link.acs_id === acsId).map((link) => zones.find((zone) => zone.id === link.zone_id)?.name).filter(Boolean).join(', ') || 'Sem zona vinculada'
 
   return <section className="fleet-section fleet-page-section census-zones-page">
-    <div className="fleet-page-heading"><div><span className="fleet-kicker">CADASTRO MUNICIPAL</span><h2>Zonas e ACS</h2><p>Cadastre as zonas e mantenha o catálogo de ACS disponível para os demais módulos.</p></div></div>
     {notice && <div className={noticeTone === 'error' ? 'fleet-inline-error' : 'fleet-inline-success'} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}{notice}</div>}
     {saving && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>{savingAction === 'zone' ? 'Criando a zona no banco…' : savingAction === 'acs' ? 'Cadastrando o ACS…' : 'Vinculando o ACS à zona…'} Aguarde.</span></div>}
     <div className="census-management-grid">

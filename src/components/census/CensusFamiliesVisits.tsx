@@ -143,7 +143,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   const topAcs = useMemo(() => [...acsSummary].sort((a, b) => b.coverage - a.coverage || b.completed - a.completed).slice(0, 6), [acsSummary])
 
   return <section className="fleet-section fleet-page-section census-families-page">
-    <div className="fleet-page-heading census-families-heading"><div><span className="fleet-kicker">OPERAÇÃO DE CAMPO</span><h2>Famílias e Visitas</h2><p>Acompanhe domicílios cadastrados, cobertura de visitas e pendências do Censo Municipal.</p></div><div className="census-families-actions"><button type="button" className="fleet-secondary-button" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Atualizar</button><button type="button" className="fleet-primary-button" onClick={onOpenTerritory}><MapPinned size={14} /> Abrir mapa</button></div></div>
+    <div className="census-families-actions census-families-toolbar"><button type="button" className="fleet-secondary-button" onClick={() => void load()} disabled={loading}><RefreshCw size={14} /> Atualizar</button><button type="button" className="fleet-primary-button" onClick={onOpenTerritory}><MapPinned size={14} /> Abrir mapa</button></div>
     {error && <div className="fleet-inline-error" role="alert"><AlertCircle size={15} />{error}</div>}
     {loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={20} />Carregando dados de campo…</div> : <>
       <div className="census-family-metrics">

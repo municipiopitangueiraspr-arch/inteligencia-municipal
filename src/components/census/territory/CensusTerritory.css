@@ -192,3 +192,5 @@
   color: #2d7781;
   font-size: 9px;
 }
+
+.census-territory-heading{justify-content:flex-end;min-height:30px;margin-bottom:12px}
