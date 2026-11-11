@@ -207,4 +207,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] No Mapa territorial, dar destaque ao modo ativo, à legenda e ao lote selecionado/focado, melhorar contraste, controles de toque e leitura no tablet preservando cores, filtros, dados e operações atuais.
 - [x] Nas confirmações e mensagens de gravação, reforçar hierarquia visual, legibilidade, diferenciação de sucesso/erro e clareza da ação, preservando textos essenciais e o fluxo de confirmação existente.
 - [x] Não criar funções, indicadores, métricas, tabelas ou regras de acesso; manter os dados, cálculos, autenticação e RLS atuais. Como a mudança é só de apresentação, não alterar schema nem gravar dados de teste no Supabase.
-- [ ] Validar build e lint, enviar a alteração para `main`, acompanhar GitHub Actions e confirmar o frontend atualizado no GitHub Pages para teste remoto.
+- [x] Build e lint concluídos; commit `18a65ed` enviado à `main`; workflow Pages `42927739287` concluiu com sucesso; HTML e assets públicos responderam HTTP 200 com os refinamentos confirmados. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
