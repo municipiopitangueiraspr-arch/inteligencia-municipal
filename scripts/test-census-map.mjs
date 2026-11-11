@@ -22,6 +22,7 @@ try {
   const {
     assignLotToZone,
     assignLotsToZone,
+    filterLotsByZone,
     getLotFillColor,
     getLotKey,
     groupLotSaveAssignments,
@@ -89,7 +90,10 @@ try {
   const afterSingleClick = assignLotToZone(importedLots, clickedLotKey, 'zone-green')
   assert.deepEqual(afterSingleClick.map((lot) => lot.zone_id), [null, 'zone-green', null], 'clique individual altera somente o lote clicado')
   assert.equal(getLotFillColor(afterSingleClick[1], zones), '#16a34a', 'lote recebe a cor exata da zona ativa')
-  assert.equal(getLotFillColor(afterSingleClick[0], zones), '#edf5f4', 'lote sem zona mantém cor neutra')
+  assert.equal(getLotFillColor(afterSingleClick[0], zones), '#4b5563', 'lote sem zona usa cinza-escuro padrão')
+  assert.deepEqual(filterLotsByZone(afterSingleClick, ['zone-green'], false).map((lot) => lot.source_handle), ['DXF-B'], 'filtro por zona exibe somente lotes da zona selecionada')
+  assert.deepEqual(filterLotsByZone(afterSingleClick, [], true).map((lot) => lot.source_handle), ['DXF-A', 'DXF-C'], 'filtro sem zona exibe apenas lotes não atribuídos')
+  assert.equal(filterLotsByZone(afterSingleClick, [], false).length, afterSingleClick.length, 'filtro sem seleção mantém todas as zonas e lotes sem zona visíveis')
 
   const legacyLotsWithoutIds = [
     { source_handle: 'legacy-A', zone_id: null },
@@ -126,7 +130,7 @@ try {
   assert.throws(() => groupLotSaveAssignments([{ source_handle: 'missing-id' }]), /sem UUID/, 'save não pode transformar uma atribuição parcial em inserção')
   assert.throws(() => groupLotSaveAssignments([{ id: 'same', source_handle: 'A' }, { id: 'same', source_handle: 'B' }]), /repetidos/, 'IDs repetidos são rejeitados antes da gravação')
 
-  console.log('PASS: parser de contornos, zoom no cursor, IDs, clique individual, seleção múltipla, cores, pan e seleção por área (janela/cruzamento).')
+  console.log('PASS: parser de contornos, zoom no cursor, IDs, clique individual, seleção múltipla, paleta, filtros por zona/sem zona, pan e seleção por área (janela/cruzamento).')
 } finally {
   rmSync(outputDir, { recursive: true, force: true })
 }
