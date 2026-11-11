@@ -228,3 +228,29 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Validar build e lint do frontend sem erros.
 - [ ] Commitar e enviar o aviso visual à `main`, acompanhar o workflow e confirmar HTTP 200 e o asset atualizado no GitHub Pages.
 - [x] Nota sobre a previsão: os 45 questionários enviados estão todos na data atual porque o trigger existente carimba e protege `submitted_at`; assim, o cartão de previsão de questionários deve mostrar “Ainda sem previsão” até haver envios em 3 dias distintos por pelo menos 7 dias. As previsões de domicílios e visitas já têm histórico temporal sintético suficiente.
+
+
+## Redesign da tela Famílias e visitas
+- [x] Resumo do território: separar visualmente lotes do mapa, lotes sem zona, domicílios cadastrados e domicílios presumidos; manter “sem zona” distinto de “sem visita” e explicitar unidade/denominador em cada número.
+- [x] Fluxo de visitas: exibir o total de registros de visita e a distribuição por concluída, em andamento, sem contato e cancelada; não tratar visita cancelada como pendência ativa nem confundir quantidade de visitas com quantidade de lotes.
+- [x] Questionários: mostrar enviados, rascunhos e total de respostas em área própria; deixar explícito que rascunho é um estado de preenchimento, não um alerta de atraso.
+- [x] Avanço por zona: mostrar cada zona com contagem e denominador de lotes; calcular a situação pelo registro de visita mais recente de cada lote, contando cada lote uma vez e mantendo lotes sem zona fora das barras por zona.
+- [x] Lista operacional: preservar uma linha por domicílio ativo ou por lote sem cadastro ativo; exibir lote/domicílio, zona, ACS da visita recente, data e situação da última visita do domicílio, estado do questionário; permitir busca e filtros por zona, ACS, cadastro, visita no lote (sem registro) e visita do domicílio (sem registro/concluída/em andamento/sem contato/cancelada), lote sem zona e questionário enviado/rascunho. Os dois seletores de visita permanecem separados e nunca misturam status ou denominadores.
+- [x] Hierarquia e interação: colocar território primeiro, depois visitas, questionários, comparação por zona e lista; resumos acionáveis filtram a lista quando a unidade do resumo corresponde ao filtro; mostrar quantos resultados estão visíveis.
+- [x] Responsividade: computador com resumos em grupos e tabela operacional; tablet/celular com cartões empilhados, controles confortáveis ao toque e sem rolagem horizontal obrigatória.
+- [x] Backend: criar somente view agregada no Supabase para o mapa salvo atual, o domicílio ativo/presumido, estado mais recente por domicílio/lote, contagem por status de visitas e respostas; usar `security_invoker`, respeitar RLS atual, expor somente status/contagens (nunca conteúdo das respostas) e conceder somente `SELECT` a `authenticated`, sem acesso para `anon`/`public`. Não criar tabelas de negócio, alterar triggers, políticas ou dados existentes.
+- [x] Não inferir urgência, atraso, risco clínico ou prioridade não definida; não coletar nem exibir conteúdo clínico. Usar somente dados existentes do Supabase.
+- [x] Validar build/lint e agregações do backend.
+- [ ] Publicar frontend em `main`/Pages e confirmar que o backend e a tela pública respondem para teste.
+
+### Baseline consultada (Supabase, 11/11/2026)
+- Projeto: **Inteligência Municipal**, ID `qgkjnzcqjhhqdgxmvtew` (estado `ACTIVE_HEALTHY`). Fonte: listagem de projetos do Supabase MCP e metadados de `information_schema`/`list_tables`, somente leitura.
+- O mapa ACS usado pelo frontend é a importação salva mais recente acessível, ordenada por `division_saved_at` e `updated_at`; a view territorial é `security_invoker` e aplica `census_user_can_access_lot`.
+- Na tela antiga, a lista era montada no cliente a partir de consultas separadas de lotes, domicílios, visitas e respostas. A view nova deve manter uma linha por domicílio ativo ou lote presumido, sumarizar somente status/contagens e não projetar `answers` nem `notes`.
+- A carga DEMO previamente aprovada contém 1.582 lotes, 20 sem zona, 255 domicílios marcados DEMO e 3 domicílios anteriores preservados; os registros DEMO incluem 185 visitas e 70 respostas. Os números por estado do conjunto DEMO são 60 concluídas, 60 em andamento, 50 sem contato, 15 canceladas, 45 respostas enviadas e 25 rascunhos. Eles são baseline de teste, não valores fixos no código.
+
+### Verificação agregada da view sob perfil ADMIN ativo (Supabase, 11/11/2026)
+- A view retornou **1.587 linhas** para **1.582 lotes**: 258 domicílios ativos e 1.329 linhas de lotes sem cadastro ativo. Há 20 lotes sem zona e 1.405 lotes sem visita registrada.
+- Eventos de visita: 188 no total (61 concluídos, 62 em andamento, 50 sem contato e 15 cancelados). Questionários: 71 respostas (46 enviadas e 25 rascunhos). Estes são registros de evento/resposta, não lotes únicos.
+- Situação do lote pela visita mais recente: entre os 1.562 lotes zonados, 60 concluídos, 62 em andamento, 40 sem contato, 15 cancelados e 1.385 sem visita; os outros 20 lotes estão sem zona. Há 81 domicílios ativos sem visita própria, cinco deles em lotes que já têm visita a outro domicílio, justificando os filtros separados.
+- Após migration corretiva, `information_schema.role_table_grants` retornou apenas `SELECT` para `authenticated`; `anon` e `public` não têm privilégios na view. A view mantém `security_invoker=true`.
