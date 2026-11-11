@@ -216,4 +216,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Em Questionários, facilitar a leitura da biblioteca, dos status e do editor de seções/perguntas; adequar filtros, controles, prévia e ações para computador e tablet sem alterar o conteúdo ou o fluxo de gravação.
 - [x] Em Famílias e visitas, conferir consistência do refinamento responsivo já aplicado e melhorar a legibilidade dos filtros, indicadores e registros sem criar métricas ou retirar dados.
 - [x] Preservar os estados/cores e a persistência atuais; não criar funcionalidades, indicadores, tabelas ou regras de acesso nem alterar schema/RLS do Supabase.
-- [ ] Validar build/lint, publicar em `main`, aguardar GitHub Actions e confirmar a tela e assets no GitHub Pages para teste remoto.
+- [x] Build/lint concluídos; commit `2c6f2f4` enviado à `main`; workflow Pages `42928604684` concluído com sucesso; página pública e assets responderam HTTP 200 com as mudanças confirmadas. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
