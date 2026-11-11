@@ -241,7 +241,7 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Backend: criar somente view agregada no Supabase para o mapa salvo atual, o domicílio ativo/presumido, estado mais recente por domicílio/lote, contagem por status de visitas e respostas; usar `security_invoker`, respeitar RLS atual, expor somente status/contagens (nunca conteúdo das respostas) e conceder somente `SELECT` a `authenticated`, sem acesso para `anon`/`public`. Não criar tabelas de negócio, alterar triggers, políticas ou dados existentes.
 - [x] Não inferir urgência, atraso, risco clínico ou prioridade não definida; não coletar nem exibir conteúdo clínico. Usar somente dados existentes do Supabase.
 - [x] Validar build/lint e agregações do backend.
-- [ ] Publicar frontend em `main`/Pages e confirmar que o backend e a tela pública respondem para teste.
+- [x] Publicar frontend em `main`/Pages e confirmar que o backend e a tela pública respondem para teste: commit `6739d113f0dfc854376665ceb6ed7aab2ed00c17`, workflow `43004558055` concluído com sucesso, HTML/JS/CSS públicos em HTTP 200 e bundle contendo a view `census_families_visits_dashboard_rows` e os filtros separados por lote e domicílio. URL: <https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/>.
 
 ### Baseline consultada (Supabase, 11/11/2026)
 - Projeto: **Inteligência Municipal**, ID `qgkjnzcqjhhqdgxmvtew` (estado `ACTIVE_HEALTHY`). Fonte: listagem de projetos do Supabase MCP e metadados de `information_schema`/`list_tables`, somente leitura.
