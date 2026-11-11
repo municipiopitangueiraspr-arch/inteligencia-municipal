@@ -214,12 +214,15 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                 </div>
                 <BarChart3 size={21} />
               </div>
-              <div className="census-overview-funnel-stages">
+              {metrics.lots > 0 ? <div className="census-overview-funnel-stages">
                 <Funnel label="Lotes no mapa" value={metrics.lots} max={metrics.lots} color="#2d7d8a" />
-                <Funnel label="Domicílios confirmados" value={metrics.confirmed} max={metrics.lots} color="#2d8a70" />
-                <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="#d5a341" />
+                <Funnel label="Lotes com domicílio confirmado" value={metrics.confirmed} max={metrics.lots} color="#2d8a70" />
+                <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="#2d8a70" />
                 <Funnel label="Lotes com questionário enviado" value={metrics.submitted} max={metrics.lots} color="#7750a8" />
-              </div>
+              </div> : <div className="census-overview-chart-empty" role="status">
+                <strong>Ainda não há lotes neste mapa</strong>
+                <span>Este resumo usa os lotes válidos do mapa territorial publicado.</span>
+              </div>}
               <div className="census-overview-funnel-note"><Home size={15} /> {metrics.presumed.toLocaleString('pt-BR')} lote(s) ainda usam a estimativa inicial de um domicílio por lote.</div>
             </section>
 
@@ -288,7 +291,7 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                   <div><strong>{visit.household}</strong><small>{visit.acs} · {fmtDate(visit.created_at)}</small></div>
                   <b className={`census-overview-activity-status ${visit.status.toLowerCase()}`}>{visit.status === 'COMPLETED' ? 'Concluída' : visit.status === 'NO_CONTACT' ? 'Sem contato' : visit.status === 'IN_PROGRESS' ? 'Em andamento' : 'Cancelada'}</b>
                 </div>
-              )) : <div className="census-overview-empty">Ainda não há visitas registradas.</div>}
+              )) : <div className="census-overview-empty"><strong>Ainda não há visitas registradas</strong><span>Este painel apresenta os eventos recentes de visita.</span></div>}
             </section>
           </div>
 
@@ -309,5 +312,5 @@ function OverviewMetric({ icon, label, value, tone }: { icon: ReactNode; label: 
 
 function Funnel({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const width = max ? Math.max((value / max) * 100, value ? 4 : 0) : 0
-  return <div className="census-overview-funnel-row" aria-label={`${label}: ${value.toLocaleString('pt-BR')}`}><div><span>{label}</span><b>{value.toLocaleString('pt-BR')}</b></div><div className="census-overview-funnel-track"><i style={{ width: `${width}%`, background: color }} /></div></div>
+  return <div className="census-overview-funnel-row" aria-label={`${label}: ${value.toLocaleString('pt-BR')} de ${max.toLocaleString('pt-BR')} lotes`}><div><span>{label}</span><b>{value.toLocaleString('pt-BR')}<small> de {max.toLocaleString('pt-BR')} lotes</small></b></div><div className="census-overview-funnel-track"><i style={{ width: `${width}%`, background: color }} /></div></div>
 }

@@ -29,7 +29,7 @@ type PendingAction =
   | { kind: 'priority'; priority: LotPriority; status: PriorityStatus }
 
 const PAGE_SIZE = 1000
-const MAP_COLORS = { never: '#cf554f', visited: '#34835e', return: '#337bb3' }
+const MAP_COLORS = { never: '#617b80', noContact: '#b74b3e', cancelled: '#87989a', visited: '#2d8a70', return: '#337bb3' }
 const sectionItems: { id: MedicalSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'visits', label: 'Visitas médicas', icon: MapPinned },
@@ -161,7 +161,6 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
   const openReturns = useMemo(() => visits.filter((visit) => visit.follow_up_status === 'PENDING').sort((a, b) => (a.follow_up_date || '').localeCompare(b.follow_up_date || '') || a.created_at.localeCompare(b.created_at)), [visits])
   const returnRows = useMemo(() => openReturns.filter((visit) => returnFilter === 'ALL' || (returnFilter === 'OVERDUE' ? (visit.follow_up_date || '') < today : (visit.follow_up_date || '') >= today)), [openReturns, returnFilter, today])
   const overdueCount = openReturns.filter((visit) => (visit.follow_up_date || '') < today).length
-  const visitedLots = lots.filter((lot) => (visitsByLot.get(lot.id) || []).some((visit) => visit.status === 'COMPLETED')).length
   const bbox = useMemo<Bbox | null>(() => {
     if (mapImport?.bbox) return mapImport.bbox
     if (!lots.length) return null
@@ -187,10 +186,17 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
   const lotCode = (lot: Lot) => getMapLotCode(lot.label, lot.source_handle, lots.findIndex((item) => item.id === lot.id) + 1)
   const mapState = (lotId: string) => {
     const lotVisits = visitsByLot.get(lotId) || []
-    if (lotVisits.some((visit) => visit.follow_up_status === 'PENDING')) return { color: MAP_COLORS.return, label: 'Retorno necessário' }
-    if (lotVisits.some((visit) => visit.status === 'COMPLETED')) return { color: MAP_COLORS.visited, label: 'Visitado, sem retorno pendente' }
-    return { color: MAP_COLORS.never, label: 'Nunca visitado' }
+    if (lotVisits.some((visit) => visit.follow_up_status === 'PENDING')) return { key: 'return', color: MAP_COLORS.return, label: 'Retorno pendente' }
+    if (lotVisits.some((visit) => visit.status === 'COMPLETED')) return { key: 'visited', color: MAP_COLORS.visited, label: 'Visita realizada' }
+    if (lotVisits.some((visit) => visit.status === 'NO_CONTACT')) return { key: 'no-contact', color: MAP_COLORS.noContact, label: 'Sem contato' }
+    if (lotVisits.some((visit) => visit.status === 'CANCELLED')) return { key: 'cancelled', color: MAP_COLORS.cancelled, label: 'Visita cancelada' }
+    return { key: 'never', color: MAP_COLORS.never, label: 'Sem visita registrada' }
   }
+  const lotStateCounts = lots.reduce<Record<string, number>>((counts, lot) => {
+    const { key } = mapState(lot.id)
+    counts[key] = (counts[key] || 0) + 1
+    return counts
+  }, {})
   const selectSection = (next: MedicalSection) => { setSection(next); setMenuOpen(false); setNotice('') }
   const selectLotOnMap = (lot: Lot, openForm = false) => {
     setSelectedLotId(lot.id); setShowVisitForm(openForm)
@@ -284,11 +290,11 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
           {section === 'visits' && <section className="medical-page" aria-busy={loading || saving}>
             <div className="medical-section-heading"><div><span className="medical-eyebrow"><Stethoscope size={14} /> SECRETARIA DE SAÚDE</span><h2>Mapa de visitas médicas</h2><p>Selecione qualquer lote no mapa para consultar o histórico ou registrar uma visita.</p></div><button type="button" className="fleet-secondary-button medical-refresh" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15} />Atualizar</button></div>
             <div className="medical-privacy-note"><HeartPulse size={16} /><span><strong>Formulário operacional.</strong> Registra lote, data, resultado e retorno. Não inclua nomes, diagnósticos ou informações clínicas.</span></div>
-            <div className="medical-map-summary"><span><i className="never" />{Math.max(0, lots.length - visitedLots).toLocaleString('pt-BR')} sem visita</span><span><i className="visited" />{visitedLots.toLocaleString('pt-BR')} com visita realizada</span><span><i className="return" />{openReturns.length.toLocaleString('pt-BR')} com retorno pendente</span></div>
+            <div className="medical-map-summary"><span><i className="never" />{(lotStateCounts.never || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes sem visita</span><span><i className="no-contact" />{(lotStateCounts['no-contact'] || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes sem contato</span><span><i className="cancelled" />{(lotStateCounts.cancelled || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com visita cancelada</span><span><i className="visited" />{(lotStateCounts.visited || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com visita realizada</span><span><i className="return" />{(lotStateCounts.return || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com retorno pendente</span></div>
             <div className={`medical-workspace${selectedLot ? ' has-selection' : ''}`}>
               <section className="medical-map-card" aria-label="Mapa de lotes para visitas médicas"><header><span><MapPinned size={16} /> Selecione um lote para registrar ou consultar</span><div><button type="button" aria-label="Aumentar zoom" onClick={() => setZoom((value) => Math.min(16, value * 1.2))} disabled={!lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" aria-label="Diminuir zoom" onClick={() => setZoom((value) => Math.max(.65, value / 1.2))} disabled={!lots.length}><Minus size={16} /></button><button type="button" aria-label="Restaurar zoom" onClick={() => setZoom(1)}><RotateCcw size={15} /></button></div></header>
-                <div className="medical-map-viewport">{loading ? <div className="medical-map-empty"><LoaderCircle className="spin" size={23} />Carregando mapa e visitas…</div> : error && !lots.length ? <div className="medical-map-empty error"><AlertCircle size={22} /><strong>Não foi possível abrir o mapa</strong><span>{error}</span></div> : !mapImport || lots.length === 0 ? <div className="medical-map-empty"><MapPinned size={24} /><strong>Mapa territorial indisponível</strong><span>Publique um mapa territorial em Saúde da Família/ACS antes de iniciar as visitas médicas.</span></div> : <svg className="medical-map-svg" viewBox="0 0 1000 1000" style={{ transform: `scale(${zoom})` }} role="group" aria-label="Mapa de lotes; vermelho sem visita, verde visitado, azul com retorno pendente">{lots.map((lot) => { const code = lotCode(lot); const zone = lot.zone_id ? zoneById.get(lot.zone_id) : null; const state = mapState(lot.id); return <polygon key={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={state.color} fillOpacity=".88" stroke={selectedLotId === lot.id ? '#123f53' : '#fff'} strokeWidth={selectedLotId === lot.id ? 2.2 : 1.15} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${code}, ${zone?.name || 'sem zona'}, ${state.label}`} className={selectedLotId === lot.id ? 'selected' : ''} onClick={() => selectLotOnMap(lot)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLotOnMap(lot) } }}><title>{`${code} · ${zone?.name || 'Sem zona'} · ${state.label}`}</title></polygon> })}</svg>}
-                  {!loading && lots.length > 0 && <div className="medical-map-legend"><span><i className="never" />Nunca visitado</span><span><i className="visited" />Visitado, sem retorno</span><span><i className="return" />Retorno necessário</span></div>}
+                <div className="medical-map-viewport">{loading ? <div className="medical-map-empty"><LoaderCircle className="spin" size={23} />Carregando mapa e visitas…</div> : error && !lots.length ? <div className="medical-map-empty error"><AlertCircle size={22} /><strong>Não foi possível abrir o mapa</strong><span>{error}</span></div> : !mapImport || lots.length === 0 ? <div className="medical-map-empty"><MapPinned size={24} /><strong>Mapa territorial indisponível</strong><span>Publique um mapa territorial em Saúde da Família/ACS antes de iniciar as visitas médicas.</span></div> : <svg className="medical-map-svg" viewBox="0 0 1000 1000" style={{ transform: `scale(${zoom})` }} role="group" aria-label="Mapa de lotes com estado da visita e do retorno">{lots.map((lot) => { const code = lotCode(lot); const zone = lot.zone_id ? zoneById.get(lot.zone_id) : null; const state = mapState(lot.id); return <polygon key={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={state.color} fillOpacity=".88" stroke={selectedLotId === lot.id ? '#123f53' : '#fff'} strokeWidth={selectedLotId === lot.id ? 2.2 : 1.15} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${code}, ${zone?.name || 'sem zona'}, ${state.label}`} className={selectedLotId === lot.id ? 'selected' : ''} onClick={() => selectLotOnMap(lot)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLotOnMap(lot) } }}><title>{`${code} · ${zone?.name || 'Sem zona'} · ${state.label}`}</title></polygon> })}</svg>}
+                  {!loading && lots.length > 0 && <div className="medical-map-legend"><span><i className="never" />Sem visita registrada</span><span><i className="no-contact" />Sem contato</span><span><i className="cancelled" />Visita cancelada</span><span><i className="visited" />Visita realizada</span><span><i className="return" />Retorno pendente</span></div>}
                 </div>
               </section>
               {selectedLot && <aside className="medical-lot-panel"><header><div><span className="medical-eyebrow">LOTE SELECIONADO</span><h3>{lotCode(selectedLot)}</h3><span className="medical-zone"><i style={{ background: selectedLot.zone_id ? zoneById.get(selectedLot.zone_id)?.color || '#c5d4d4' : '#c5d4d4' }} />{selectedLot.zone_id ? zoneById.get(selectedLot.zone_id)?.name || 'Zona não informada' : 'Sem zona'}</span></div><button type="button" className="medical-icon-button" aria-label="Fechar detalhes do lote" onClick={() => { setSelectedLotId(null); setShowVisitForm(false) }}><X size={18} /></button></header>

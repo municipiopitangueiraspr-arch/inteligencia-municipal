@@ -118,6 +118,17 @@
 .census-family-clear-filters:hover{border-color:#8ab5b8;background:#f2f9f8}
 .census-family-metric:focus-visible,.census-family-lot-note:focus-visible,.census-family-zone-card:focus-visible,.census-family-clear-filters:focus-visible{outline:3px solid #1d6670;outline-offset:3px}
 .census-families-actions button:focus-visible,.census-family-filter-control select:focus-visible,.census-family-search input:focus-visible{outline:3px solid #1d6670;outline-offset:2px}
+.census-families-page{--acs-visit-completed:#2d8a70;--acs-visit-progress:#d5a341;--acs-visit-no-contact:#b74b3e;--acs-visit-cancelled:#87989a;--acs-visit-no-visit:#617b80}
+.census-family-stacked-bar .completed,.census-family-zone-stack .completed,.census-family-legend-dot.completed{background:var(--acs-visit-completed)}
+.census-family-stacked-bar .in-progress,.census-family-zone-stack .in-progress,.census-family-legend-dot.in-progress{background:var(--acs-visit-progress)}
+.census-family-stacked-bar .no-contact,.census-family-zone-stack .no-contact,.census-family-legend-dot.no-contact{background:var(--acs-visit-no-contact)}
+.census-family-stacked-bar .cancelled,.census-family-zone-stack .cancelled,.census-family-legend-dot.cancelled{background:var(--acs-visit-cancelled)}
+.census-family-zone-stack .no-visit,.census-family-legend-dot.no-visit,.census-family-zone-card-breakdown .no-visit{background:var(--acs-visit-no-visit)}
+.census-family-status-pill.no-visit{background:#e8eff0;color:#435e63}
+.census-family-chart-empty{display:grid;align-content:center;gap:4px;min-height:54px;margin:14px 0 13px;padding:10px 12px;border:1px dashed #aabfc1;border-radius:10px;background:#f7faf9;color:#52696d}
+.census-family-chart-empty strong{font-size:13px;line-height:1.35}
+.census-family-chart-empty span{font-size:12px;line-height:1.45}
+.census-family-page-header p,.census-family-section-heading small,.census-family-metric-copy small,.census-family-context-note,.census-family-zone-card-caption,.census-family-zone-card-breakdown>span,.census-family-results-heading span,.census-family-table td small,.census-family-table-subtext,.census-family-empty-state{color:#52696d}
 @media(max-width:1100px){
   .census-family-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .census-family-filters{grid-template-columns:repeat(3,minmax(0,1fr))}

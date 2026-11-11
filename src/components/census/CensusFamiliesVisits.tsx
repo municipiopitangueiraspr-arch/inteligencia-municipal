@@ -471,7 +471,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     </header>
 
     {error && <div className="fleet-inline-error" role="alert"><AlertCircle size={16} aria-hidden="true" />{error}</div>}
-    {loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={20} aria-hidden="true" />Carregando dados de campo…</div> : !hasMap ? <div className="census-family-empty-state">
+    {loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={20} aria-hidden="true" />Carregando dados de campo…</div> : error ? null : !hasMap ? <div className="census-family-empty-state">
       <MapPinned size={30} aria-hidden="true" />
       <strong>Nenhuma divisão territorial salva</strong>
       <span>Salve uma divisão no Mapa Territorial para iniciar o acompanhamento.</span>
@@ -534,10 +534,10 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             </div>
             <span className="census-family-total-badge">{formatCount(visitTotal)}</span>
           </div>
-          <div
+          {visitTotal > 0 ? <div
             className="census-family-stacked-bar visits"
             role="img"
-            aria-label={`Distribuição de ${formatCount(visitTotal)} registros de visita`}
+            aria-label={`Distribuição de ${formatCount(visitTotal)} eventos de visita`}
           >
             {VISIT_STATUSES.map((status) => {
               const value = metrics.visits[
@@ -548,10 +548,13 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
               return <i
                 key={status.key}
                 className={status.className}
-                style={{ width: `${visitTotal ? (value / visitTotal) * 100 : 0}%` }}
+                style={{ width: `${(value / visitTotal) * 100}%` }}
               />
             })}
-          </div>
+          </div> : <div className="census-family-chart-empty" role="status">
+            <strong>Ainda não há registros de visita</strong>
+            <span>Este gráfico conta eventos de visita vinculados a domicílios ativos.</span>
+          </div>}
           <div className="census-family-legend">
             <CountLegend label="Concluídas" value={metrics.visits.completed} className="completed" />
             <CountLegend label="Em andamento" value={metrics.visits.inProgress} className="in-progress" />
@@ -578,14 +581,17 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             </div>
             <span className="census-family-total-badge">{formatCount(responseTotal)}</span>
           </div>
-          <div
+          {responseTotal > 0 ? <div
             className="census-family-stacked-bar questionnaires"
             role="img"
             aria-label={`${formatCount(metrics.questionnaires.submitted)} enviados e ${formatCount(metrics.questionnaires.draft)} rascunhos, de ${formatCount(responseTotal)} respostas`}
           >
-            <i className="submitted" style={{ width: `${responseTotal ? (metrics.questionnaires.submitted / responseTotal) * 100 : 0}%` }} />
-            <i className="draft" style={{ width: `${responseTotal ? (metrics.questionnaires.draft / responseTotal) * 100 : 0}%` }} />
-          </div>
+            <i className="submitted" style={{ width: `${(metrics.questionnaires.submitted / responseTotal) * 100}%` }} />
+            <i className="draft" style={{ width: `${(metrics.questionnaires.draft / responseTotal) * 100}%` }} />
+          </div> : <div className="census-family-chart-empty" role="status">
+            <strong>Ainda não há respostas registradas</strong>
+            <span>Este gráfico conta respostas de questionário vinculadas a visitas.</span>
+          </div>}
           <div className="census-family-legend questionnaire-legend">
             <CountLegend label="Enviadas" value={metrics.questionnaires.submitted} className="submitted" />
             <CountLegend label="Rascunhos" value={metrics.questionnaires.draft} className="draft" />
