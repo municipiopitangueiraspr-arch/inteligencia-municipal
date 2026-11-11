@@ -24,8 +24,8 @@ type Visit = { id: string; household_id: string; visit_date: string; status: 'IN
 type FormSnapshot = Pick<QuestionnaireRecord, 'id' | 'slug' | 'title' | 'subtitle' | 'description' | 'version' | 'form_schema'>
 type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; status: 'DRAFT' | 'SUBMITTED'; submitted_at: string | null; created_at: string; questionnaire_version: number; questionnaire_snapshot: FormSnapshot }
 type MapMode = 'zones' | 'questionnaire' | 'visits'
-type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'cancelled'
-type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'cancelled'
+type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
+type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type ResponseEditorState = { responseId: string | null; visitId: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type VisitDraft = { household: Household; visitDate: string; notes: string; questionnaireId: string }
 type PendingWrite =
@@ -272,7 +272,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     const result = new Map<string, CoverageStatus>()
     for (const lot of lots) {
       const households = householdByLot.get(lot.id) || []
-      if (!households.length) { result.set(lot.id, 'no_visit'); continue }
+      if (!households.length) { result.set(lot.id, 'no_activity'); continue }
       const states = households.map((household) => {
         const householdVisits = visitsByHousehold.get(household.id) || []
         const formResponses = householdVisits.flatMap((visit) => responsesByVisit.get(visit.id) || []).filter((response) => response.questionnaire_id === coverageFormId)
@@ -305,27 +305,27 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     for (const lot of lots) {
       const visits = (householdByLot.get(lot.id) || []).flatMap((household) => visitsByHousehold.get(household.id) || []).sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
       const latest = visits[0]
-      result.set(lot.id, !latest ? 'no_visit' : latest.status === 'IN_PROGRESS' ? 'in_progress' : latest.status === 'NO_CONTACT' ? 'no_contact' : latest.status === 'CANCELLED' ? 'cancelled' : 'completed')
+      result.set(lot.id, !(householdByLot.get(lot.id) || []).length ? 'no_activity' : !latest ? 'no_visit' : latest.status === 'IN_PROGRESS' ? 'in_progress' : latest.status === 'NO_CONTACT' ? 'no_contact' : latest.status === 'CANCELLED' ? 'cancelled' : 'completed')
     }
     return result
   }, [coverageHouseholds, coverageVisits, lots])
   const mapStatus = (lot: TerritoryLot): CoverageStatus => coverageByLot.get(lot.id) || 'no_visit'
   const mapVisitStatus = (lot: TerritoryLot): VisitMapStatus => visitStatusByLot.get(lot.id) || 'no_visit'
-  const mapStatusLabels: Record<CoverageStatus, string> = { answered: 'Respondido', partial: 'Parcial', draft: 'Rascunho', questionnaire_pending: 'Questionário pendente', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', cancelled: 'Cancelada' }
-  const statusColors: Record<CoverageStatus, string> = { answered: 'var(--acs-chart-completed)', partial: 'var(--acs-chart-partial)', draft: 'var(--acs-chart-progress)', questionnaire_pending: 'var(--acs-chart-no-visit)', in_progress: 'var(--acs-chart-progress)', no_contact: 'var(--acs-chart-no-contact)', no_visit: 'var(--acs-chart-no-visit)', cancelled: 'var(--acs-chart-cancelled)' }
-  const visitStatusLabels: Record<VisitMapStatus, string> = { completed: 'Visita concluída', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', cancelled: 'Cancelada' }
-  const visitStatusColors: Record<VisitMapStatus, string> = { completed: 'var(--acs-chart-completed)', in_progress: 'var(--acs-chart-progress)', no_contact: 'var(--acs-chart-no-contact)', no_visit: 'var(--acs-chart-no-visit)', cancelled: 'var(--acs-chart-cancelled)' }
+  const mapStatusLabels: Record<CoverageStatus, string> = { answered: 'Respondido', partial: 'Parcial', draft: 'Rascunho', questionnaire_pending: 'Questionário pendente', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', no_activity: 'Sem cadastro e sem atividade', cancelled: 'Cancelada' }
+  const statusColors: Record<CoverageStatus, string> = { answered: 'var(--acs-chart-completed)', partial: 'var(--acs-chart-partial)', draft: 'var(--acs-chart-progress)', questionnaire_pending: 'var(--acs-chart-progress)', in_progress: 'var(--acs-chart-progress)', no_contact: 'var(--acs-chart-no-contact)', no_visit: 'var(--acs-chart-no-visit)', no_activity: 'var(--acs-chart-no-activity)', cancelled: 'var(--acs-chart-cancelled)' }
+  const visitStatusLabels: Record<VisitMapStatus, string> = { completed: 'Visita concluída', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', no_activity: 'Sem cadastro e sem atividade', cancelled: 'Cancelada' }
+  const visitStatusColors: Record<VisitMapStatus, string> = { completed: 'var(--acs-chart-completed)', in_progress: 'var(--acs-chart-progress)', no_contact: 'var(--acs-chart-no-contact)', no_visit: 'var(--acs-chart-no-visit)', no_activity: 'var(--acs-chart-no-activity)', cancelled: 'var(--acs-chart-cancelled)' }
   const activeMapForm = activeForms.find((form) => form.id === coverageFormId)
   const mapMetrics = useMemo(() => {
     const coverageStatuses = lots.map((lot) => mapStatus(lot))
     const visitStatuses = lots.map((lot) => mapVisitStatus(lot))
     const answered = coverageStatuses.filter((status) => status === 'answered').length
     const pending = coverageStatuses.length - answered
-    const visited = visitStatuses.filter((status) => status !== 'no_visit').length
+    const visited = visitStatuses.filter((status) => !['no_visit', 'no_activity'].includes(status)).length
     const noContact = visitStatuses.filter((status) => status === 'no_contact').length
     const inProgress = visitStatuses.filter((status) => status === 'in_progress').length
     const completed = visitStatuses.filter((status) => status === 'completed').length
-    return { answered, pending, visited, noContact, inProgress, completed, noVisit: visitStatuses.filter((status) => status === 'no_visit').length, coverage: coverageStatuses.length ? Math.round((answered / coverageStatuses.length) * 1000) / 10 : 0 }
+    return { answered, pending, visited, noContact, inProgress, completed, noVisit: visitStatuses.filter((status) => status === 'no_visit').length, noActivity: visitStatuses.filter((status) => status === 'no_activity').length, coverage: coverageStatuses.length ? Math.round((answered / coverageStatuses.length) * 1000) / 10 : 0 }
   }, [coverageByLot, lots, visitStatusByLot])
 
   function startPan(event: ReactPointerEvent<HTMLDivElement>) {
@@ -500,7 +500,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       </div>
       {mapMode === 'questionnaire' && <div className="census-map-filter-row"><label className="census-map-filter-control acs-filter-select" data-tone="questionnaire"><span className="acs-filter-caption"><FileText size={14} />Questionário</span><select value={coverageFormId} onChange={(event) => setCoverageFormId(event.target.value)}><option value="">Selecione</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label><button type="button" aria-pressed={showOnlyPending} data-state={showOnlyPending ? 'pending' : 'all'} className={`census-map-pending-toggle acs-filter-toggle${showOnlyPending ? ' active' : ''}`} onClick={() => setShowOnlyPending((current) => !current)} disabled={!coverageFormId}><Filter size={14} />{showOnlyPending ? 'Somente pendentes' : 'Todos os lotes'}</button></div>}
       {mapMode === 'questionnaire' && coverageFormId && <div className="census-map-metrics" aria-label={`Indicadores por lote, total de ${lots.length.toLocaleString('pt-BR')} lotes`}><div className="coverage"><strong>{mapMetrics.coverage}%<small>{lots.length.toLocaleString('pt-BR')} lotes</small></strong><span>Cobertura</span></div><div className="completed"><strong>{mapMetrics.answered.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes respondidos</span></div><div className="pending"><strong>{mapMetrics.pending.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem resposta enviada</span></div><div className="no-contact"><strong>{mapMetrics.noContact.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem contato</span></div></div>}
-      {mapMode === 'visits' && <div className="census-map-metrics" aria-label={`Indicadores por lote, total de ${lots.length.toLocaleString('pt-BR')} lotes`}><div className="recorded"><strong>{mapMetrics.visited.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita registrada</span></div><div className="no-visit"><strong>{mapMetrics.noVisit.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem visita</span></div><div className="in-progress"><strong>{mapMetrics.inProgress.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes em andamento</span></div><div className="completed"><strong>{mapMetrics.completed.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita concluída</span></div></div>}
+      {mapMode === 'visits' && <div className="census-map-metrics" aria-label={`Indicadores por lote, total de ${lots.length.toLocaleString('pt-BR')} lotes`}><div className="recorded"><strong>{mapMetrics.visited.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita registrada</span></div><div className="no-visit"><strong>{mapMetrics.noVisit.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Domicílio cadastrado, sem visita</span></div><div className="no-activity"><strong>{mapMetrics.noActivity.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Sem cadastro e sem atividade</span></div><div className="in-progress"><strong>{mapMetrics.inProgress.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes em andamento</span></div><div className="completed"><strong>{mapMetrics.completed.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita concluída</span></div></div>}
       {mapMode === 'questionnaire' && !coverageFormId && <div className="census-map-empty-filter"><Eye size={16} />Selecione um questionário para colorir o mapa pela cobertura.</div>}
     </section>
     <div className={`census-territory-workspace${selectedLot ? ' with-panel' : ''}`}>
@@ -518,9 +518,9 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
                 const isSelected = selectedLot?.id === lot.id
                 const mapCode = getMapLotCode(lot.label, lot.source_handle, index + 1)
                 const visualLabel = mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
-                const fill = mapMode === 'zones' ? getLotFillColor(lot, zones) : mapMode === 'visits' ? visitStatusColors[visitStatus] : status === 'answered' || status === 'partial' ? zone?.color || statusColors[status] : '#eef3f2'
-                const fillOpacity = mapMode === 'questionnaire' && status !== 'answered' && status !== 'partial' ? 0.72 : 1
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={fill} fillOpacity={fillOpacity} stroke="none" strokeWidth="0" vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon>
+                const fill = mapMode === 'zones' ? (lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)') : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
+                const fillOpacity = 1
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={fill} fillOpacity={fillOpacity} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon>
               })}
             </svg>
             <div className="census-territory-legend">{mapMode === 'zones' ? <>{zones.map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}{zone.active ? '' : ' · inativa'}</span>)}<span><i className="unassigned" />Sem zona</span></> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : Object.entries(mapStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: statusColors[status as CoverageStatus] }} />{label}</span>)}</div>

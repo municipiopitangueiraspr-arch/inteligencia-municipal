@@ -269,6 +269,7 @@
 .census-map-metrics>div.coverage,.census-map-metrics>div.completed{--metric-accent:var(--acs-chart-completed)}
 .census-map-metrics>div.pending,.census-map-metrics>div.no-visit{--metric-accent:var(--acs-chart-no-visit)}
 .census-map-metrics>div.no-contact{--metric-accent:var(--acs-chart-no-contact)}
+.census-map-metrics>div.no-activity{--metric-accent:var(--acs-chart-no-activity)}
 .census-map-metrics>div.in-progress{--metric-accent:var(--acs-chart-progress)}
 .census-map-metrics strong{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;color:var(--metric-accent)}
 .census-map-metrics strong small{color:#52696d;font-size:11px;font-weight:700}
@@ -276,3 +277,9 @@
 .census-territory-legend{color:#52696d;font-size:11px}
 .census-territory-legend i{border-color:#718a8d}
 @media(max-width:760px){.census-map-metrics strong small{font-size:10px}.census-map-metrics span{font-size:10px}}
+.census-territory-viewport{background-color:#fbfcfd;background-image:radial-gradient(#dbe4e9 1px,transparent 1px)}
+.census-territory-legend .unassigned{background:var(--acs-chart-no-activity);border-color:#fff;box-shadow:0 0 0 1px #4b5563}
+.census-territory-svg polygon:not(.selected){stroke:#fff!important;stroke-width:1px!important;vector-effect:non-scaling-stroke}
+.census-territory-svg polygon:focus-visible{stroke:#143d49!important;stroke-width:2.5px!important}
+.census-map-metrics>div.no-visit{--metric-accent:var(--acs-chart-no-visit)}
+@media(min-width:761px){.census-map-metrics:has(> .no-activity){grid-template-columns:repeat(5,minmax(0,1fr))}}

@@ -18,8 +18,9 @@
   --acs-chart-completed: #2d8a70;
   --acs-chart-progress: #d5a341;
   --acs-chart-no-contact: #b74b3e;
-  --acs-chart-cancelled: #87989a;
-  --acs-chart-no-visit: #617b80;
+  --acs-chart-cancelled: #6b62a8;
+  --acs-chart-no-visit: #6f9fb4;
+  --acs-chart-no-activity: #4b5563;
   --acs-chart-return: #337bb3;
   --acs-chart-partial: #4d9b91;
 }
