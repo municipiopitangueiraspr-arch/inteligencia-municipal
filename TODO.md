@@ -261,4 +261,4 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Remover o título repetido “Famílias e visitas” dentro do conteúdo, mantendo o título do cabeçalho global, a descrição e as ações.
 - [x] Remover os estilos obsoletos e verificar ausência de mensagens de demonstração na interface.
 - [x] Validar build/lint: `npm run build` e `npm run lint` concluídos com sucesso; nenhuma mensagem de demo remanescente em `src`.
-- [ ] Publicar no GitHub Pages para teste remoto.
+- [x] Publicar no GitHub Pages para teste remoto: commit `8f92a9cd6b479b40c46e2c7d63416f5c061b5920`, workflow `43006750783` concluído com sucesso; HTML, JavaScript e CSS responderam HTTP 200 e os marcadores do aviso/demo não estão nos assets públicos. URL: <https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/>.
