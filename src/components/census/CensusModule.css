@@ -120,3 +120,20 @@
 .census-workspace-svg polygon.census-lot-selected{filter:brightness(1.2) saturate(1.22)!important}
 
 .census-map-svg polygon,.census-map-svg polygon:hover,.census-map-svg polygon:focus-visible{stroke:none!important;stroke-width:0!important;outline:none!important}
+
+.census-map-merge-summary{display:grid;gap:12px;padding:16px 18px;border:1px solid #cbdde2;border-radius:14px;background:linear-gradient(120deg,#f7fbfc,#eef6f8);color:#294d55}
+.census-map-merge-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.census-map-merge-heading strong{font-size:14px;font-weight:800}
+.census-map-merge-heading span,.census-map-merge-summary>small{color:#536f75;font-size:11px;line-height:1.5}
+.census-map-merge-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.census-map-merge-metrics>div{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:9px;padding:10px 12px;border:1px solid #d8e6e8;border-radius:11px;background:#fff}
+.census-map-merge-metrics strong{color:#147a57;font-size:22px;line-height:1}
+.census-map-merge-metrics span{color:#456168;font-size:10px;line-height:1.35}
+.census-map-merge-metrics .review{background:#fffaf0;border-color:#f0ddb2}
+.census-map-merge-metrics .review strong{color:#b36a08}
+.census-map-merge-metrics .removed{background:#f7f8fa;border-color:#dce1e5}
+.census-map-merge-metrics .removed strong{color:#65727a}
+.census-publish-button{margin-top:8px;background:#17684c!important;border-color:#17684c!important}
+.census-publish-button:hover:not(:disabled){background:#10573e!important}
+.census-publish-button:disabled{opacity:.55}
+@media(max-width:680px){.census-map-merge-metrics{grid-template-columns:1fr}.census-map-merge-metrics>div{grid-template-columns:56px 1fr}.census-map-merge-heading{display:grid;gap:4px}}

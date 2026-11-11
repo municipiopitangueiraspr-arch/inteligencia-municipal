@@ -26,7 +26,9 @@ try {
     getLotFillColor,
     getLotKey,
     groupLotSaveAssignments,
+    exactLotGeometryFingerprint,
     isImportableLotGeometry,
+    matchDraftLotsToCurrent,
     mergeSelectedLotKeys,
     parseDxfLotBoundaries,
     selectLotKeysInRect,
@@ -81,6 +83,22 @@ try {
     { source_handle: 'DXF-C', label: null, zone_id: null },
   ], () => `lot-${++nextId}`)
   assert.deepEqual(importedLots.map((lot) => lot.id), ['lot-1', 'lot-2', 'lot-3'], 'cada geometria recebe ID próprio')
+
+  const reversedSquare = [[10, 10], [10, 0], [0, 0], [0, 10]]
+  assert.equal(exactLotGeometryFingerprint(square), exactLotGeometryFingerprint(reversedSquare), 'a rotação e orientação do contorno não impedem a correspondência geométrica exata')
+  const mergedLots = matchDraftLotsToCurrent(
+    [
+      { id: 'draft-same', source_handle: 'NEW-HANDLE', geometry: reversedSquare, zone_id: null },
+      { id: 'draft-new', source_handle: 'NEW-LOT', geometry: [[20, 20], [30, 20], [30, 30], [20, 30]], zone_id: null },
+    ],
+    [{ id: 'active-same', source_handle: 'OLD-HANDLE', geometry: square, zone_id: 'zone-green' }],
+  )
+  assert.deepEqual(mergedLots.map((lot) => [lot.matched_lot_id, lot.merge_status, lot.zone_id]), [['active-same', 'MATCHED', 'zone-green'], [null, 'NEW', null]], 'o merge preserva zona apenas para geometria única e idêntica')
+  const ambiguousMatch = matchDraftLotsToCurrent(
+    [{ id: 'draft-ambiguous', source_handle: 'D', geometry: square, zone_id: null }],
+    [{ id: 'active-1', source_handle: 'A', geometry: square }, { id: 'active-2', source_handle: 'B', geometry: square }],
+  )
+  assert.equal(ambiguousMatch[0].merge_status, 'NEW', 'geometrias ambíguas nunca recebem associação automática')
 
   const zones = [
     { id: 'zone-green', color: '#16a34a' },

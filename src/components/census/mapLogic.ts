@@ -9,6 +9,8 @@ export type MapLotAssignment = {
   zone_number?: number | null
 }
 
+export type MapLotMergeMatch = { matched_lot_id: string | null; merge_status: 'MATCHED' | 'NEW' }
+
 export type MapZoneColor = { id: string; color: string }
 export type MapSelectionRect = { left: number; top: number; right: number; bottom: number }
 export type MapPolygonForSelection = { key: string; points: MapLotPoint[] }
@@ -40,6 +42,42 @@ export function getLotKey(lot: MapLotAssignment) {
 
 export function withLotIds<T extends { id?: string }>(lots: T[], createId: () => string): Array<T & { id: string }> {
   return lots.map((lot) => ({ ...lot, id: createId() }))
+}
+
+function normalizedCoordinate(value: number) {
+  return Object.is(value, -0) ? '0' : String(value)
+}
+
+/** Canonical exact fingerprint: ring start and winding direction do not affect a match. */
+export function exactLotGeometryFingerprint(geometry: readonly MapLotPoint[]) {
+  const points = geometry.map(([x, y]) => [normalizedCoordinate(x), normalizedCoordinate(y)] as const)
+  if (points.length > 1 && points[0][0] === points[points.length - 1][0] && points[0][1] === points[points.length - 1][1]) points.pop()
+  if (!points.length) return ''
+  const rings = [points, [...points].reverse()]
+  const candidates = rings.flatMap((ring) => ring.map((_, start) => [...ring.slice(start), ...ring.slice(0, start)].map(([x, y]) => `${x},${y}`).join(';')))
+  return candidates.sort()[0]
+}
+
+/** Match only unique, byte-exact geometries; ambiguous or changed lots require human review. */
+export function matchDraftLotsToCurrent<D extends { geometry: [number, number][]; zone_id?: string | null }, C extends { id?: string; geometry: readonly MapLotPoint[]; zone_id?: string | null }>(draftLots: D[], currentLots: C[]): Array<D & MapLotMergeMatch> {
+  const byGeometry = new Map<string, C[]>()
+  for (const lot of currentLots) {
+    const fingerprint = exactLotGeometryFingerprint(lot.geometry)
+    if (!fingerprint) continue
+    byGeometry.set(fingerprint, [...(byGeometry.get(fingerprint) || []), lot])
+  }
+  const used = new Set<string>()
+  return draftLots.map((lot) => {
+    const candidates = byGeometry.get(exactLotGeometryFingerprint(lot.geometry)) || []
+    const match = candidates.length === 1 && candidates[0].id && !used.has(candidates[0].id) ? candidates[0] : null
+    if (match?.id) used.add(match.id)
+    return {
+      ...lot,
+      matched_lot_id: match?.id || null,
+      merge_status: match ? 'MATCHED' : 'NEW',
+      ...(match ? { zone_id: match.zone_id ?? null } : {}),
+    }
+  })
 }
 
 export function assignLotToZone<T extends MapLotAssignment>(lots: T[], key: string, zoneId: string): T[] {
