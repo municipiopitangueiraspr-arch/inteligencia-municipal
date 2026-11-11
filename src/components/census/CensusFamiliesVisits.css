@@ -200,3 +200,23 @@
 @media(max-width:1100px){.census-family-filter-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.census-family-filter-groups{grid-template-columns:1fr}.census-family-filter-group-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:430px){.census-family-filter-group-controls{grid-template-columns:1fr}.census-family-filter-group{padding:10px}.census-family-filter-panel .census-family-filter-control{min-height:58px}}
+
+/* Paleta única de estados nos indicadores e gráficos de Famílias e visitas. */
+.census-families-page{--acs-visit-completed:var(--acs-chart-completed);--acs-visit-progress:var(--acs-chart-progress);--acs-visit-no-contact:var(--acs-chart-no-contact);--acs-visit-cancelled:var(--acs-chart-cancelled);--acs-visit-no-visit:var(--acs-chart-no-visit)}
+.census-family-metric.blue .census-family-metric-icon{background:#eaf3f4;color:var(--acs-chart-territory)}
+.census-family-metric.teal .census-family-metric-icon{background:#e8f5ee;color:var(--acs-chart-completed)}
+.census-family-metric.slate .census-family-metric-icon{background:#eef3f3;color:var(--acs-chart-no-visit)}
+.census-family-metric.amber .census-family-metric-icon{background:#fff4df;color:#815a11}
+.census-family-total-badge{display:flex;align-items:baseline;justify-content:center;gap:5px;min-width:84px;padding:5px 9px}
+.census-family-total-badge strong{color:#214d56;font-size:17px;font-variant-numeric:tabular-nums}
+.census-family-total-badge small{color:#52696d;font-size:10px;font-weight:800}
+.census-family-lot-note{border-left:4px solid var(--acs-chart-no-visit);background:#eef3f3}
+.census-family-lot-note svg{color:var(--acs-chart-no-visit)}
+.census-family-lot-note>b{color:#4d666b}
+.census-family-zone-card-heading>strong{color:#236950}
+.census-family-status-pill.completed,.census-family-questionnaire-pill.submitted{background:#e8f5ee;color:#236950}
+.census-family-status-pill.in-progress,.census-family-questionnaire-pill.draft{background:#fff4df;color:#815a11}
+.census-family-status-pill.no-contact{background:#ffefed;color:#a93f35}
+.census-family-status-pill.cancelled,.census-family-status-pill.no-visit,.census-family-questionnaire-pill.none{background:#eef3f3;color:#4d666b}
+@media(max-width:560px){.census-family-total-badge{min-width:78px;padding-inline:7px}.census-family-total-badge small{font-size:9px}}
+.census-family-zone-chip.unassigned{color:#4d666b}

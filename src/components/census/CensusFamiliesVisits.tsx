@@ -495,8 +495,8 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             icon={<AlertCircle size={20} />}
             label="Lotes sem zona"
             value={metrics.unzonedLots}
-            note="Fora do denominador das zonas"
-            tone="amber"
+            note={`de ${formatCount(metrics.lots)} lotes no mapa`}
+            tone="slate"
             active={zoneFilter === 'NO_ZONE'}
             onClick={() => filterByZone('NO_ZONE')}
             ariaLabel={`${formatCount(metrics.unzonedLots)} lotes sem zona. Filtrar lista por lotes sem zona.`}
@@ -514,8 +514,8 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
           <MetricCard
             icon={<UsersRound size={20} />}
             label="Lotes sem domicílio ativo"
+            note={`de ${formatCount(metrics.lots)} lotes no mapa`}
             value={metrics.presumedLots}
-            note="Exibidos como domicílios presumidos"
             tone="slate"
             active={householdFilter === 'PRESUMED'}
             onClick={() => filterByHouseholdType('PRESUMED')}
@@ -529,10 +529,10 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
           <div className="census-family-section-heading">
             <div>
               <span className="fleet-kicker">2 · VISITAS</span>
-              <h3>Registros de visita</h3>
-              <small>Contagem de eventos vinculados a domicílios ativos; não é contagem de lotes.</small>
+              <h3>Eventos de visita</h3>
+              <small>Eventos de domicílios ativos; a barra não representa lotes.</small>
             </div>
-            <span className="census-family-total-badge">{formatCount(visitTotal)}</span>
+            <span className="census-family-total-badge"><strong>{formatCount(visitTotal)}</strong><small>eventos</small></span>
           </div>
           {visitTotal > 0 ? <div
             className="census-family-stacked-bar visits"
@@ -577,9 +577,9 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             <div>
               <span className="fleet-kicker">3 · QUESTIONÁRIOS</span>
               <h3>Respostas registradas</h3>
-              <small>Rascunho é um estado de preenchimento, não um alerta de atraso.</small>
+              <small>Respostas vinculadas a visitas, enviadas ou em rascunho.</small>
             </div>
-            <span className="census-family-total-badge">{formatCount(responseTotal)}</span>
+            <span className="census-family-total-badge"><strong>{formatCount(responseTotal)}</strong><small>respostas</small></span>
           </div>
           {responseTotal > 0 ? <div
             className="census-family-stacked-bar questionnaires"

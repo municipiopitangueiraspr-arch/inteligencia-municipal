@@ -137,3 +137,21 @@
 .census-overview-activity-dot.in_progress{background:#d5a341}
 .census-overview-activity-dot.cancelled{background:#87989a}
 .census-overview-activity-status.no_contact{color:#a93f35!important}
+
+/* Indicadores e gráficos usam a mesma paleta semântica das visitas e questionários. */
+.census-overview-funnel-note{border:1px solid #d7e7e8;background:#edf6f7;color:#345d63}
+.census-overview-funnel-note svg{flex:none;color:var(--acs-chart-territory)}
+.census-overview-metric.blue>span{background:#eaf3f4;color:var(--acs-chart-territory)}
+.census-overview-metric.green>span{background:#e8f5ee;color:var(--acs-chart-completed)}
+.census-overview-zone>div:first-child>b{color:var(--acs-chart-completed)}
+.census-overview-activity-dot.completed{background:var(--acs-chart-completed)}
+.census-overview-activity-dot.no_contact{background:var(--acs-chart-no-contact)}
+.census-overview-activity-dot.in_progress{background:var(--acs-chart-progress)}
+.census-overview-activity-dot.cancelled{background:var(--acs-chart-cancelled)}
+.census-overview-activity-status.completed{background:#e8f5ee;color:#236950!important}
+.census-overview-activity-status.no_contact{background:#ffefed;color:#a93f35!important}
+.census-overview-activity-status.in_progress{background:#fff4df;color:#815a11!important}
+.census-overview-activity-status.cancelled{background:#eef3f3;color:#4d666b!important}
+.census-overview-forecast-row>.census-overview-forecast-unavailable{color:#4d666b}
+.census-overview-forecast-row>.census-overview-forecast-complete{color:#236950}
+@media(max-width:650px){.census-overview-activity-status{font-size:10px!important}}

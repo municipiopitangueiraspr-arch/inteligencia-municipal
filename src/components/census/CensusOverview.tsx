@@ -176,8 +176,11 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
   const zoneStats = useMemo(() => data?.zones.map((zone) => {
     const lots = data.lots.filter((lot) => lot.zone_id === zone.id)
     const lotIds = new Set(lots.map((lot) => lot.id))
-    const householdIds = new Set(data.households.filter((household) => lotIds.has(household.lot_id)).map((household) => household.id))
-    const done = new Set(data.visits.filter((visit) => householdIds.has(visit.household_id) && visit.status === 'COMPLETED').map((visit) => visit.household_id)).size
+    const householdById = new Map(data.households.map((household) => [household.id, household]))
+    const done = new Set(data.visits
+      .filter((visit) => visit.status === 'COMPLETED')
+      .map((visit) => householdById.get(visit.household_id)?.lot_id)
+      .filter((lotId): lotId is string => Boolean(lotId && lotIds.has(lotId)))).size
     return { ...zone, lots: lots.length, done, coverage: lots.length ? Math.round((done / lots.length) * 100) : 0 }
   }) || [], [data])
 
@@ -215,10 +218,10 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                 <BarChart3 size={21} />
               </div>
               {metrics.lots > 0 ? <div className="census-overview-funnel-stages">
-                <Funnel label="Lotes no mapa" value={metrics.lots} max={metrics.lots} color="#2d7d8a" />
-                <Funnel label="Lotes com domicílio confirmado" value={metrics.confirmed} max={metrics.lots} color="#2d8a70" />
-                <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="#2d8a70" />
-                <Funnel label="Lotes com questionário enviado" value={metrics.submitted} max={metrics.lots} color="#7750a8" />
+                <Funnel label="Lotes no mapa" value={metrics.lots} max={metrics.lots} color="var(--acs-chart-territory)" />
+                <Funnel label="Lotes com domicílio confirmado" value={metrics.confirmed} max={metrics.lots} color="var(--acs-chart-completed)" />
+                <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="var(--acs-chart-completed)" />
+                <Funnel label="Lotes com questionário enviado" value={metrics.submitted} max={metrics.lots} color="var(--acs-chart-completed)" />
               </div> : <div className="census-overview-chart-empty" role="status">
                 <strong>Ainda não há lotes neste mapa</strong>
                 <span>Este resumo usa os lotes válidos do mapa territorial publicado.</span>
@@ -273,9 +276,9 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                 <button type="button" className="census-text-action" onClick={() => onOpen('territory')}>Abrir mapa <ArrowRight size={14} /></button>
               </div>
               {zoneStats.map((zone) => (
-                <div className="census-overview-zone" key={zone.id}>
-                  <div><span><i style={{ background: zone.color }} />{zone.name}</span><b>{zone.coverage}% visitados</b></div>
-                  <div className="census-overview-track"><i style={{ width: `${zone.coverage}%`, background: zone.color }} /></div>
+                  <div className="census-overview-zone" key={zone.id}>
+                    <div><span><i style={{ background: zone.color }} />{zone.name}</span><b>{zone.coverage}% com visita concluída</b></div>
+                  <div className="census-overview-track"><i style={{ width: `${zone.coverage}%`, background: 'var(--acs-chart-completed)' }} /></div>
                   <small>{zone.done} de {zone.lots} lote(s) com visita concluída</small>
                 </div>
               ))}

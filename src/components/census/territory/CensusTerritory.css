@@ -265,3 +265,14 @@
 .census-workspace-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
 @media(max-width:1100px){.census-map-mode-tabs button,.census-map-pending-toggle{min-height:44px;padding:10px 13px}.census-territory-toolbar button{width:44px;height:44px;min-width:44px}.census-territory-badges span{min-height:42px}}
 @media(max-width:850px){.census-territory-legend{max-width:calc(100% - 16px);max-height:28vh;overflow:auto;padding:10px 12px}.census-territory-panel-header{padding:16px}.census-territory-panel-scroll{gap:14px;padding:14px}}
+.census-map-metrics>div{--metric-accent:var(--acs-chart-territory);border-left:3px solid var(--metric-accent);background:#fbfdfd}
+.census-map-metrics>div.coverage,.census-map-metrics>div.completed{--metric-accent:var(--acs-chart-completed)}
+.census-map-metrics>div.pending,.census-map-metrics>div.no-visit{--metric-accent:var(--acs-chart-no-visit)}
+.census-map-metrics>div.no-contact{--metric-accent:var(--acs-chart-no-contact)}
+.census-map-metrics>div.in-progress{--metric-accent:var(--acs-chart-progress)}
+.census-map-metrics strong{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;color:var(--metric-accent)}
+.census-map-metrics strong small{color:#52696d;font-size:11px;font-weight:700}
+.census-map-metrics span{color:#52696d;font-size:11px;line-height:1.25}
+.census-territory-legend{color:#52696d;font-size:11px}
+.census-territory-legend i{border-color:#718a8d}
+@media(max-width:760px){.census-map-metrics strong small{font-size:10px}.census-map-metrics span{font-size:10px}}
