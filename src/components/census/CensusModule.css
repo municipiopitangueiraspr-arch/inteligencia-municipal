@@ -65,3 +65,29 @@
 .census-mobile-menu-button{width:44px;height:44px}
 @media(max-width:1100px){.census-shell>.fleet-sidebar .fleet-back{min-height:44px;padding-inline:12px}.census-mobile-menu button{min-height:44px;font-size:13px}}
 @media(max-width:600px){.census-confirmation-dialog{padding:21px}.census-confirmation-dialog h2{font-size:21px}.census-confirmation-actions button{min-height:46px}.census-write-progress{font-size:13px}}
+
+
+/* Zonas e ACS: hierarquia clara para cadastro, consulta e vínculo */
+.census-management-grid{gap:16px}
+.census-management-card,.census-link-card{padding:19px}
+.census-management-heading h3{font-size:19px}
+.census-management-card>p,.census-link-card>p{font-size:13px;line-height:1.55}
+.census-form-stack label,.census-form-row label,.census-link-form label{font-size:13px}
+.census-form-stack input,.census-form-row input,.census-link-form select{box-sizing:border-box;min-height:44px;font-size:14px}
+.census-color-input input{width:48px;height:44px;min-height:44px}
+.census-color-input span{font-size:12px}
+.census-form-stack>.fleet-primary-button,.census-link-form>.fleet-primary-button{min-height:46px;font-size:13px}
+.census-catalog-list{max-height:250px;gap:8px}
+.census-catalog-row{min-height:46px;gap:10px;padding:10px 12px}
+.census-catalog-row>i{width:13px;height:13px}
+.census-catalog-row>strong{font-size:14px}
+.census-catalog-row:not(.census-acs-row)>small{margin-left:auto;padding:4px 9px;border-radius:999px;background:#e4f5eb;color:#287a56;font-size:11px;font-weight:800}
+.census-acs-row .fleet-user-avatar{width:36px;height:36px;font-size:14px}
+.census-acs-row>span:nth-child(2){flex:1;min-width:0;gap:4px}
+.census-acs-row>span:nth-child(2)>strong{font-size:14px;overflow-wrap:anywhere}
+.census-acs-row>span:nth-child(2)>small{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.census-catalog-list>span{padding:12px;color:#607b80;font-size:13px}
+.census-no-zones{font-size:13px;line-height:1.5}
+.census-no-zones small{font-size:12px}
+@media(max-width:900px){.census-management-card,.census-link-card{padding:18px}.census-catalog-list{max-height:300px}.census-link-form>.fleet-primary-button{min-height:46px}}
+@media(max-width:520px){.census-management-card,.census-link-card{padding:15px}.census-catalog-row{padding:10px}.census-catalog-row>strong{font-size:13px}}

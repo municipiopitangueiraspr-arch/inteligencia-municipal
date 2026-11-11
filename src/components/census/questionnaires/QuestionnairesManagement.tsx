@@ -269,7 +269,7 @@ export function QuestionnairesManagement() {
         <div className="questionnaire-library-stats"><strong>{activeCount}</strong><span>ativo(s)</span><span className="questionnaire-stat-divider" /><span>{forms.length} cadastrado(s)</span></div>
         <label className="questionnaire-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar questionário" aria-label="Buscar questionário" /></label>
         <div className="questionnaire-filter" role="group" aria-label="Filtrar por estado">
-          {([['ALL', 'Todos'], ['DRAFT', 'Rascunho'], ['ACTIVE', 'Ativos'], ['INACTIVE', 'Inativos']] as Array<[StatusFilter, string]>).map(([value, label]) => <button key={value} type="button" className={statusFilter === value ? 'selected' : ''} onClick={() => setStatusFilter(value)}>{label}</button>)}
+          {([['ALL', 'Todos'], ['DRAFT', 'Rascunho'], ['ACTIVE', 'Ativos'], ['INACTIVE', 'Inativos']] as Array<[StatusFilter, string]>).map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} className={statusFilter === value ? 'selected' : ''} onClick={() => setStatusFilter(value)}>{label}</button>)}
         </div>
         <div className="questionnaire-list" aria-label="Lista de questionários">
           {visibleForms.map((form) => <button type="button" key={form.id} className={`questionnaire-list-item${draft?.id === form.id && !isNew ? ' selected' : ''}`} onClick={() => selectQuestionnaire(form)} disabled={loading || saving}>

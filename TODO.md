@@ -208,3 +208,12 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Nas confirmações e mensagens de gravação, reforçar hierarquia visual, legibilidade, diferenciação de sucesso/erro e clareza da ação, preservando textos essenciais e o fluxo de confirmação existente.
 - [x] Não criar funções, indicadores, métricas, tabelas ou regras de acesso; manter os dados, cálculos, autenticação e RLS atuais. Como a mudança é só de apresentação, não alterar schema nem gravar dados de teste no Supabase.
 - [x] Build e lint concluídos; commit `18a65ed` enviado à `main`; workflow Pages `42927739287` concluiu com sucesso; HTML e assets públicos responderam HTTP 200 com os refinamentos confirmados. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
+
+
+## Refinamento visual de Zonas/ACS, Questionários e Famílias/visitas
+
+- [x] Em Zonas e ACS, melhorar a hierarquia dos cadastros, catálogos e vínculo territorial; manter as ações, dados e regras atuais.
+- [x] Em Questionários, facilitar a leitura da biblioteca, dos status e do editor de seções/perguntas; adequar filtros, controles, prévia e ações para computador e tablet sem alterar o conteúdo ou o fluxo de gravação.
+- [x] Em Famílias e visitas, conferir consistência do refinamento responsivo já aplicado e melhorar a legibilidade dos filtros, indicadores e registros sem criar métricas ou retirar dados.
+- [x] Preservar os estados/cores e a persistência atuais; não criar funcionalidades, indicadores, tabelas ou regras de acesso nem alterar schema/RLS do Supabase.
+- [ ] Validar build/lint, publicar em `main`, aguardar GitHub Actions e confirmar a tela e assets no GitHub Pages para teste remoto.

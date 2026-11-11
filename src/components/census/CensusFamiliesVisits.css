@@ -35,3 +35,17 @@
   .census-family-table td:nth-child(6),.census-family-table td:nth-child(7){align-items:center}
 }
 @media(max-width:520px){.census-family-table tbody tr{grid-template-columns:minmax(0,1fr)}.census-family-table td,.census-family-table td:first-child{padding:10px 12px}.census-family-coverage-copy>span{font-size:12px;line-height:1.5}}
+
+
+/* Consistência visual e acessibilidade dos filtros/ações já existentes */
+.census-families-actions button{min-height:44px;padding-inline:14px;font-size:12px}
+.census-family-filter-title span{padding:5px 9px;border:1px solid #d9e7e7;border-radius:999px;background:#f6faf9;color:#42656c;font-weight:800}
+.census-family-search:focus-within{border-color:#397f89;box-shadow:0 0 0 3px #397f891a}
+.census-family-filters select:focus-visible,.census-family-search:focus-within{outline:3px solid #397f8930;outline-offset:1px}
+.census-family-table tbody tr:focus-within{outline:3px solid #397f8930;outline-offset:2px}
+.census-family-table td::before{line-height:1.4}
+.census-family-table tbody tr{transition:border-color .15s ease,box-shadow .15s ease}
+.census-family-table tbody tr:hover{border-color:#9fc5c5;box-shadow:0 5px 16px #265b5d12}
+.census-family-empty strong{font-size:14px}
+.census-family-empty span{font-size:12px;line-height:1.5}
+@media(max-width:850px){.census-families-actions button{min-height:46px}.census-family-table tbody tr{margin-bottom:1px}}

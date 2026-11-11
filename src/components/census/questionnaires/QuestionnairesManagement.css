@@ -3,3 +3,88 @@
 @media(max-width:760px){.questionnaire-page-heading{align-items:stretch}.questionnaire-new-button{width:100%}.questionnaire-list{grid-template-columns:1fr;max-height:320px}.questionnaire-filter button{font-size:8px}.questionnaire-editor-toolbar{align-items:stretch;flex-direction:column}.questionnaire-editor-title h3{max-width:100%;white-space:normal}.questionnaire-toolbar-actions{justify-content:stretch}.questionnaire-toolbar-actions>button{flex:1}.questionnaire-builder-layout.with-preview{grid-template-columns:1fr}.questionnaire-preview-panel{position:static;max-height:78vh;min-height:440px}.questionnaire-section-top{grid-template-columns:28px minmax(0,1fr)}.questionnaire-section-number{width:27px;height:27px}.questionnaire-section-top>.questionnaire-reorder-actions{grid-column:2;justify-content:flex-end;grid-row:2}.questionnaire-questions,.questionnaire-add-question{margin-left:0}.questionnaire-question-settings{grid-template-columns:1fr}.questionnaire-validation-editor>div{grid-template-columns:repeat(2,minmax(0,1fr))}.questionnaire-sections-heading{align-items:flex-start;flex-direction:column}.questionnaire-sections-heading .fleet-secondary-button{width:100%}.questionnaire-add-first .fleet-primary-button{width:100%}}
 
 .questionnaire-page-actions{display:flex;justify-content:flex-end;margin-bottom:16px}
+
+
+/* Biblioteca e editor: leitura e ergonomia consistentes em desktop/tablet */
+.questionnaire-library{padding:18px 16px}
+.questionnaire-library-heading h3,.questionnaire-editor-title h3,.questionnaire-card-heading h3{font-size:18px}
+.questionnaire-library-stats{font-size:12px}
+.questionnaire-library-stats strong{font-size:17px}
+.questionnaire-search{min-height:44px;height:auto}
+.questionnaire-search input{font-size:13px}
+.questionnaire-filter{gap:5px}
+.questionnaire-filter button{min-height:40px;padding:8px 5px;font-size:11px}
+.questionnaire-list-item{min-height:64px;padding:11px}
+.questionnaire-list-copy strong{font-size:12px;line-height:1.4}
+.questionnaire-list-copy small{font-size:11px}
+.questionnaire-status{padding:5px 8px;font-size:11px}
+.questionnaire-status:before{width:7px;height:7px}
+.questionnaire-list-empty{font-size:12px;line-height:1.45}
+.questionnaire-editor-title h3{max-width:100%;font-size:20px;line-height:1.3;white-space:normal}
+.questionnaire-editor-title small{font-size:12px}
+.questionnaire-toolbar-actions .fleet-primary-button,.questionnaire-toolbar-actions .fleet-secondary-button,.questionnaire-activate-button,.questionnaire-deactivate-button{min-height:44px;padding:0 13px;font-size:12px}
+.questionnaire-details-card,.questionnaire-section-card{padding:17px}
+.questionnaire-details-card>label,.questionnaire-section-heading>label,.questionnaire-question-card>label,.questionnaire-question-settings>label{font-size:12px;line-height:1.4}
+.questionnaire-details-card input,.questionnaire-details-card textarea,.questionnaire-section-heading input,.questionnaire-section-heading textarea,.questionnaire-question-card textarea,.questionnaire-question-settings input,.questionnaire-question-settings select,.questionnaire-options-editor input,.questionnaire-column-row select,.questionnaire-validation-editor input{font-size:13px;line-height:1.45}
+.questionnaire-details-card input,.questionnaire-section-heading input,.questionnaire-question-settings input,.questionnaire-question-settings select{height:44px}
+.questionnaire-sections-heading h3{font-size:19px}
+.questionnaire-sections-heading small{font-size:12px}
+.questionnaire-sections-heading .fleet-secondary-button{min-height:44px;font-size:12px}
+.questionnaire-section-number{width:34px;height:34px;font-size:13px}
+.questionnaire-question-card{gap:11px;padding:15px}
+.questionnaire-question-number{font-size:11px}
+.questionnaire-reorder-actions{gap:5px}
+.questionnaire-reorder-actions button,.questionnaire-option-row button,.questionnaire-column-row button{width:38px;height:38px}
+.questionnaire-required-toggle>input,.questionnaire-allow-other input{width:18px;height:18px;flex:none}
+.questionnaire-required-toggle strong{font-size:11px}
+.questionnaire-required-toggle small{font-size:10px}
+.questionnaire-options-editor,.questionnaire-validation-editor{gap:9px;padding:12px}
+.questionnaire-options-editor>strong,.questionnaire-validation-editor>strong{font-size:12px}
+.questionnaire-option-row input,.questionnaire-column-row select{height:40px;font-size:12px}
+.questionnaire-option-row>span{width:26px;height:26px;font-size:10px}
+.questionnaire-text-action,.questionnaire-allow-other{font-size:11px}
+.questionnaire-validation-editor>div{gap:9px}
+.questionnaire-validation-editor label{font-size:11px}
+.questionnaire-validation-editor input{height:40px}
+.questionnaire-add-question{min-height:44px;font-size:12px}
+.questionnaire-no-questions{font-size:12px}
+.questionnaire-preview-heading>span{font-size:12px}
+.questionnaire-preview-heading button{width:40px;height:40px}
+.questionnaire-preview-note{font-size:11px;line-height:1.5}
+.questionnaire-preview-form{padding:19px 17px}
+.questionnaire-preview-form h3{font-size:18px}
+.questionnaire-preview-form h4{font-size:12px}
+.questionnaire-preview-description,.questionnaire-preview-section>p{font-size:11px;line-height:1.5}
+.questionnaire-preview-section>h4{font-size:13px}
+.questionnaire-preview-question>label{font-size:12px}
+.questionnaire-preview-question>small{font-size:11px}
+.questionnaire-preview-question>input,.questionnaire-preview-question>textarea{font-size:12px}
+.questionnaire-preview-choices label{font-size:11px;line-height:1.4}
+.questionnaire-preview-table{font-size:10px}
+.questionnaire-preview-signature span{font-size:10px}
+.questionnaire-notice{padding:12px 14px;font-size:12px;line-height:1.55}
+@media(max-width:940px){.questionnaire-builder-layout.with-preview{grid-template-columns:minmax(0,1fr)}.questionnaire-preview-panel{position:static;max-height:72vh;min-height:400px}}
+@media(max-width:760px){
+  .questionnaire-library{padding:15px}
+  .questionnaire-filter button{min-height:44px;font-size:11px}
+  .questionnaire-list-item{min-height:68px}
+  .questionnaire-toolbar-actions{gap:8px}
+  .questionnaire-toolbar-actions>button{flex:1 1 145px;min-height:46px}
+  .questionnaire-section-top{gap:9px}
+  .questionnaire-reorder-actions button,.questionnaire-option-row button,.questionnaire-column-row button{width:44px;height:44px}
+  .questionnaire-details-card,.questionnaire-section-card{padding:14px}
+  .questionnaire-preview-panel{max-height:70dvh;min-height:360px}
+}
+
+
+/* Ajustes finais da revisão: marcador alinhado ao grid e prévia mais legível */
+.questionnaire-section-top{grid-template-columns:36px minmax(0,1fr) auto}
+.questionnaire-section-number{width:36px;height:36px}
+.questionnaire-preview-note{font-size:12px}
+.questionnaire-preview-description,.questionnaire-preview-section>p{font-size:12px;line-height:1.55}
+.questionnaire-preview-question>small{font-size:12px}
+.questionnaire-preview-choices label{font-size:12px}
+.questionnaire-preview-table{font-size:12px}
+.questionnaire-preview-table th,.questionnaire-preview-table td{padding:8px 6px}
+.questionnaire-preview-signature span{font-size:12px}
+@media(max-width:760px){.questionnaire-section-top{grid-template-columns:36px minmax(0,1fr)}.questionnaire-section-number{width:36px;height:36px}}
