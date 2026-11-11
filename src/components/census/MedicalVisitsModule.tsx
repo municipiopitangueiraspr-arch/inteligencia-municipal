@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Activity, AlertCircle, ArrowLeft, CalendarClock, CalendarDays, Check, CheckCircle2, ClipboardList, Clock3, HeartPulse, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Plus, RefreshCw, RotateCcw, Search, Stethoscope, X } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { getMapLotCode } from './territory/lotDisplay'
+import { zoomMapViewAtOffset } from './mapLogic'
 import { useCensusDialogFocus } from './territory/useCensusDialogFocus'
 import '../FleetModule.css'
 import './CensusModule.css'
@@ -94,7 +96,10 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
   const [priorityLotId, setPriorityLotId] = useState('')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL')
   const [prioritySearch, setPrioritySearch] = useState('')
-  const [zoom, setZoom] = useState(1)
+  const [mapView, setMapView] = useState({ zoom: 1, pan: { x: 0, y: 0 } })
+  const mapPointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const medicalMapViewportRef = useRef<HTMLDivElement | null>(null)
+  const mapPinchRef = useRef<{ distance: number; view: typeof mapView } | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const confirmationRef = useCensusDialogFocus(Boolean(pendingAction), () => setPendingAction(null))
 
@@ -198,6 +203,45 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
     counts[key] = (counts[key] || 0) + 1
     return counts
   }, {})
+  const zoomMedicalMap = (factor: number, client?: { x: number; y: number }, bounds?: DOMRect) => {
+    const anchor = client && bounds ? { x: client.x - bounds.left - bounds.width / 2, y: client.y - bounds.top - bounds.height / 2 } : { x: 0, y: 0 }
+    setMapView((current) => zoomMapViewAtOffset(current, factor, anchor))
+  }
+  useEffect(() => {
+    const viewport = medicalMapViewportRef.current
+    if (!viewport) return
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const bounds = viewport.getBoundingClientRect()
+      const anchor = { x: event.clientX - bounds.left - bounds.width / 2, y: event.clientY - bounds.top - bounds.height / 2 }
+      setMapView((current) => zoomMapViewAtOffset(current, event.deltaY < 0 ? 1.15 : 1 / 1.15, anchor))
+    }
+    viewport.addEventListener('wheel', handleWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', handleWheel)
+  }, [])
+  const onMedicalPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    mapPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (mapPointersRef.current.size === 2) {
+      const points = Array.from(mapPointersRef.current.values())
+      mapPinchRef.current = { distance: Math.hypot(points[1].x-points[0].x, points[1].y-points[0].y), view: mapView }
+    }
+  }
+  const onMedicalPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!mapPointersRef.current.has(event.pointerId)) return
+    mapPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (mapPointersRef.current.size < 2 || !mapPinchRef.current) return
+    event.preventDefault()
+    const points = Array.from(mapPointersRef.current.values())
+    const distance = Math.hypot(points[1].x-points[0].x, points[1].y-points[0].y)
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const midpoint = { x: (points[0].x+points[1].x)/2, y: (points[0].y+points[1].y)/2 }
+    const anchor = { x: midpoint.x-bounds.left-bounds.width/2, y: midpoint.y-bounds.top-bounds.height/2 }
+    setMapView(zoomMapViewAtOffset(mapPinchRef.current.view, distance / Math.max(1,mapPinchRef.current.distance), anchor))
+  }
+  const onMedicalPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    mapPointersRef.current.delete(event.pointerId)
+    mapPinchRef.current = null
+  }
   const selectSection = (next: MedicalSection) => { setSection(next); setMenuOpen(false); setNotice('') }
   const selectLotOnMap = (lot: Lot, openForm = false) => {
     setSelectedLotId(lot.id); setShowVisitForm(openForm)
@@ -293,8 +337,8 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
             <div className="medical-privacy-note"><HeartPulse size={16} /><span><strong>Formulário operacional.</strong> Registra lote, data, resultado e retorno. Não inclua nomes, diagnósticos ou informações clínicas.</span></div>
             <div className="medical-map-summary"><span><i className="never" />{(lotStateCounts.never || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes sem visita</span><span><i className="no-contact" />{(lotStateCounts['no-contact'] || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes sem contato</span><span><i className="cancelled" />{(lotStateCounts.cancelled || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com visita cancelada</span><span><i className="visited" />{(lotStateCounts.visited || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com visita realizada</span><span><i className="return" />{(lotStateCounts.return || 0).toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes com retorno pendente</span></div>
             <div className={`medical-workspace${selectedLot ? ' has-selection' : ''}`}>
-              <section className="medical-map-card" aria-label="Mapa de lotes para visitas médicas"><header><span><MapPinned size={16} /> Selecione um lote para registrar ou consultar</span><div><button type="button" aria-label="Aumentar zoom" onClick={() => setZoom((value) => Math.min(16, value * 1.2))} disabled={!lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" aria-label="Diminuir zoom" onClick={() => setZoom((value) => Math.max(.65, value / 1.2))} disabled={!lots.length}><Minus size={16} /></button><button type="button" aria-label="Restaurar zoom" onClick={() => setZoom(1)}><RotateCcw size={15} /></button></div></header>
-                <div className="medical-map-viewport">{loading ? <div className="medical-map-empty"><LoaderCircle className="spin" size={23} />Carregando mapa e visitas…</div> : error && !lots.length ? <div className="medical-map-empty error"><AlertCircle size={22} /><strong>Não foi possível abrir o mapa</strong><span>{error}</span></div> : !mapImport || lots.length === 0 ? <div className="medical-map-empty"><MapPinned size={24} /><strong>Mapa territorial indisponível</strong><span>Publique um mapa territorial em Saúde da Família/ACS antes de iniciar as visitas médicas.</span></div> : <svg className="medical-map-svg" viewBox="0 0 1000 1000" style={{ transform: `scale(${zoom})` }} role="group" aria-label="Mapa de lotes com estado da visita e do retorno">{lots.map((lot) => { const code = lotCode(lot); const zone = lot.zone_id ? zoneById.get(lot.zone_id) : null; const state = mapState(lot.id); return <polygon key={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={state.color} fillOpacity=".88" stroke={selectedLotId === lot.id ? '#123f53' : '#fff'} strokeWidth={selectedLotId === lot.id ? 2.2 : 1.15} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${code}, ${zone?.name || 'sem zona'}, ${state.label}`} className={selectedLotId === lot.id ? 'selected' : ''} onClick={() => selectLotOnMap(lot)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLotOnMap(lot) } }}><title>{`${code} · ${zone?.name || 'Sem zona'} · ${state.label}`}</title></polygon> })}</svg>}
+              <section className="medical-map-card" aria-label="Mapa de lotes para visitas médicas"><header><span><MapPinned size={16} /> Selecione um lote para registrar ou consultar</span><div><button type="button" aria-label="Aumentar zoom" onClick={() => zoomMedicalMap(1.2)} disabled={!lots.length}><Plus size={16} /></button><b>{Math.round(mapView.zoom * 100)}%</b><button type="button" aria-label="Diminuir zoom" onClick={() => zoomMedicalMap(1 / 1.2)} disabled={!lots.length}><Minus size={16} /></button><button type="button" aria-label="Restaurar zoom" onClick={() => setMapView({ zoom: 1, pan: { x: 0, y: 0 } })}><RotateCcw size={15} /></button></div></header>
+                <div ref={medicalMapViewportRef} className="medical-map-viewport" onPointerDown={onMedicalPointerDown} onPointerMove={onMedicalPointerMove} onPointerUp={onMedicalPointerUp} onPointerCancel={onMedicalPointerUp}>{loading ? <div className="medical-map-empty"><LoaderCircle className="spin" size={23} />Carregando mapa e visitas…</div> : error && !lots.length ? <div className="medical-map-empty error"><AlertCircle size={22} /><strong>Não foi possível abrir o mapa</strong><span>{error}</span></div> : !mapImport || lots.length === 0 ? <div className="medical-map-empty"><MapPinned size={24} /><strong>Mapa territorial indisponível</strong><span>Publique um mapa territorial em Saúde da Família/ACS antes de iniciar as visitas médicas.</span></div> : <svg className="medical-map-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${mapView.pan.x}px, ${mapView.pan.y}px) scale(${mapView.zoom})`, transformOrigin: '50% 50%' }} role="group" aria-label="Mapa de lotes com estado da visita e do retorno">{lots.map((lot) => { const code = lotCode(lot); const zone = lot.zone_id ? zoneById.get(lot.zone_id) : null; const state = mapState(lot.id); return <polygon key={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={state.color} fillOpacity=".88" vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${code}, ${zone?.name || 'sem zona'}, ${state.label}`} className={selectedLotId === lot.id ? 'selected' : ''} onClick={() => selectLotOnMap(lot)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLotOnMap(lot) } }}><title>{`${code} · ${zone?.name || 'Sem zona'} · ${state.label}`}</title></polygon> })}</svg>}
                   {!loading && lots.length > 0 && <div className="medical-map-legend"><span><i className="never" />Sem visita registrada</span><span><i className="no-contact" />Sem contato</span><span><i className="cancelled" />Visita cancelada</span><span><i className="visited" />Visita realizada</span><span><i className="return" />Retorno pendente</span></div>}
                 </div>
               </section>

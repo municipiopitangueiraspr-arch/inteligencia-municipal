@@ -111,3 +111,12 @@
 .census-no-zones small{font-size:12px}
 @media(max-width:900px){.census-management-card,.census-link-card{padding:18px}.census-catalog-list{max-height:300px}.census-link-form>.fleet-primary-button{min-height:46px}}
 @media(max-width:520px){.census-management-card,.census-link-card{padding:15px}.census-catalog-row{padding:10px}.census-catalog-row>strong{font-size:13px}}
+
+/* Mapas ACS: realce por preenchimento, sem bordas brancas nos lotes. */
+.census-workspace-svg polygon,
+.census-workspace-svg polygon:hover,
+.census-workspace-svg polygon:focus-visible,
+.census-workspace-svg polygon.census-lot-selected{stroke:none!important;stroke-width:0!important;outline:none!important}
+.census-workspace-svg polygon.census-lot-selected{filter:brightness(1.2) saturate(1.22)!important}
+
+.census-map-svg polygon,.census-map-svg polygon:hover,.census-map-svg polygon:focus-visible{stroke:none!important;stroke-width:0!important;outline:none!important}

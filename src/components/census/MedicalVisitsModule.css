@@ -9,3 +9,11 @@
 .medical-map-summary{color:#52696d;font-size:12px;line-height:1.4}
 .medical-map-legend{gap:8px 11px;font-size:11px;line-height:1.4}
 @media(max-width:600px){.medical-map-summary{font-size:11px}.medical-map-legend{max-width:calc(100% - 16px);max-height:30vh;overflow:auto;font-size:10px}}
+
+.medical-map-viewport{touch-action:none}
+.medical-map-svg polygon,
+.medical-map-svg polygon:hover,
+.medical-map-svg polygon:focus-visible,
+.medical-map-svg polygon.selected{stroke:none!important;stroke-width:0!important;outline:none!important}
+.medical-map-svg polygon.selected{filter:brightness(1.12) saturate(1.1)!important}
+.medical-map-viewport{overscroll-behavior:contain}

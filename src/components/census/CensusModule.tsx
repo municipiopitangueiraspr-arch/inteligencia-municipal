@@ -255,7 +255,7 @@ function MapPreparationWorkspace() {
   const areaGestureRef = useRef<AreaSelectionGesture | null>(null)
   const areaRectOverlayRef = useRef<SVGRectElement | null>(null)
   const pointerMapRef = useRef(new Map<number, { x: number; y: number }>())
-  const pinchRef = useRef<{ distance: number; zoom: number } | null>(null)
+  const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; anchor: { x: number; y: number } } | null>(null)
   const pinchWasActiveRef = useRef(false)
   const pendingLotKeyRef = useRef<string | null>(null)
   const movedRef = useRef(false)
@@ -361,7 +361,9 @@ function MapPreparationWorkspace() {
     pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
     if (pointerMapRef.current.size === 2 && !areaSelectMode) {
       const points = [...pointerMapRef.current.values()]
-      pinchRef.current = { distance: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y), zoom: mapView.zoom }
+      const bounds = mapViewportRef.current?.getBoundingClientRect()
+      const mid = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 }
+      pinchRef.current = { distance: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y), zoom: mapView.zoom, pan: { ...mapView.pan }, anchor: bounds ? { x: mid.x - bounds.left - bounds.width / 2, y: mid.y - bounds.top - bounds.height / 2 } : { x: 0, y: 0 } }
       pinchWasActiveRef.current = true
       movedRef.current = true
       setDragging(false)
@@ -401,7 +403,13 @@ function MapPreparationWorkspace() {
     if (pointerMapRef.current.size >= 2 && pinchRef.current) {
       const points = [...pointerMapRef.current.values()]
       const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
-      if (pinchRef.current.distance > 0) setMapView((current) => ({ ...current, zoom: Math.min(64, Math.max(0.65, pinchRef.current!.zoom * distance / pinchRef.current!.distance)) }))
+      if (pinchRef.current.distance > 0) {
+        const bounds = mapViewportRef.current?.getBoundingClientRect()
+        const mid = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 }
+        const anchor = bounds ? { x: mid.x - bounds.left - bounds.width / 2, y: mid.y - bounds.top - bounds.height / 2 } : pinchRef.current.anchor
+        const next = zoomMapViewAtOffset({ zoom: pinchRef.current.zoom, pan: pinchRef.current.pan }, distance / pinchRef.current.distance, anchor)
+        setMapView(next)
+      }
       return
     }
     if (Math.hypot(event.clientX - dragStart.current.x, event.clientY - dragStart.current.y) < 8) return

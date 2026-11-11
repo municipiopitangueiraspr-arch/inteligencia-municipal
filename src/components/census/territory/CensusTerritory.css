@@ -247,7 +247,7 @@
 @media(prefers-reduced-motion:reduce){.census-territory-svg polygon.selected{animation:none;transition:none}}
 
 /* O foco nativo do SVG desenha um retângulo sobre o bounding box; o foco visual é o pulso interno. */
-.census-territory-svg polygon:focus,.census-territory-svg polygon:focus-visible{outline:none!important;outline-width:0!important;stroke:none!important;stroke-width:0!important;-webkit-tap-highlight-color:transparent}
+
 
 
 /* Mais contraste e leitura semântica, preservando os estados atuais do mapa */
@@ -268,7 +268,7 @@
 .census-household-summary small{font-size:10px}
 .census-visit-row-heading strong,.census-response-history-link strong{font-size:12px}
 .census-visit-row-heading small,.census-response-history-link small{font-size:10px}
-.census-territory-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
+
 .census-workspace-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
 @media(max-width:1100px){.census-map-mode-tabs button,.census-map-zone-chip{min-height:44px;padding:10px 13px}.census-territory-toolbar button{width:44px;height:44px;min-width:44px}.census-territory-badges span{min-height:42px}}
 @media(max-width:850px){.census-territory-legend{max-width:calc(100% - 16px);max-height:28vh;overflow:auto;padding:10px 12px}.census-territory-panel-header{padding:16px}.census-territory-panel-scroll{gap:14px;padding:14px}}
@@ -286,8 +286,8 @@
 @media(max-width:760px){.census-map-metrics strong small{font-size:10px}.census-map-metrics span{font-size:10px}}
 .census-territory-viewport{background-color:#fbfcfd;background-image:radial-gradient(#dbe4e9 1px,transparent 1px)}
 .census-territory-legend .unassigned{background:var(--acs-chart-no-activity);border-color:#fff;box-shadow:0 0 0 1px #4b5563}
-.census-territory-svg polygon:not(.selected){stroke:#fff!important;stroke-width:1px!important;vector-effect:non-scaling-stroke}
-.census-territory-svg polygon:focus-visible{stroke:#143d49!important;stroke-width:2.5px!important}
+
+
 .census-map-metrics>div.no-visit{--metric-accent:var(--acs-chart-no-visit)}
 @media(min-width:761px){.census-map-metrics:has(> .no-activity){grid-template-columns:repeat(5,minmax(0,1fr))}}
 .census-map-tooltip{position:absolute;z-index:8;display:grid;gap:6px;width:max-content;max-width:min(300px,calc(100% - 20px));padding:10px 12px;border:1px solid #c8d5dc;border-radius:10px;background:#fff;box-shadow:0 8px 24px #1f354033;color:#344b57;font-size:12px;line-height:1.35;pointer-events:none;transform:translate(-50%,-100%)}
@@ -302,7 +302,7 @@
 .census-territory-lot-meta strong{color:#214d56;font-size:15px}
 .census-visit-dialog-context{margin:5px 0 0;color:#52696d;font-size:12px;line-height:1.35}
 @media(max-width:560px){.census-map-tooltip{max-width:calc(100% - 16px);padding:9px 10px;font-size:11px}.census-map-tooltip strong{font-size:12px}.census-territory-lot-meta{align-items:start}.census-territory-selected-status{font-size:10px}}
-.census-territory-svg polygon:hover:not(.selected){filter:brightness(1.08) saturate(1.08);stroke:#385a66!important;stroke-width:1.5px!important}
+
 .census-territory-empty-filter{position:absolute;inset:0 0 60px;z-index:3;display:grid;align-content:center;justify-items:center;gap:8px;padding:24px;background:#fbfcfde8;color:#52696d;text-align:center;pointer-events:none}
 .census-territory-empty-filter svg{color:#59717b}
 .census-territory-empty-filter strong{color:#294e58;font-size:14px}
@@ -332,3 +332,13 @@
 .census-dossier-households>.census-add-household-button{min-height:44px}
 @media(max-width:1100px){.census-map-zone-display button{min-height:44px;padding:10px 12px}}
 @media(max-width:760px){.census-map-zone-display{align-items:stretch}.census-map-zone-display>span{width:100%;min-height:28px}.census-map-zone-display button{flex:1}.census-map-zone-filter-options .census-map-zone-chip{min-width:calc(50% - 6px)}.census-dossier-household select{min-height:46px}}
+
+/* Os polígonos usam preenchimento limpo; apenas lotes fora do filtro zonal mantêm silhueta. */
+.census-territory-svg polygon:not(.silhouette),
+.census-territory-svg polygon:not(.silhouette):hover,
+.census-territory-svg polygon:not(.silhouette):focus-visible,
+.census-territory-svg polygon:not(.silhouette).selected{stroke:none!important;stroke-width:0!important;filter:brightness(1.06) saturate(1.04)!important;outline:none!important}
+.census-territory-svg polygon.silhouette,
+.census-territory-svg polygon.silhouette:hover,
+.census-territory-svg polygon.silhouette:focus-visible{fill:none!important;stroke:#202833!important;stroke-width:1.5px!important;filter:none!important;outline:none!important}
+.census-territory-legend i.filtered-out{background:transparent!important;border:1.5px solid #202833;box-sizing:border-box}
