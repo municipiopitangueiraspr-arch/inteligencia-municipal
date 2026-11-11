@@ -308,3 +308,27 @@
 .census-territory-empty-filter strong{color:#294e58;font-size:14px}
 .census-territory-empty-filter span{font-size:12px;line-height:1.4}
 @media(max-width:760px){.census-map-zone-filters{gap:6px}.census-map-zone-chip{font-size:11px}.census-map-filter-count{font-size:12px}.census-map-filter-row .acs-filter-select{flex-basis:auto}.census-territory-empty-filter{bottom:70px;padding:16px}}
+
+
+/* Mapa territorial: leitura por zona e dossiê operacional simplificado */
+.census-map-zone-display{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.census-map-zone-display>span{margin-right:3px;color:#49676d;font-size:11px;font-weight:800}
+.census-map-zone-display button{min-height:34px;padding:6px 10px;border:1px solid #d5e1e3;border-radius:8px;background:#fff;color:#425f66;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
+.census-map-zone-display button:hover,.census-map-zone-display button.active{border-color:#4d8992;background:#eaf6f5;color:#1f6872}
+.census-territory-legend i.complete-view{background:#4b5563;border-color:#374151}
+.census-map-tooltip{gap:7px;max-width:min(340px,calc(100% - 20px));line-height:1.45}
+.census-map-tooltip>span:not(.census-map-tooltip-status){overflow-wrap:anywhere}
+.census-territory-dossier-simple{gap:12px}
+.census-dossier-households{display:grid;gap:9px;padding:11px;border:1px solid #dce8e8;border-radius:11px;background:#fbfdfd}
+.census-dossier-section-heading{display:flex;align-items:center;justify-content:space-between;color:#315c64;font-size:13px;font-weight:800}
+.census-dossier-section-heading span{display:grid;place-items:center;min-width:26px;height:26px;padding:0 6px;border-radius:999px;background:#eaf5f4;color:#276e78;font-size:11px}
+.census-dossier-household{display:grid;gap:8px;padding:10px;border:1px solid #dce8e8;border-radius:9px;background:#fff}
+.census-dossier-household>div{display:flex;align-items:center;gap:8px;color:#315c64}
+.census-dossier-household>div svg{flex:none;color:#357b85}
+.census-dossier-household>div strong{font-size:12px;overflow-wrap:anywhere}
+.census-dossier-household>label{display:grid;gap:5px;color:#526d72;font-size:11px;font-weight:800}
+.census-dossier-household select{width:100%;min-height:42px;padding:8px 10px;border:1px solid #cddddd;border-radius:8px;background:#fff;color:#315d65;font:inherit;font-size:12px;font-weight:600}
+.census-dossier-no-forms{color:#647c80;font-size:11px}
+.census-dossier-households>.census-add-household-button{min-height:44px}
+@media(max-width:1100px){.census-map-zone-display button{min-height:44px;padding:10px 12px}}
+@media(max-width:760px){.census-map-zone-display{align-items:stretch}.census-map-zone-display>span{width:100%;min-height:28px}.census-map-zone-display button{flex:1}.census-map-zone-filter-options .census-map-zone-chip{min-width:calc(50% - 6px)}.census-dossier-household select{min-height:46px}}
