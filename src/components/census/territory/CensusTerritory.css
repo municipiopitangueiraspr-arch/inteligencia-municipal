@@ -211,18 +211,25 @@
 
 .census-map-insights{display:grid;gap:10px;margin-bottom:12px;padding:12px;border:1px solid #d8e6e7;border-radius:14px;background:#fff}
 .census-map-mode-tabs{display:flex;flex-wrap:wrap;gap:7px}
-.census-map-mode-tabs button,.census-map-pending-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid #d5e4e4;border-radius:9px;background:#f8fbfb;color:#4e7076;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
-.census-map-mode-tabs button:hover,.census-map-mode-tabs button.active,.census-map-pending-toggle.active{border-color:#4d8992;background:#eaf6f5;color:#1f6872}
+.census-map-mode-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 12px;border:1px solid #d5e4e4;border-radius:9px;background:#f8fbfb;color:#4e7076;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
+.census-map-mode-tabs button:hover,.census-map-mode-tabs button.active{border-color:#4d8992;background:#eaf6f5;color:#1f6872}
 .census-map-filter-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
 .census-map-filter-row label{display:flex;align-items:center;gap:7px;color:#557278;font-size:11px;font-weight:800}
 .census-map-filter-row select{min-width:220px;padding:9px 10px;border:1px solid #d2e1e2;border-radius:8px;background:#fff;color:#315d65;font:inherit;font-weight:600}
-.census-map-pending-toggle:disabled{opacity:.5;cursor:not-allowed}
+.census-map-zone-filters{display:grid;gap:7px;padding-top:9px;border-top:1px solid #e5eded}
+.census-map-zone-filter-options{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.census-map-filter-caption{display:inline-flex;align-items:center;gap:6px;margin-right:4px;color:#49676d;font-size:11px;font-weight:800}
+.census-map-zone-chip{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 9px;border:1px solid #d5e1e3;border-radius:8px;background:#fff;color:#425f66;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
+.census-map-zone-chip:hover,.census-map-zone-chip.active{border-color:#4d8992;background:#eaf6f5;color:#1f6872}
+.census-map-zone-chip i{width:10px;height:10px;flex:none;border:1px solid #70838a;border-radius:50%}
+.census-map-zone-chip i.unassigned{background:#4b5563;border-color:#374151;box-shadow:0 0 0 1px #fff}
+.census-map-filter-count{align-self:center;color:#52696d;font-size:11px;font-weight:700}
 .census-map-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .census-map-metrics>div{display:grid;gap:3px;padding:9px 10px;border:1px solid #e1ebeb;border-radius:9px;background:#f8fbfb}
 .census-map-metrics strong{color:#246e77;font:800 18px 'Manrope',sans-serif}
 .census-map-metrics span{color:#748a8e;font-size:9px;font-weight:800}
 .census-map-empty-filter{display:flex;align-items:center;gap:7px;padding:9px 10px;border-radius:9px;background:#f2f8f7;color:#618087;font-size:11px}
-@media(max-width:760px){.census-map-mode-tabs{display:grid;grid-template-columns:1fr}.census-map-mode-tabs button{justify-content:flex-start}.census-map-filter-row{align-items:stretch;flex-direction:column}.census-map-filter-row label{align-items:stretch;flex-direction:column}.census-map-filter-row select{min-width:0}.census-map-pending-toggle{width:100%}.census-map-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.census-map-mode-tabs{display:grid;grid-template-columns:1fr}.census-map-mode-tabs button{justify-content:flex-start}.census-map-filter-row{align-items:stretch;flex-direction:column}.census-map-filter-row label{align-items:stretch;flex-direction:column}.census-map-filter-row select{min-width:0}.census-map-zone-filter-options{align-items:stretch}.census-map-filter-caption{width:100%;min-height:30px}.census-map-zone-chip{min-height:42px}.census-map-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* Separação visual entre limites de lotes adjacentes */
 .census-territory-svg polygon{paint-order:stroke fill}
@@ -248,7 +255,7 @@
 .census-territory-toolbar{font-size:12px;line-height:1.4}
 .census-territory-legend{gap:8px 12px;font-size:11px;line-height:1.4}
 .census-territory-legend i{width:13px;height:13px}
-.census-map-mode-tabs button,.census-map-pending-toggle{font-size:12px}
+.census-map-mode-tabs button,.census-map-zone-chip{font-size:12px}
 .census-map-metrics span{font-size:11px;line-height:1.3}
 .census-territory-panel-header h3{font-size:20px}
 .census-territory-lot-meta{font-size:11px}
@@ -263,7 +270,7 @@
 .census-visit-row-heading small,.census-response-history-link small{font-size:10px}
 .census-territory-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
 .census-workspace-svg polygon:focus-visible{outline:none!important;stroke:#143d49!important;stroke-width:4!important;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 3px #143d49)!important}
-@media(max-width:1100px){.census-map-mode-tabs button,.census-map-pending-toggle{min-height:44px;padding:10px 13px}.census-territory-toolbar button{width:44px;height:44px;min-width:44px}.census-territory-badges span{min-height:42px}}
+@media(max-width:1100px){.census-map-mode-tabs button,.census-map-zone-chip{min-height:44px;padding:10px 13px}.census-territory-toolbar button{width:44px;height:44px;min-width:44px}.census-territory-badges span{min-height:42px}}
 @media(max-width:850px){.census-territory-legend{max-width:calc(100% - 16px);max-height:28vh;overflow:auto;padding:10px 12px}.census-territory-panel-header{padding:16px}.census-territory-panel-scroll{gap:14px;padding:14px}}
 .census-map-metrics>div{--metric-accent:var(--acs-chart-territory);border-left:3px solid var(--metric-accent);background:#fbfdfd}
 .census-map-metrics>div.coverage,.census-map-metrics>div.completed{--metric-accent:var(--acs-chart-completed)}
@@ -296,3 +303,8 @@
 .census-visit-dialog-context{margin:5px 0 0;color:#52696d;font-size:12px;line-height:1.35}
 @media(max-width:560px){.census-map-tooltip{max-width:calc(100% - 16px);padding:9px 10px;font-size:11px}.census-map-tooltip strong{font-size:12px}.census-territory-lot-meta{align-items:start}.census-territory-selected-status{font-size:10px}}
 .census-territory-svg polygon:hover:not(.selected){filter:brightness(1.08) saturate(1.08);stroke:#385a66!important;stroke-width:1.5px!important}
+.census-territory-empty-filter{position:absolute;inset:0 0 60px;z-index:3;display:grid;align-content:center;justify-items:center;gap:8px;padding:24px;background:#fbfcfde8;color:#52696d;text-align:center;pointer-events:none}
+.census-territory-empty-filter svg{color:#59717b}
+.census-territory-empty-filter strong{color:#294e58;font-size:14px}
+.census-territory-empty-filter span{font-size:12px;line-height:1.4}
+@media(max-width:760px){.census-map-zone-filters{gap:6px}.census-map-zone-chip{font-size:11px}.census-map-filter-count{font-size:12px}.census-map-filter-row .acs-filter-select{flex-basis:auto}.census-territory-empty-filter{bottom:70px;padding:16px}}

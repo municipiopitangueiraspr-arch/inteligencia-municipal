@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
 import { CensusOverview } from './CensusOverview'
-import { assignLotToZone, assignLotsToZone, filterLotsByZone, getLotFillColor, getLotKey, groupLotSaveAssignments, mergeSelectedLotKeys, parseDxfLotBoundaries, selectLotKeysInRect, shouldStartMapPan, withLotIds, zoomMapViewAtOffset } from './mapLogic'
+import { assignLotToZone, assignLotsToZone, filterUnassignedLots, getLotFillColor, getLotKey, groupLotSaveAssignments, mergeSelectedLotKeys, parseDxfLotBoundaries, selectLotKeysInRect, shouldStartMapPan, withLotIds, zoomMapViewAtOffset } from './mapLogic'
 import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
 import { CensusTerritory } from './territory/CensusTerritory'
 import '../FleetModule.css'
@@ -236,7 +236,6 @@ function MapPreparationWorkspace() {
   const [lots, setLots] = useState<Lot[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
   const [activeZoneId, setActiveZoneId] = useState('')
-  const [zoneFilterIds, setZoneFilterIds] = useState<string[]>([])
   const [showOnlyUnassigned, setShowOnlyUnassigned] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
@@ -312,23 +311,12 @@ function MapPreparationWorkspace() {
   const toSvg = (point: Point) => toSvgPoint(point).join(',')
   const assignedCount = lots.filter((lot) => lot.zone_id).length
   const zoneCount = (zoneId: string) => lots.filter((lot) => lot.zone_id === zoneId).length
-  const visibleLots = filterLotsByZone(lots, zoneFilterIds, showOnlyUnassigned)
+  const visibleLots = filterUnassignedLots(lots, showOnlyUnassigned)
   const visibleLotKeys = new Set(visibleLots.map(getLotKey))
   const visibleLotsCount = visibleLots.length
 
-  function toggleZoneFilter(zoneId: string) {
-    setShowOnlyUnassigned(false)
-    setSelectedLotKeys([])
-    setZoneFilterIds((current) => current.length === 0 ? [zoneId] : current.includes(zoneId) ? current.filter((id) => id !== zoneId) : [...current, zoneId])
-  }
-  function showAllZones() {
-    setShowOnlyUnassigned(false)
-    setZoneFilterIds([])
-    setSelectedLotKeys([])
-  }
   function toggleUnassignedFilter() {
     setShowOnlyUnassigned((current) => !current)
-    setZoneFilterIds([])
     setSelectedLotKeys([])
   }
 
@@ -567,17 +555,15 @@ function MapPreparationWorkspace() {
         <div className={`census-workspace-map${saving ? ' saving' : ''}`}>
           <div className="census-map-toolbar"><span><Move size={14} /> {areaSelectMode ? 'Arraste da esquerda para a direita para incluir lotes inteiros; da direita para a esquerda para incluir os que cruzam a área. Esc cancela.' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para aproximar no cursor'}</span><div><button type="button" className={`census-area-selection-toggle${areaSelectMode ? ' active' : ''}`} aria-pressed={areaSelectMode} disabled={saving} onClick={toggleAreaSelectMode}><Move size={14} /><span>{areaSelectMode ? 'Sair da seleção por área' : 'Selecionar por área'}</span></button><button type="button" disabled={saving} onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" disabled={saving} onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" disabled={saving} onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div>
           <div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}${areaSelectMode ? ' area-select-mode' : ''}${isAreaSelecting ? ' area-selecting' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishPointerAction} onPointerCancel={cancelPointerAction}>
-            {bbox ? <><svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { if (!visibleLotKeys.has(getLotKey(lot))) return null; const zone = zones.find((item) => item.id === lot.zone_id); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke="none" strokeWidth="0" vectorEffect="non-scaling-stroke"><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg>{visibleLots.length === 0 && <div className="census-map-filter-empty" role="status"><Filter size={20} /><strong>Nenhum lote corresponde a este filtro</strong><span>Ajuste o filtro ou selecione “Todas as zonas”.</span></div>}</> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}
+            {bbox ? <><svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { if (!visibleLotKeys.has(getLotKey(lot))) return null; const zone = zones.find((item) => item.id === lot.zone_id); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke="none" strokeWidth="0" vectorEffect="non-scaling-stroke"><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg>{visibleLots.length === 0 && showOnlyUnassigned && <div className="census-map-filter-empty" role="status"><Filter size={20} /><strong>Nenhum lote corresponde a este filtro</strong><span>Desmarque “Ver lotes sem zona” para exibir todos os lotes.</span></div>}</> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}
           </div>
           <div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="selected" />Lote selecionado</span></div>
         </div>
         <aside className="census-workspace-zones">
-          <section className="census-prep-map-filter" aria-label="Filtrar lotes exibidos no mapa">
-            <div className="census-prep-map-filter-heading"><span><Filter size={15} /><strong>Exibir no mapa</strong></span><small>{visibleLotsCount.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes</small></div>
-            <button type="button" className={`census-prep-filter-all${!showOnlyUnassigned && zoneFilterIds.length === 0 ? ' active' : ''}`} aria-pressed={!showOnlyUnassigned && zoneFilterIds.length === 0} onClick={showAllZones} disabled={saving}>Todas as zonas</button>
-            <div className="census-prep-filter-zones">{zones.map((zone) => <label key={zone.id} className={showOnlyUnassigned ? 'disabled' : ''}><input type="checkbox" checked={zoneFilterIds.includes(zone.id)} disabled={saving || showOnlyUnassigned} onChange={() => toggleZoneFilter(zone.id)} /><i style={{ background: zone.color }} /><span>{zone.name}</span><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lotes</small></label>)}</div>
-            <button type="button" className={`census-prep-filter-unassigned${showOnlyUnassigned ? ' active' : ''}`} aria-pressed={showOnlyUnassigned} onClick={toggleUnassignedFilter} disabled={saving}><i />Exibir somente lotes sem zona <small>{lots.filter((lot) => !lot.zone_id).length.toLocaleString('pt-BR')}</small></button>
-            <p>{showOnlyUnassigned ? 'O mapa mostra apenas lotes ainda sem zona.' : zoneFilterIds.length ? `Mostrando somente ${zoneFilterIds.length} zona(s) selecionada(s).` : 'Sem zonas selecionadas no filtro, o mapa mostra todos os lotes.'}</p>
+          <section className="census-prep-map-filter" aria-label="Filtro de lotes">
+            <div className="census-prep-map-filter-heading"><span><Filter size={15} /><strong>Filtro de lotes</strong></span><small>{visibleLotsCount.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes</small></div>
+            <label className={`census-prep-filter-unassigned${showOnlyUnassigned ? ' active' : ''}`}><input type="checkbox" checked={showOnlyUnassigned} onChange={toggleUnassignedFilter} disabled={saving} /><i /> <span>Ver lotes sem zona</span><small>{lots.filter((lot) => !lot.zone_id).length.toLocaleString('pt-BR')} lotes</small></label>
+            <p>{showOnlyUnassigned ? 'Exibindo somente lotes sem zona.' : 'Desmarcado: todos os lotes são exibidos.'}</p>
           </section>
           <div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>
           {zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} disabled={saving} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}

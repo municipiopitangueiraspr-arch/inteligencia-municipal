@@ -72,11 +72,8 @@ export function getLotFillColor(lot: MapLotAssignment, zones: MapZoneColor[]) {
   return zones.find((zone) => zone.id === lot.zone_id)?.color || '#4b5563'
 }
 
-export function filterLotsByZone<T extends { zone_id?: string | null }>(lots: T[], zoneIds: string[], onlyUnassigned: boolean) {
-  if (onlyUnassigned) return lots.filter((lot) => !lot.zone_id)
-  if (!zoneIds.length) return lots
-  const selected = new Set(zoneIds)
-  return lots.filter((lot) => lot.zone_id && selected.has(lot.zone_id))
+export function filterUnassignedLots<T extends { zone_id?: string | null }>(lots: T[], onlyUnassigned: boolean) {
+  return onlyUnassigned ? lots.filter((lot) => !lot.zone_id) : lots
 }
 
 export function shouldStartMapPan(targetIsLot: boolean) {

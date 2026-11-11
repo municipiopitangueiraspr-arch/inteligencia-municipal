@@ -58,27 +58,18 @@
 .census-prep-map-filter-heading svg{color:#357582}
 .census-prep-map-filter-heading strong{font-size:12px}
 .census-prep-map-filter-heading>small{color:#52696d;font-size:10px;font-weight:700}
-.census-prep-filter-all{min-height:34px;padding:7px 9px;border:1px solid #d7e3e4;border-radius:8px;background:#fff;color:#46636a;text-align:left;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
-.census-prep-filter-all.active{border-color:#397b86;background:#eaf5f4;color:#215e68}
-.census-prep-filter-zones{display:grid;gap:4px;max-height:190px;overflow:auto}
-.census-prep-filter-zones label{display:flex;align-items:center;gap:8px;min-height:34px;padding:5px 7px;border:1px solid transparent;border-radius:7px;background:#fff;color:#385860;font-size:11px;cursor:pointer}
-.census-prep-filter-zones label:hover{border-color:#cadbdd;background:#f3f8f8}
-.census-prep-filter-zones label.disabled{opacity:.55;cursor:not-allowed}
-.census-prep-filter-zones input{width:16px;height:16px;flex:none;margin:0;accent-color:#287987}
-.census-prep-filter-zones i,.census-prep-filter-unassigned i{width:11px;height:11px;flex:none;border:1px solid #728890;border-radius:3px}
-.census-prep-filter-zones label>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-.census-prep-filter-zones small,.census-prep-filter-unassigned small{color:#52696d;font-size:10px;font-weight:700}
-.census-prep-filter-unassigned{display:flex;align-items:center;gap:8px;min-height:38px;padding:7px 9px;border:1px solid #cbd5df;border-radius:8px;background:#fff;color:#344256;text-align:left;font:700 11px 'DM Sans',sans-serif;cursor:pointer}
-.census-prep-filter-unassigned i{border-color:#374151;background:#4b5563}
+.census-prep-filter-unassigned{display:flex;align-items:center;gap:9px;min-height:40px;padding:8px 9px;border:1px solid #cbd5df;border-radius:8px;background:#fff;color:#344256;font-size:12px;font-weight:800;cursor:pointer}
+.census-prep-filter-unassigned input{width:17px;height:17px;flex:none;margin:0;accent-color:#4b5563}
+.census-prep-filter-unassigned i{width:11px;height:11px;flex:none;border:1px solid #374151;border-radius:3px;background:#4b5563}
 .census-prep-filter-unassigned span{flex:1}
-.census-prep-filter-unassigned small{margin-left:auto}
 .census-prep-filter-unassigned.active{border-color:#4b5563;background:#eef0f3;color:#293241;box-shadow:inset 3px 0 #4b5563}
+.census-prep-filter-unassigned small{margin-left:auto;color:#52696d;font-size:10px;font-weight:700}
 .census-prep-map-filter p{margin:0;color:#52696d;font-size:10px;line-height:1.4}
 .census-map-filter-empty{position:absolute;inset:0;z-index:2;display:grid;align-content:center;justify-items:center;gap:8px;padding:24px;background:#fbfcfde8;color:#52696d;text-align:center;pointer-events:none}
 .census-map-filter-empty svg{color:#59717b}
 .census-map-filter-empty strong{color:#294e58;font-size:14px}
 .census-map-filter-empty span{font-size:12px;line-height:1.4}
-@media(max-width:1100px){.census-prep-filter-all,.census-prep-filter-unassigned{min-height:44px}.census-prep-filter-zones label{min-height:42px;padding-inline:9px}}
+@media(max-width:1100px){.census-prep-filter-unassigned{min-height:44px}}
 
 
 /* Confirmações, mensagens e navegação: hierarquia visual acessível */
