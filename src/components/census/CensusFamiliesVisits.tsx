@@ -657,75 +657,92 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
           <div className="census-family-section-heading">
             <div>
               <span className="fleet-kicker">5 · LISTA OPERACIONAL</span>
-              <h3 id="census-family-filter-title">Encontrar um lote ou domicílio</h3>
-              <small>A lista detalha cada domicílio ativo e inclui uma linha presumida quando o lote não tem cadastro.</small>
+              <h3 id="census-family-filter-title">Encontrar lote ou domicílio</h3>
             </div>
             <Filter size={19} aria-hidden="true" />
           </div>
         </div>
         <div className="census-family-filters">
-          <label className="census-family-search">
+          <label className="census-family-search acs-filter-search">
             <Search size={17} aria-hidden="true" />
-            <span className="sr-only">Buscar por domicílio, lote, zona ou ACS</span>
             <input
+              type="search"
+              aria-label="Buscar lote, domicílio, zona ou ACS"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por lote, domicílio, zona ou ACS"
+              placeholder="Buscar lote, domicílio, zona ou ACS"
             />
           </label>
-          <label className="census-family-filter-control">
-            <span>Zona</span>
-            <select value={zoneFilter} onChange={(event) => setZoneFilter(event.target.value as ZoneFilter)}>
-              <option value="ALL">Todas as zonas</option>
-              <option value="NO_ZONE">Sem zona</option>
-              {visibleZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
-            </select>
-          </label>
-          <label className="census-family-filter-control">
-            <span>Visita no lote</span>
-            <select value={lotVisitFilter} onChange={(event) => { setVisitFilter('ALL'); setLotVisitFilter(event.target.value as LotVisitFilter) }}>
-              <option value="ALL">Todos os lotes</option>
-              <option value="NO_VISIT">Lote sem visita registrada</option>
-            </select>
-          </label>
-          <label className="census-family-filter-control">
-            <span>ACS da última visita</span>
-            <select value={acsFilter} onChange={(event) => setAcsFilter(event.target.value)}>
-              <option value="ALL">Todos os ACS</option>
-              {acsOptions.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-            </select>
-          </label>
-          <label className="census-family-filter-control">
-            <span>Cadastro</span>
-            <select value={householdFilter} onChange={(event) => setHouseholdFilter(event.target.value as HouseholdFilter)}>
-              <option value="ALL">Todos os registros</option>
-              <option value="REGISTERED">Domicílio cadastrado</option>
-              <option value="PRESUMED">Domicílio presumido</option>
-            </select>
-          </label>
-          <label className="census-family-filter-control">
-            <span>Visita do domicílio</span>
-            <select value={visitFilter} onChange={(event) => filterByVisit(event.target.value as VisitFilter)}>
-              <option value="ALL">Todas as situações</option>
-              <option value="NO_VISIT">Domicílio sem visita registrada</option>
-              {VISIT_STATUSES.map((status) => <option key={status.key} value={status.key}>{VISIT_LABELS[status.key]}</option>)}
-            </select>
-          </label>
-          <label className="census-family-filter-control">
-            <span>Questionário mais recente</span>
-            <select value={questionnaireFilter} onChange={(event) => setQuestionnaireFilter(event.target.value as QuestionnaireFilter)}>
-              <option value="ALL">Todos os estados</option>
-              <option value="NO_RESPONSE">Sem resposta</option>
-              <option value="SUBMITTED">Enviado</option>
-              <option value="DRAFT">Rascunho</option>
-            </select>
-          </label>
+          <div className="census-family-filter-groups">
+            <section className="census-family-filter-group territory" role="group" aria-label="Filtros de território e equipe">
+              <div className="census-family-filter-group-title"><MapPinned size={16} aria-hidden="true" /><strong>Território</strong></div>
+              <div className="census-family-filter-group-controls">
+                <label className="census-family-filter-control acs-filter-select" data-tone="territory" data-state={zoneFilter === 'NO_ZONE' ? 'no-visit' : undefined}>
+                  <span className="acs-filter-caption">Zona</span>
+                  <select value={zoneFilter} onChange={(event) => setZoneFilter(event.target.value as ZoneFilter)}>
+                    <option value="ALL">Todas</option>
+                    <option value="NO_ZONE">Sem zona</option>
+                    {visibleZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}
+                  </select>
+                </label>
+                <label className="census-family-filter-control acs-filter-select" data-tone="team">
+                  <span className="acs-filter-caption"><UsersRound size={14} aria-hidden="true" />ACS</span>
+                  <select value={acsFilter} onChange={(event) => setAcsFilter(event.target.value)}>
+                    <option value="ALL">Todos</option>
+                    {acsOptions.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                  </select>
+                </label>
+              </div>
+            </section>
+            <section className="census-family-filter-group household" role="group" aria-label="Filtros de lote e domicílio">
+              <div className="census-family-filter-group-title"><Home size={16} aria-hidden="true" /><strong>Lote e domicílio</strong></div>
+              <div className="census-family-filter-group-controls">
+                <label className="census-family-filter-control acs-filter-select" data-tone="visit" data-state={lotVisitFilter === 'NO_VISIT' ? 'no-visit' : undefined}>
+                  <span className="acs-filter-caption">Visita no lote</span>
+                  <select value={lotVisitFilter} onChange={(event) => { setVisitFilter('ALL'); setLotVisitFilter(event.target.value as LotVisitFilter) }}>
+                    <option value="ALL">Todos</option>
+                    <option value="NO_VISIT">Sem visita</option>
+                  </select>
+                </label>
+                <label className="census-family-filter-control acs-filter-select" data-tone="household" data-state={householdFilter === 'REGISTERED' ? 'registered' : householdFilter === 'PRESUMED' ? 'presumed' : undefined}>
+                  <span className="acs-filter-caption">Cadastro</span>
+                  <select value={householdFilter} onChange={(event) => setHouseholdFilter(event.target.value as HouseholdFilter)}>
+                    <option value="ALL">Todos</option>
+                    <option value="REGISTERED">Cadastrado</option>
+                    <option value="PRESUMED">Presumido</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+            <section className="census-family-filter-group status" role="group" aria-label="Filtros de situação">
+              <div className="census-family-filter-group-title"><Filter size={16} aria-hidden="true" /><strong>Situação</strong></div>
+              <div className="census-family-filter-group-controls">
+                <label className="census-family-filter-control acs-filter-select" data-tone="visit" data-state={visitFilter === 'NO_VISIT' ? 'no-visit' : visitFilter.toLowerCase().replace('_', '-')}>
+                  <span className="acs-filter-caption">Visita do domicílio</span>
+                  <select value={visitFilter} onChange={(event) => filterByVisit(event.target.value as VisitFilter)}>
+                    <option value="ALL">Todas</option>
+                    <option value="NO_VISIT">Sem visita</option>
+                    {VISIT_STATUSES.map((status) => <option key={status.key} value={status.key}>{VISIT_LABELS[status.key]}</option>)}
+                  </select>
+                </label>
+                <label className="census-family-filter-control acs-filter-select" data-tone="questionnaire" data-state={questionnaireFilter === 'NO_RESPONSE' ? 'no-response' : questionnaireFilter.toLowerCase()}>
+                  <span className="acs-filter-caption"><FileText size={14} aria-hidden="true" />Questionário</span>
+                  <select value={questionnaireFilter} onChange={(event) => setQuestionnaireFilter(event.target.value as QuestionnaireFilter)}>
+                    <option value="ALL">Todos</option>
+                    <option value="NO_RESPONSE">Sem resposta</option>
+                    <option value="SUBMITTED">Enviado</option>
+                    <option value="DRAFT">Rascunho</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+          </div>
         </div>
 
         <div className="census-family-results-heading" id="census-family-results">
           <div aria-live="polite" aria-atomic="true">
             <strong>{formatCount(filteredRows.length)} registros exibidos</strong>
-            <span>de {formatCount(rows.length)} registros: um por domicílio ativo ou lote sem cadastro ativo</span>
+            <span>de {formatCount(rows.length)} registros no total</span>
           </div>
           {hasFilters && <button type="button" className="census-family-clear-filters" onClick={clearFilters}>
             <X size={15} aria-hidden="true" /> Limpar filtros

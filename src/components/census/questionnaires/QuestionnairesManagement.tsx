@@ -267,9 +267,9 @@ export function QuestionnairesManagement() {
       <aside className="fleet-panel questionnaire-library">
         <div className="questionnaire-library-heading"><div><span className="fleet-kicker">BIBLIOTECA</span><h3>Questionários</h3></div><span className="questionnaire-count">{forms.length}</span></div>
         <div className="questionnaire-library-stats"><strong>{activeCount}</strong><span>ativo(s)</span><span className="questionnaire-stat-divider" /><span>{forms.length} cadastrado(s)</span></div>
-        <label className="questionnaire-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar questionário" aria-label="Buscar questionário" /></label>
-        <div className="questionnaire-filter" role="group" aria-label="Filtrar por estado">
-          {([['ALL', 'Todos'], ['DRAFT', 'Rascunho'], ['ACTIVE', 'Ativos'], ['INACTIVE', 'Inativos']] as Array<[StatusFilter, string]>).map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} className={statusFilter === value ? 'selected' : ''} onClick={() => setStatusFilter(value)}>{label}</button>)}
+        <label className="questionnaire-search acs-filter-search"><Search size={15} /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar questionário" aria-label="Buscar questionário" /></label>
+        <div className="questionnaire-filter acs-filter-segmented" role="group" aria-label="Filtrar por estado">
+          {([['ALL', 'Todos'], ['DRAFT', 'Rascunho'], ['ACTIVE', 'Ativos'], ['INACTIVE', 'Inativos']] as Array<[StatusFilter, string]>).map(([value, label]) => <button key={value} type="button" data-state={value.toLowerCase()} aria-pressed={statusFilter === value} className={statusFilter === value ? 'selected' : ''} onClick={() => setStatusFilter(value)}>{label}</button>)}
         </div>
         <div className="questionnaire-list" aria-label="Lista de questionários">
           {visibleForms.map((form) => <button type="button" key={form.id} className={`questionnaire-list-item${draft?.id === form.id && !isNew ? ' selected' : ''}`} onClick={() => selectQuestionnaire(form)} disabled={loading || saving}>

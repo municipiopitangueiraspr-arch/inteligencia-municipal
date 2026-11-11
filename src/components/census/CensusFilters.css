@@ -1,0 +1,216 @@
+/* Sistema visual comum de filtros do módulo Saúde da Família/ACS. */
+.census-main {
+  --acs-territory: #236875;
+  --acs-territory-soft: #eaf3f4;
+  --acs-completed: #236950;
+  --acs-completed-soft: #e8f5ee;
+  --acs-progress: #815a11;
+  --acs-progress-soft: #fff4df;
+  --acs-no-contact: #a93f35;
+  --acs-no-contact-soft: #ffefed;
+  --acs-neutral: #4d666b;
+  --acs-neutral-soft: #eef3f3;
+  --acs-questionnaire: #7251a0;
+  --acs-questionnaire-soft: #f2eef8;
+  --acs-return: #286292;
+  --acs-return-soft: #eaf2fb;
+}
+
+.acs-filter-search {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #d6e3e4;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--acs-territory);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.acs-filter-search:focus-within {
+  border-color: var(--acs-territory);
+  background: #f9fcfc;
+  box-shadow: 0 0 0 3px #2d7d8a1c;
+}
+.acs-filter-search > svg { flex: none; width: 18px; height: 18px; }
+.acs-filter-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #244d55;
+  font: 600 14px 'DM Sans', sans-serif;
+}
+.acs-filter-search input::placeholder { color: #60777c; opacity: 1; font-weight: 500; }
+
+.acs-filter-select {
+  --filter-accent: var(--acs-territory);
+  --filter-soft: var(--acs-territory-soft);
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 9px 12px 9px 14px;
+  border: 1px solid #d6e3e4;
+  border-left: 4px solid var(--filter-accent);
+  border-radius: 11px;
+  background: var(--filter-soft);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.acs-filter-select[data-tone='household'] { --filter-accent: var(--acs-questionnaire); --filter-soft: var(--acs-questionnaire-soft); }
+.acs-filter-select[data-tone='visit'] { --filter-accent: var(--acs-neutral); --filter-soft: var(--acs-neutral-soft); }
+.acs-filter-select[data-tone='questionnaire'] { --filter-accent: var(--acs-questionnaire); --filter-soft: var(--acs-questionnaire-soft); }
+.acs-filter-select[data-tone='team'] { --filter-accent: #426ca0; --filter-soft: #eef3fa; }
+.acs-filter-select[data-state='completed'], .acs-filter-select[data-state='submitted'], .acs-filter-select[data-state='registered'] { --filter-accent: var(--acs-completed); --filter-soft: var(--acs-completed-soft); }
+.acs-filter-select[data-state='all'] { --filter-accent: var(--acs-neutral); --filter-soft: var(--acs-neutral-soft); }
+.acs-filter-select[data-state='in-progress'], .acs-filter-select[data-state='draft'], .acs-filter-select[data-state='presumed'] { --filter-accent: var(--acs-progress); --filter-soft: var(--acs-progress-soft); }
+.acs-filter-select[data-state='no-contact'] { --filter-accent: var(--acs-no-contact); --filter-soft: var(--acs-no-contact-soft); }
+.acs-filter-select[data-state='cancelled'], .acs-filter-select[data-state='no-visit'], .acs-filter-select[data-state='no-response'] { --filter-accent: var(--acs-neutral); --filter-soft: var(--acs-neutral-soft); }
+.acs-filter-select:focus-within { border-color: var(--filter-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--filter-accent) 17%, transparent); }
+.acs-filter-select .acs-filter-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--filter-accent);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.acs-filter-select .acs-filter-caption svg { flex: none; width: 14px; height: 14px; }
+.acs-filter-select select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #284c53;
+  font: 700 14px 'DM Sans', sans-serif;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.acs-filter-select select:focus-visible { outline: 2px solid var(--filter-accent); outline-offset: 3px; border-radius: 3px; }
+
+.acs-filter-segmented {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid #d9e4e5;
+  border-radius: 12px;
+  background: #f3f7f7;
+}
+.acs-filter-segmented > button {
+  --segment-accent: var(--acs-neutral);
+  --segment-soft: #fff;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #536a6f;
+  font: 700 12px 'DM Sans', sans-serif;
+  text-align: center;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.acs-filter-segmented > button[data-state='completed'], .acs-filter-segmented > button[data-state='active'], .acs-filter-segmented > button[data-state='visited'], .acs-filter-segmented > button[data-state='submitted'] { --segment-accent: var(--acs-completed); --segment-soft: var(--acs-completed-soft); }
+.acs-filter-segmented > button[data-state='in-progress'], .acs-filter-segmented > button[data-state='draft'], .acs-filter-segmented > button[data-state='pending'] { --segment-accent: var(--acs-progress); --segment-soft: var(--acs-progress-soft); }
+.acs-filter-segmented > button[data-state='no-contact'], .acs-filter-segmented > button[data-state='overdue'] { --segment-accent: var(--acs-no-contact); --segment-soft: var(--acs-no-contact-soft); }
+.acs-filter-segmented > button[data-state='cancelled'], .acs-filter-segmented > button[data-state='inactive'], .acs-filter-segmented > button[data-state='no-visit'], .acs-filter-segmented > button[data-state='no-response'] { --segment-accent: var(--acs-neutral); --segment-soft: var(--acs-neutral-soft); }
+.acs-filter-segmented > button[data-state='return'], .acs-filter-segmented > button[data-state='upcoming'] { --segment-accent: var(--acs-return); --segment-soft: var(--acs-return-soft); }
+.acs-filter-segmented > button[aria-pressed='true'], .acs-filter-segmented > button.selected, .acs-filter-segmented > button.active {
+  border-color: color-mix(in srgb, var(--segment-accent) 38%, white);
+  background: var(--segment-soft);
+  color: var(--segment-accent);
+  box-shadow: 0 1px 3px #183b4114;
+}
+.acs-filter-segmented > button:focus-visible { outline: 3px solid color-mix(in srgb, var(--segment-accent) 35%, transparent); outline-offset: 2px; }
+.acs-filter-segmented > button > i, .acs-filter-segmented > button > .acs-filter-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--segment-accent);
+}
+.acs-filter-segmented > button > svg { width: 15px; height: 15px; flex: none; }
+
+@media (max-width: 640px) {
+  .acs-filter-search { min-height: 48px; }
+  .acs-filter-search input { font-size: 15px; }
+  .acs-filter-segmented { width: 100%; }
+  .acs-filter-segmented > button { min-height: 44px; padding: 8px 7px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .acs-filter-search, .acs-filter-select, .acs-filter-segmented > button { transition: none; }
+}
+
+/* Destaque por área do módulo e uso em controles existentes. */
+.acs-filter-segmented > button[data-state='territory'] { --segment-accent: var(--acs-territory); --segment-soft: var(--acs-territory-soft); }
+.acs-filter-segmented > button[data-state='questionnaire'] { --segment-accent: var(--acs-questionnaire); --segment-soft: var(--acs-questionnaire-soft); }
+.acs-filter-segmented > button[data-state='visits'] { --segment-accent: var(--acs-completed); --segment-soft: var(--acs-completed-soft); }
+.census-map-mode-tabs.acs-filter-segmented { width:100%; }
+.census-map-mode-tabs.acs-filter-segmented > button { min-height:46px; font-size:13px; }
+.census-map-filter-row .acs-filter-select { display:grid; flex:1 1 300px; min-width:230px; }
+.census-map-filter-row .acs-filter-select select { min-width:0; }
+.census-map-pending-toggle.acs-filter-toggle {
+  box-sizing:border-box;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:46px;
+  padding:9px 14px;
+  border:1px solid #d6e3e4;
+  border-radius:11px;
+  background:var(--acs-neutral-soft);
+  color:var(--acs-neutral);
+  font:700 13px 'DM Sans',sans-serif;
+  cursor:pointer;
+}
+.census-map-pending-toggle.acs-filter-toggle.active { border-color:#ddc078; background:var(--acs-progress-soft); color:var(--acs-progress); }
+.census-map-pending-toggle.acs-filter-toggle:disabled { opacity:.5; cursor:not-allowed; }
+.census-map-pending-toggle.acs-filter-toggle:focus-visible { outline:3px solid #2d7d8a55; outline-offset:2px; }
+.census-main .medical-search.acs-filter-search { box-sizing:border-box; width:min(260px,100%); min-width:180px; height:auto; min-height:46px; padding:0 12px; }
+.census-main .medical-search.acs-filter-search input { min-height:42px; font-size:13px; }
+.medical-return-toolbar .medical-return-filters.acs-filter-segmented { flex:1 1 auto; }
+.medical-return-toolbar .medical-return-filters.acs-filter-segmented > button { min-height:42px; font-size:12px; }
+.medical-priority-controls { align-items:stretch; flex-wrap:wrap; }
+.medical-priority-filter.acs-filter-segmented { flex:1 1 300px; }
+.medical-priority-filter.acs-filter-segmented > button { min-height:42px; }
+.census-main .questionnaire-filter.acs-filter-segmented { width:100%; }
+.census-main .questionnaire-filter.acs-filter-segmented > button { min-height:42px; font-size:12px; }
+@media (max-width:760px) {
+  .census-map-mode-tabs.acs-filter-segmented { display:grid; grid-template-columns:1fr; }
+  .census-map-mode-tabs.acs-filter-segmented > button { justify-content:flex-start; }
+  .census-map-filter-row .acs-filter-select { min-width:0; }
+  .medical-priority-controls { width:100%; }
+  .medical-priority-filter.acs-filter-segmented { flex-basis:100%; }
+  .medical-priority-filter.acs-filter-segmented > button { padding-inline:5px; font-size:11px; }
+}
+@media (max-width:560px) {
+  .medical-return-toolbar .medical-return-filters.acs-filter-segmented { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .medical-return-toolbar .medical-return-filters.acs-filter-segmented > button { padding-inline:5px; font-size:10px; }
+  .medical-priority-controls .medical-search.acs-filter-search { width:100%; min-width:0; }
+  .medical-priority-filter.acs-filter-segmented { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .census-main .questionnaire-filter.acs-filter-segmented { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

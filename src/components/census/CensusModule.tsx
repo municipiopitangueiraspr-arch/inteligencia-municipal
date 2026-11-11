@@ -10,6 +10,7 @@ import { CensusTerritory } from './territory/CensusTerritory'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
+import './CensusFilters.css'
 
 type Point = [number, number]
 type Lot = {
