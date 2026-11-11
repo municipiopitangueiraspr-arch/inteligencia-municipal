@@ -254,3 +254,11 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - Eventos de visita: 188 no total (61 concluídos, 62 em andamento, 50 sem contato e 15 cancelados). Questionários: 71 respostas (46 enviadas e 25 rascunhos). Estes são registros de evento/resposta, não lotes únicos.
 - Situação do lote pela visita mais recente: entre os 1.562 lotes zonados, 60 concluídos, 62 em andamento, 40 sem contato, 15 cancelados e 1.385 sem visita; os outros 20 lotes estão sem zona. Há 81 domicílios ativos sem visita própria, cinco deles em lotes que já têm visita a outro domicílio, justificando os filtros separados.
 - Após migration corretiva, `information_schema.role_table_grants` retornou apenas `SELECT` para `authenticated`; `anon` e `public` não têm privilégios na view. A view mantém `security_invoker=true`.
+
+
+## Limpeza visual de Saúde da Família/ACS (11/11/2026)
+- [x] Remover de todas as telas do módulo o aviso global “DEMO / Dados sintéticos de demonstração”; manter os dados e indicadores inalterados.
+- [x] Remover o título repetido “Famílias e visitas” dentro do conteúdo, mantendo o título do cabeçalho global, a descrição e as ações.
+- [x] Remover os estilos obsoletos e verificar ausência de mensagens de demonstração na interface.
+- [x] Validar build/lint: `npm run build` e `npm run lint` concluídos com sucesso; nenhuma mensagem de demo remanescente em `src`.
+- [ ] Publicar no GitHub Pages para teste remoto.

@@ -458,7 +458,6 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     <header className="census-family-page-header">
       <div>
         <span className="fleet-kicker">SAÚDE DA FAMÍLIA / ACS</span>
-        <h2>Famílias e visitas</h2>
         <p>Território, atividade de campo e questionários em uma única leitura.</p>
       </div>
       <div className="census-families-actions">

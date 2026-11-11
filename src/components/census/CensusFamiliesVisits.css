@@ -1,6 +1,5 @@
 .census-families-page{display:grid;gap:20px;color:#294d53}
 .census-family-page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
-.census-family-page-header h2{margin:5px 0 0;color:#173f47;font-size:26px;line-height:1.15}
 .census-family-page-header p{margin:7px 0 0;color:#607a7f;font-size:14px;line-height:1.5}
 .census-families-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .census-families-actions button{min-height:44px;padding:0 15px;font-size:13px}
@@ -147,7 +146,6 @@
 }
 @media(max-width:560px){
   .census-family-page-header{align-items:flex-start}
-  .census-family-page-header h2{font-size:23px}
   .census-family-page-header p{font-size:13px}
   .census-families-actions{width:100%}
   .census-families-actions button{flex:1;justify-content:center;min-height:46px;padding:0 9px;font-size:12px}
