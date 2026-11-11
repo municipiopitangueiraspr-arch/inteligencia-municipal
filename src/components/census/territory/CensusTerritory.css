@@ -283,3 +283,16 @@
 .census-territory-svg polygon:focus-visible{stroke:#143d49!important;stroke-width:2.5px!important}
 .census-map-metrics>div.no-visit{--metric-accent:var(--acs-chart-no-visit)}
 @media(min-width:761px){.census-map-metrics:has(> .no-activity){grid-template-columns:repeat(5,minmax(0,1fr))}}
+.census-map-tooltip{position:absolute;z-index:8;display:grid;gap:6px;width:max-content;max-width:min(300px,calc(100% - 20px));padding:10px 12px;border:1px solid #c8d5dc;border-radius:10px;background:#fff;box-shadow:0 8px 24px #1f354033;color:#344b57;font-size:12px;line-height:1.35;pointer-events:none;transform:translate(-50%,-100%)}
+.census-map-tooltip.below{transform:translate(-50%,8px)}
+.census-map-tooltip strong{color:#213c49;font-size:13px;font-weight:800}
+.census-map-tooltip-status{display:flex;align-items:center;gap:7px;color:#243f4b;font-weight:800}
+.census-map-tooltip-status i,.census-territory-selected-status i{width:10px;height:10px;flex:none;border:1px solid #ffffff;border-radius:50%;background:var(--acs-chart-no-activity);box-shadow:0 0 0 1px #647984}
+.census-map-tooltip>span:not(.census-map-tooltip-status){color:#506570}
+.census-territory-selected-status{display:inline-flex;align-items:center;gap:7px;width:max-content;max-width:100%;margin-top:3px;padding:5px 9px;border:1px solid;border-radius:999px;background:#f4f7f8;color:#344b57;font-size:11px;font-weight:800;line-height:1.3}
+.census-territory-lot-meta>span{display:grid;gap:3px}
+.census-territory-lot-meta small{color:#52696d;font-size:10px;font-weight:700}
+.census-territory-lot-meta strong{color:#214d56;font-size:15px}
+.census-visit-dialog-context{margin:5px 0 0;color:#52696d;font-size:12px;line-height:1.35}
+@media(max-width:560px){.census-map-tooltip{max-width:calc(100% - 16px);padding:9px 10px;font-size:11px}.census-map-tooltip strong{font-size:12px}.census-territory-lot-meta{align-items:start}.census-territory-selected-status{font-size:10px}}
+.census-territory-svg polygon:hover:not(.selected){filter:brightness(1.08) saturate(1.08);stroke:#385a66!important;stroke-width:1.5px!important}

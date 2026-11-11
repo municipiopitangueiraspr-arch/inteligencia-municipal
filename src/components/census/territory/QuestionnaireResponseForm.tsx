@@ -14,11 +14,12 @@ type QuestionnaireResponseFormProps = {
   readOnly: boolean
   saving: boolean
   responseStatus: ResponseStatus
+  contextLabel?: string
   onSave: (answers: QuestionnaireAnswers, status: ResponseStatus) => void
   onClose: () => void
 }
 
-export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, saving, responseStatus, onSave, onClose }: QuestionnaireResponseFormProps) {
+export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, saving, responseStatus, contextLabel, onSave, onClose }: QuestionnaireResponseFormProps) {
   const [answers, setAnswers] = useState<QuestionnaireAnswers>(initialAnswers)
   const [validationError, setValidationError] = useState('')
   const [confirmClose, setConfirmClose] = useState(false)
@@ -52,7 +53,7 @@ export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, savi
         <button type="button" className="census-icon-button" aria-label="Fechar resposta" onClick={requestClose} disabled={saving}><X size={20} /></button>
       </header>
       {form.description && <p className="census-response-description">{form.description}</p>}
-      <div className="census-response-context"><FileSignature size={16} /><span>{readOnly ? `Resposta ${responseStatus === 'SUBMITTED' ? 'enviada' : 'em rascunho'} · histórico preservado` : 'As respostas ficam vinculadas à visita e à versão deste questionário.'}</span></div>
+      <div className="census-response-context"><FileSignature size={16} /><span>{contextLabel && <><strong>{contextLabel}.</strong> </>}{readOnly ? `Resposta ${responseStatus === 'SUBMITTED' ? 'enviada' : 'em rascunho'} · histórico preservado` : 'As respostas ficam vinculadas à visita e à versão deste questionário.'}</span></div>
       {validationError && <div className="census-response-alert error" role="alert"><AlertCircle size={16} />{validationError}</div>}
       <div className="census-response-scroll">
         {form.form_schema.sections.map((section, index) => <ResponseSection key={section.id} section={section} sectionIndex={index} answers={answers} readOnly={readOnly} onChange={updateAnswer} />)}

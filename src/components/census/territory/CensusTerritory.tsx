@@ -26,6 +26,8 @@ type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; st
 type MapMode = 'zones' | 'questionnaire' | 'visits'
 type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
+type MapTooltip = { lotId: string; x: number; y: number }
+type LotActivity = { householdCount: number; visitCount: number; latestVisit: Visit | null }
 type ResponseEditorState = { responseId: string | null; visitId: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type VisitDraft = { household: Household; visitDate: string; notes: string; questionnaireId: string }
 type PendingWrite =
@@ -92,6 +94,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const [selectedLot, setSelectedLot] = useState<TerritoryLot | null>(null)
+  const [mapTooltip, setMapTooltip] = useState<MapTooltip | null>(null)
   const [panelError, setPanelError] = useState('')
   const [detailLoading, setDetailLoading] = useState(false)
   const [households, setHouseholds] = useState<Household[]>([])
@@ -169,6 +172,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     if (!viewport) return
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
+      setMapTooltip(null)
       setZoom((current) => Math.min(24, Math.max(0.65, current * (event.deltaY < 0 ? 1.15 : 1 / 1.15))))
     }
     viewport.addEventListener('wheel', handleWheel, { passive: false })
@@ -244,6 +248,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   }, [])
 
   function selectLot(lot: TerritoryLot) {
+    setMapTooltip(null)
     setSelectedLot(lot)
     setShowHouseholdForm(false)
     setVisitDraft(null)
@@ -309,6 +314,27 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     }
     return result
   }, [coverageHouseholds, coverageVisits, lots])
+  const activityByLot = useMemo(() => {
+    const result = new Map<string, LotActivity>()
+    const lotByHousehold = new Map<string, string>()
+    for (const household of coverageHouseholds) {
+      lotByHousehold.set(household.id, household.lot_id)
+      const current = result.get(household.lot_id) || { householdCount: 0, visitCount: 0, latestVisit: null }
+      current.householdCount += 1
+      result.set(household.lot_id, current)
+    }
+    for (const visit of coverageVisits) {
+      const lotId = lotByHousehold.get(visit.household_id)
+      if (!lotId) continue
+      const current = result.get(lotId) || { householdCount: 0, visitCount: 0, latestVisit: null }
+      current.visitCount += 1
+      const visitTime = `${visit.visit_date}-${visit.created_at}`
+      const latestTime = current.latestVisit ? `${current.latestVisit.visit_date}-${current.latestVisit.created_at}` : ''
+      if (!current.latestVisit || visitTime > latestTime) current.latestVisit = visit
+      result.set(lotId, current)
+    }
+    return result
+  }, [coverageHouseholds, coverageVisits])
   const mapStatus = (lot: TerritoryLot): CoverageStatus => coverageByLot.get(lot.id) || 'no_visit'
   const mapVisitStatus = (lot: TerritoryLot): VisitMapStatus => visitStatusByLot.get(lot.id) || 'no_visit'
   const mapStatusLabels: Record<CoverageStatus, string> = { answered: 'Respondido', partial: 'Parcial', draft: 'Rascunho', questionnaire_pending: 'Questionário pendente', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', no_activity: 'Sem cadastro e sem atividade', cancelled: 'Cancelada' }
@@ -329,6 +355,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   }, [coverageByLot, lots, visitStatusByLot])
 
   function startPan(event: ReactPointerEvent<HTMLDivElement>) {
+    setMapTooltip(null)
     const target = event.target instanceof Element ? event.target.closest('[data-lot-id]') : null
     const targetLot = target ? lots.find((lot) => lot.id === target.getAttribute('data-lot-id')) || null : null
     pointerMapRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -373,6 +400,15 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     setDragging(false)
   }
   function resetMap() { setZoom(1); setPan({ x: 0, y: 0 }) }
+
+  function showMapTooltip(lotId: string, element: SVGPolygonElement) {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const lotRect = element.getBoundingClientRect()
+    const viewportRect = viewport.getBoundingClientRect()
+    const x = lotRect.left + lotRect.width / 2 - viewportRect.left
+    setMapTooltip({ lotId, x: Math.max(8, Math.min(viewportRect.width - 8, x)), y: Math.max(8, lotRect.top - viewportRect.top - 8) })
+  }
 
   function requestHouseholdSave() {
     if (!selectedLot || !householdLabel.trim()) return
@@ -487,6 +523,14 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const selectedZone = selectedLot ? zones.find((zone) => zone.id === selectedLot.zone_id) : null
   const selectedIndex = selectedLot ? lots.findIndex((lot) => lot.id === selectedLot.id) + 1 : 0
   const lotLabel = selectedLot ? getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex) : ''
+  const tooltipLot = mapTooltip ? lots.find((lot) => lot.id === mapTooltip.lotId) || null : null
+  const tooltipIndex = tooltipLot ? lots.findIndex((lot) => lot.id === tooltipLot.id) + 1 : 0
+  const tooltipZone = tooltipLot ? zones.find((zone) => zone.id === tooltipLot.zone_id) : null
+  const tooltipActivity = tooltipLot ? activityByLot.get(tooltipLot.id) : null
+  const tooltipStatus = tooltipLot ? (mapMode === 'zones' ? tooltipZone ? `Zona: ${tooltipZone.name}` : 'Sem zona' : mapMode === 'visits' ? visitStatusLabels[mapVisitStatus(tooltipLot)] : mapStatusLabels[mapStatus(tooltipLot)]) : ''
+  const tooltipStatusColor = tooltipLot ? (mapMode === 'zones' ? tooltipZone?.color || 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[mapVisitStatus(tooltipLot)] : statusColors[mapStatus(tooltipLot)]) : ''
+  const selectedStatus = selectedLot ? (mapMode === 'zones' ? selectedZone ? `Zona: ${selectedZone.name}` : 'Sem zona' : mapMode === 'visits' ? visitStatusLabels[mapVisitStatus(selectedLot)] : mapStatusLabels[mapStatus(selectedLot)]) : ''
+  const selectedStatusColor = selectedLot ? (mapMode === 'zones' ? selectedZone?.color || 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[mapVisitStatus(selectedLot)] : statusColors[mapStatus(selectedLot)]) : ''
 
   return <section className="census-territory" aria-busy={loading || writing}>
     <div className="census-territory-heading"><div className="census-territory-badges"><span><MapPinned size={15} />{lots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
@@ -494,11 +538,11 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
-        <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapMode('zones'); setShowOnlyPending(false) }}><MapPinned size={15} />Divisão por zonas</button>
-        <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => setMapMode('questionnaire')}><BarChart3 size={15} />Cobertura do questionário</button>
-        <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => setMapMode('visits')}><ClipboardCheck size={15} />Situação das visitas</button>
+        <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones'); setShowOnlyPending(false) }}><MapPinned size={15} />Divisão por zonas</button>
+        <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><BarChart3 size={15} />Cobertura do questionário</button>
+        <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('visits') }}><ClipboardCheck size={15} />Situação das visitas</button>
       </div>
-      {mapMode === 'questionnaire' && <div className="census-map-filter-row"><label className="census-map-filter-control acs-filter-select" data-tone="questionnaire"><span className="acs-filter-caption"><FileText size={14} />Questionário</span><select value={coverageFormId} onChange={(event) => setCoverageFormId(event.target.value)}><option value="">Selecione</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label><button type="button" aria-pressed={showOnlyPending} data-state={showOnlyPending ? 'pending' : 'all'} className={`census-map-pending-toggle acs-filter-toggle${showOnlyPending ? ' active' : ''}`} onClick={() => setShowOnlyPending((current) => !current)} disabled={!coverageFormId}><Filter size={14} />{showOnlyPending ? 'Somente pendentes' : 'Todos os lotes'}</button></div>}
+      {mapMode === 'questionnaire' && <div className="census-map-filter-row"><label className="census-map-filter-control acs-filter-select" data-tone="questionnaire"><span className="acs-filter-caption"><FileText size={14} />Questionário</span><select value={coverageFormId} onChange={(event) => { setMapTooltip(null); setCoverageFormId(event.target.value) }}><option value="">Selecione</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label><button type="button" aria-pressed={showOnlyPending} data-state={showOnlyPending ? 'pending' : 'all'} className={`census-map-pending-toggle acs-filter-toggle${showOnlyPending ? ' active' : ''}`} onClick={() => { setMapTooltip(null); setShowOnlyPending((current) => !current) }} disabled={!coverageFormId}><Filter size={14} />{showOnlyPending ? 'Somente pendentes' : 'Todos os lotes'}</button></div>}
       {mapMode === 'questionnaire' && coverageFormId && <div className="census-map-metrics" aria-label={`Indicadores por lote, total de ${lots.length.toLocaleString('pt-BR')} lotes`}><div className="coverage"><strong>{mapMetrics.coverage}%<small>{lots.length.toLocaleString('pt-BR')} lotes</small></strong><span>Cobertura</span></div><div className="completed"><strong>{mapMetrics.answered.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes respondidos</span></div><div className="pending"><strong>{mapMetrics.pending.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem resposta enviada</span></div><div className="no-contact"><strong>{mapMetrics.noContact.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem contato</span></div></div>}
       {mapMode === 'visits' && <div className="census-map-metrics" aria-label={`Indicadores por lote, total de ${lots.length.toLocaleString('pt-BR')} lotes`}><div className="recorded"><strong>{mapMetrics.visited.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita registrada</span></div><div className="no-visit"><strong>{mapMetrics.noVisit.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Domicílio cadastrado, sem visita</span></div><div className="no-activity"><strong>{mapMetrics.noActivity.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Sem cadastro e sem atividade</span></div><div className="in-progress"><strong>{mapMetrics.inProgress.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes em andamento</span></div><div className="completed"><strong>{mapMetrics.completed.toLocaleString('pt-BR')}<small>/ {lots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita concluída</span></div></div>}
       {mapMode === 'questionnaire' && !coverageFormId && <div className="census-map-empty-filter"><Eye size={16} />Selecione um questionário para colorir o mapa pela cobertura.</div>}
@@ -520,19 +564,28 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
                 const visualLabel = mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
                 const fill = mapMode === 'zones' ? (lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)') : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
                 const fillOpacity = 1
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={fill} fillOpacity={fillOpacity} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} className={isSelected ? 'selected' : ''} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon>
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={fill} style={{ fill }} fillOpacity={fillOpacity} vectorEffect="non-scaling-stroke" tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} className={isSelected ? 'selected' : ''} aria-describedby={mapTooltip?.lotId === lot.id ? 'territory-map-tooltip' : undefined} onPointerEnter={(event) => showMapTooltip(lot.id, event.currentTarget)} onPointerLeave={() => setMapTooltip((current) => current?.lotId === lot.id ? null : current)} onFocus={(event) => showMapTooltip(lot.id, event.currentTarget)} onBlur={() => setMapTooltip((current) => current?.lotId === lot.id ? null : current)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon>
               })}
             </svg>
+            {mapTooltip && tooltipLot && <div id="territory-map-tooltip" className={`census-map-tooltip${mapTooltip.y < 100 ? ' below' : ''}`} role="tooltip" style={{ left: mapTooltip.x, top: mapTooltip.y }}>
+              <strong>{getMapLotCode(tooltipLot.label, tooltipLot.source_handle, tooltipIndex)}{mapMode !== 'zones' ? ` · ${tooltipZone?.name || 'Sem zona'}` : ''}</strong>
+              <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />{tooltipStatus}</span>
+              {mapMode !== 'zones' && <>
+                <span>{tooltipActivity?.householdCount ? `${tooltipActivity.householdCount.toLocaleString('pt-BR')} ${tooltipActivity.householdCount === 1 ? 'domicílio ativo' : 'domicílios ativos'} · ${tooltipActivity.visitCount.toLocaleString('pt-BR')} ${tooltipActivity.visitCount === 1 ? 'visita registrada' : 'visitas registradas'}` : null}</span>
+                {mapMode === 'questionnaire' && activeMapForm && <span>Questionário: {activeMapForm.title}</span>}
+                {tooltipActivity?.latestVisit && <span>{tooltipActivity.latestVisit.status === 'NO_CONTACT' ? 'Última tentativa' : tooltipActivity.latestVisit.status === 'CANCELLED' ? 'Último registro' : 'Última visita'}: {formatDate(tooltipActivity.latestVisit.visit_date)}</span>}
+              </>}
+            </div>}
             <div className="census-territory-legend">{mapMode === 'zones' ? <>{zones.map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}{zone.active ? '' : ' · inativa'}</span>)}<span><i className="unassigned" />Sem zona</span></> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : Object.entries(mapStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: statusColors[status as CoverageStatus] }} />{label}</span>)}</div>
           </>}
         </div>
       </div>
 
       {selectedLot && <aside className="census-territory-panel" aria-label={`Dossiê do ${lotLabel}`}>
-        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ TERRITORIAL</span><h3>{lotLabel}</h3><span className="census-territory-zone"><i style={{ background: selectedZone?.color || '#9aaeb1' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setVisitDraft(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
+        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ TERRITORIAL</span><h3>{lotLabel}</h3><span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span><span className="census-territory-selected-status" style={{ borderColor: selectedStatusColor }}><i style={{ background: selectedStatusColor }} />{selectedStatus}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setVisitDraft(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
         {panelError && <div className="census-territory-panel-error" role="alert"><AlertCircle size={16} />{panelError}</div>}
         {detailLoading ? <div className="census-territory-panel-loading"><LoaderCircle className="spin" size={19} />Carregando dossiê…</div> : authorized && <div className="census-territory-panel-scroll">
-          <div className="census-territory-lot-meta"><span><strong>{lotLabel}</strong> código do mapa</span><span><strong>{households.length.toLocaleString('pt-BR')}</strong> domicílio(s)</span></div>
+          <div className="census-territory-lot-meta"><span><small>Código do lote</small><strong>{lotLabel}</strong></span><span><small>Domicílios ativos</small><strong>{households.length.toLocaleString('pt-BR')}</strong></span></div>
           <section className="census-territory-acs-card" aria-label="ACS responsável pelo lote">
             <div className="census-territory-acs-heading"><UsersRound size={17} /><div><strong>ACS responsável</strong><small>{lotAcs.some((item) => item.scope === 'LOTE') ? 'Vínculo específico deste lote' : lotAcs.length ? 'ACS vinculado à zona deste lote' : 'Sem vínculo de ACS ativo'}</small></div></div>
             {lotAcs.length ? <div className="census-territory-acs-list">{lotAcs.map((item) => <div key={`${item.scope}-${item.acs_id}`}><span className="census-territory-acs-avatar">{item.full_name.trim().charAt(0).toUpperCase() || 'A'}</span><span><strong>{item.full_name}</strong><small>{item.scope === 'LOTE' ? 'Vinculado a este lote' : 'Vinculado à zona'}</small></span></div>)}</div> : <p className="census-territory-acs-empty">Nenhum ACS ativo está vinculado a este lote ou à sua zona.</p>}
@@ -550,8 +603,8 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
             const pendingForms = activeForms.filter((form) => !receivedQuestionnaireIds.has(form.id))
             return <article className="census-household-card" key={household.id}>
               <header><span className="census-household-icon"><Home size={16} /></span><div><strong>{household.label || `Domicílio ${index + 1}`}</strong><small>Cadastrado em {formatDate(household.created_at)}</small></div></header>
-              <div className="census-household-summary"><span><b>{summary?.resident_count ?? '—'}</b><small>moradores</small></span><span><b>{summary?.submitted_questionnaire_count ?? 0}</b><small>questionários</small></span><span><b>{summary?.visit_count ?? 0}</b><small>visitas</small></span></div>
-              <div className="census-household-meta"><span><CalendarDays size={14} />Última visita: {formatDate(summary?.last_visit_date)}</span>{summary?.income_band && <span><span className="census-income-dot" />Renda: {summary.income_band}</span>}</div>
+              <div className="census-household-summary"><span><b>{summary?.resident_count ?? '—'}</b><small>moradores</small></span><span><b>{summary?.submitted_questionnaire_count ?? 0}</b><small>questionários enviados</small></span><span><b>{summary?.visit_count ?? 0}</b><small>visitas registradas</small></span></div>
+              <div className="census-household-meta"><span><CalendarDays size={14} />Última visita: {summary?.last_visit_date ? formatDate(summary.last_visit_date) : 'Sem visita registrada'}</span>{summary?.income_band && <span><span className="census-income-dot" />Renda: {summary.income_band}</span>}</div>
               <section className="census-household-available-forms"><div><strong>Aplicar questionário</strong><small>{pendingForms.length ? 'Selecione um questionário ativo para este domicílio.' : 'Todos os questionários ativos já foram respondidos; você ainda pode iniciar uma nova visita.'}</small></div>{activeForms.length ? <select aria-label={`Aplicar questionário ao ${household.label || `Domicílio ${index + 1}`}`} defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) openVisitDialog(household, form.id); event.currentTarget.value = '' }} disabled={writing}><option value="">Selecione um questionário ativo…</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}{pendingForms.some((item) => item.id === form.id) ? ' · pendente' : ' · respondido'}</option>)}</select> : <button type="button" className="census-link-button" onClick={onOpenQuestionnaires}>Ative um questionário para aplicar</button>}</section>
               {activeForms.length > 0 && pendingForms.length === 0 && <p className="census-household-all-forms-received">Todos os questionários ativos já foram recebidos. Consulte o histórico para ver as respostas.</p>}
 
@@ -574,9 +627,9 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       </aside>}
     </div>
 
-    {visitDraft && <div className="census-visit-dialog-backdrop"><section ref={visitDialogRef} tabIndex={-1} className="census-visit-dialog" role="dialog" aria-modal="true" aria-labelledby="census-visit-dialog-title"><header><div><span className="fleet-kicker">NOVA VISITA</span><h3 id="census-visit-dialog-title">{visitDraft.household.label}</h3></div><button type="button" className="census-icon-button" onClick={() => setVisitDraft(null)} aria-label="Fechar"><X size={18} /></button></header><label>Data da visita<input type="date" autoFocus value={visitDraft.visitDate} max={dateToday()} onChange={(event) => setVisitDraft((current) => current ? { ...current, visitDate: event.target.value } : current)} /></label><label>Observação breve<textarea rows={3} maxLength={2000} value={visitDraft.notes} onChange={(event) => setVisitDraft((current) => current ? { ...current, notes: event.target.value } : current)} placeholder="Opcional — não registre informações médicas neste campo." /></label><label>Questionário para preencher<select value={visitDraft.questionnaireId} onChange={(event) => setVisitDraft((current) => current ? { ...current, questionnaireId: event.target.value } : current)}><option value="">Registrar visita sem questionário agora</option>{activeForms.map((form) => <option value={form.id} key={form.id}>{form.title}</option>)}</select></label>{!activeForms.length && <p className="census-visit-dialog-tip">A ficha inicial ainda está em rascunho. Você pode registrar a visita agora e preencher um formulário depois de ativá-lo.</p>}<footer><button type="button" className="fleet-secondary-button" onClick={() => setVisitDraft(null)}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestVisitSave} disabled={!visitDraft.visitDate}><CalendarDays size={15} />Registrar visita</button></footer></section></div>}
+    {visitDraft && <div className="census-visit-dialog-backdrop"><section ref={visitDialogRef} tabIndex={-1} className="census-visit-dialog" role="dialog" aria-modal="true" aria-labelledby="census-visit-dialog-title"><header><div><span className="fleet-kicker">NOVA VISITA</span><h3 id="census-visit-dialog-title">{visitDraft.household.label}</h3><p className="census-visit-dialog-context">Lote {lotLabel} · {selectedZone?.name || 'Sem zona'}</p></div><button type="button" className="census-icon-button" onClick={() => setVisitDraft(null)} aria-label="Fechar"><X size={18} /></button></header><label>Data da visita<input type="date" autoFocus value={visitDraft.visitDate} max={dateToday()} onChange={(event) => setVisitDraft((current) => current ? { ...current, visitDate: event.target.value } : current)} /></label><label>Observação breve<textarea rows={3} maxLength={2000} value={visitDraft.notes} onChange={(event) => setVisitDraft((current) => current ? { ...current, notes: event.target.value } : current)} placeholder="Opcional — não registre informações médicas neste campo." /></label><label>Questionário para preencher<select value={visitDraft.questionnaireId} onChange={(event) => setVisitDraft((current) => current ? { ...current, questionnaireId: event.target.value } : current)}><option value="">Registrar visita sem questionário agora</option>{activeForms.map((form) => <option value={form.id} key={form.id}>{form.title}</option>)}</select></label>{!activeForms.length && <p className="census-visit-dialog-tip">A ficha inicial ainda está em rascunho. Você pode registrar a visita agora e preencher um formulário depois de ativá-lo.</p>}<footer><button type="button" className="fleet-secondary-button" onClick={() => setVisitDraft(null)}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestVisitSave} disabled={!visitDraft.visitDate}><CalendarDays size={15} />Registrar visita</button></footer></section></div>}
 
-    {responseEditor && <QuestionnaireResponseForm key={`${responseEditor.responseId || responseEditor.visitId}-${responseEditor.form.id}`} form={responseEditor.form} initialAnswers={responseEditor.answers} readOnly={responseEditor.readOnly} saving={writing} responseStatus={responseEditor.status} onSave={requestResponseSave} onClose={() => setResponseEditor(null)} />}
+    {responseEditor && <QuestionnaireResponseForm key={`${responseEditor.responseId || responseEditor.visitId}-${responseEditor.form.id}`} form={responseEditor.form} initialAnswers={responseEditor.answers} readOnly={responseEditor.readOnly} saving={writing} responseStatus={responseEditor.status} contextLabel={`Lote ${lotLabel} · ${selectedZone?.name || 'Sem zona'}`} onSave={requestResponseSave} onClose={() => setResponseEditor(null)} />}
     {confirmation && <CensusWriteConfirmation {...confirmation} onCancel={() => setPendingWrite(null)} onConfirm={() => void confirmPendingWrite()} />}
   </section>
 }
