@@ -217,3 +217,14 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Em Famílias e visitas, conferir consistência do refinamento responsivo já aplicado e melhorar a legibilidade dos filtros, indicadores e registros sem criar métricas ou retirar dados.
 - [x] Preservar os estados/cores e a persistência atuais; não criar funcionalidades, indicadores, tabelas ou regras de acesso nem alterar schema/RLS do Supabase.
 - [x] Build/lint concluídos; commit `2c6f2f4` enviado à `main`; workflow Pages `42928604684` concluído com sucesso; página pública e assets responderam HTTP 200 com as mudanças confirmadas. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
+
+
+## Carga sintética para demonstração da Saúde da Família/ACS
+- [x] Alimentar com registros claramente identificados como DEMO as telas Visão Geral, Mapa Territorial e Famílias/visitas, usando o mapa existente (1.582 lotes), as cinco zonas, ACS e o questionário ativo; preservar os registros sintéticos atuais e não apagar linhas. Resultado: 255 domicílios DEMO (50 domicílios principais e um complementar por zona), 185 visitas e 70 respostas.
+- [x] Cobrir as situações já suportadas pelo sistema: 20 lotes sem zona e sem domicílio; domicílios presumidos; visitas concluídas (60), em andamento (60), sem contato (50) e canceladas (15); questionários enviados (45) e rascunhos (25); cobertura parcial em um lote por zona e histórico de tentativa sem contato seguido de visita concluída.
+- [x] Não registrar nomes de moradores, contatos, endereços, identificadores pessoais nem respostas clínicas; usar rótulos DEMO e somente respostas agregadas válidas de número de moradores/faixa de renda para os indicadores existentes.
+- [x] Preservar triggers, validações, RLS e schema atuais do Supabase; não alterar regras de acesso nem adicionar indicadores/funcionalidades de negócio. Não houve exclusão: os 3 domicílios sintéticos anteriores foram preservados; todas as telas do módulo exibem aviso de “Dados sintéticos de demonstração”.
+- [x] Verificar os dados consumidos pelo frontend: a view territorial retorna os 1.582 lotes no contexto administrativo, incluindo os 20 sem zona; domicílios e visitas têm atividade em 5 dias ao longo de 24 dias.
+- [x] Validar build e lint do frontend sem erros.
+- [ ] Commitar e enviar o aviso visual à `main`, acompanhar o workflow e confirmar HTTP 200 e o asset atualizado no GitHub Pages.
+- [x] Nota sobre a previsão: os 45 questionários enviados estão todos na data atual porque o trigger existente carimba e protege `submitted_at`; assim, o cartão de previsão de questionários deve mostrar “Ainda sem previsão” até haver envios em 3 dias distintos por pelo menos 7 dias. As previsões de domicílios e visitas já têm histórico temporal sintético suficiente.
