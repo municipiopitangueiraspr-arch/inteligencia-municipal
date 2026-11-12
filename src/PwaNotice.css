@@ -1,0 +1,43 @@
+.pwa-notice {
+  position: fixed;
+  z-index: 10000;
+  inset: auto max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 14px 16px;
+  border: 1px solid #bdd4e2;
+  border-radius: 14px;
+  background: #fff;
+  color: #183344;
+  box-shadow: 0 12px 36px rgb(12 36 52 / 22%);
+  font: inherit;
+}
+.pwa-notice-copy { display: grid; gap: 3px; min-width: 0; }
+.pwa-notice-copy strong { font-size: 15px; }
+.pwa-notice-copy span { color: #4d6270; font-size: 13px; line-height: 1.4; }
+.pwa-notice-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.pwa-notice-action, .pwa-notice-close {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.pwa-notice-action { padding: 0 14px; background: #0b5269; color: #fff; font-size: 14px; font-weight: 700; }
+.pwa-notice-action:hover { background: #073e51; }
+.pwa-notice-close { width: 44px; background: #eef3f6; color: #344c5b; }
+.pwa-notice button:focus-visible { outline: 3px solid #e3a634; outline-offset: 2px; }
+@media (max-width: 540px) {
+  .pwa-notice { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .pwa-notice-actions { width: 100%; }
+  .pwa-notice-action { flex: 1; }
+  .pwa-notice-close { margin-left: auto; }
+}
