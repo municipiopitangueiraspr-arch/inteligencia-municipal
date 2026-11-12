@@ -267,6 +267,7 @@ function MapPreparationWorkspace() {
   const [areaSelectMode, setAreaSelectMode] = useState(false)
   const [isAreaSelecting, setIsAreaSelecting] = useState(false)
   const [selectedLotKeys, setSelectedLotKeys] = useState<string[]>([])
+  const [focusedLotKey, setFocusedLotKey] = useState<string | null>(null)
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 })
   const mapViewportRef = useRef<HTMLDivElement | null>(null)
   const areaGestureRef = useRef<AreaSelectionGesture | null>(null)
@@ -379,11 +380,13 @@ function MapPreparationWorkspace() {
     }
     if (areaSelectMode || multiSelect) {
       const key = getLotKey(lot)
+      setFocusedLotKey(key)
       setSelectedLotKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
       return
     }
     if (!activeZoneId) { setNoticeTone('info'); setNotice('Cadastre e selecione uma zona antes de clicar nos lotes.'); return }
     const key = getLotKey(lot)
+    setFocusedLotKey(key)
     setLots((current) => assignLotToZone(current, key, activeZoneId))
   }
   function assignSelectedLots() {
@@ -625,7 +628,7 @@ function MapPreparationWorkspace() {
         <div className={`census-workspace-map${saving ? ' saving' : ''}`}>
           <div className="census-map-toolbar"><span><Move size={14} /> {areaSelectMode ? 'Arraste da esquerda para a direita para incluir lotes inteiros; da direita para a esquerda para incluir os que cruzam a área. Esc cancela.' : 'Arraste para mover · clique aplica a zona · Ctrl/Cmd+clique seleciona · role para aproximar no cursor'}</span><div><button type="button" className={`census-area-selection-toggle${areaSelectMode ? ' active' : ''}`} aria-pressed={areaSelectMode} disabled={saving} onClick={toggleAreaSelectMode}><Move size={14} /><span>{areaSelectMode ? 'Sair da seleção por área' : 'Selecionar por área'}</span></button><button type="button" disabled={saving} onClick={() => zoomBy(1.25)} aria-label="Aumentar zoom"><Plus size={15} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" disabled={saving} onClick={() => zoomBy(1 / 1.25)} aria-label="Reduzir zoom"><Minus size={15} /></button><button type="button" disabled={saving} onClick={resetView} aria-label="Restaurar enquadramento"><RotateCcw size={15} /></button></div></div>
           <div ref={mapViewportRef} className={`census-map-viewport${dragging ? ' dragging' : ''}${areaSelectMode ? ' area-select-mode' : ''}${isAreaSelecting ? ' area-selecting' : ''}`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={finishPointerAction} onPointerCancel={cancelPointerAction}>
-            {bbox ? <><svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { if (!visibleLotKeys.has(getLotKey(lot))) return null; const zone = zones.find((item) => item.id === lot.zone_id); const selected = selectedLotKeys.includes(getLotKey(lot)); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke="none" strokeWidth="0" vectorEffect="non-scaling-stroke"><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg>{visibleLots.length === 0 && showOnlyUnassigned && <div className="census-map-filter-empty" role="status"><Filter size={20} /><strong>Nenhum lote corresponde a este filtro</strong><span>Desmarque “Ver lotes sem zona” para exibir todos os lotes.</span></div>}</> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}
+            {bbox ? <><svg className="census-workspace-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="img" aria-label="Mapa de lotes para classificação">{lots.map((lot, index) => { if (!visibleLotKeys.has(getLotKey(lot))) return null; const zone = zones.find((item) => item.id === lot.zone_id); const selected = selectedLotKeys.includes(getLotKey(lot)) || focusedLotKey === getLotKey(lot); return <polygon key={getLotKey(lot)} data-lot-key={getLotKey(lot)} className={selected ? 'census-lot-selected' : undefined} points={lot.geometry.map(toSvg).join(' ')} fill={getLotFillColor(lot, zones)} stroke="none" strokeWidth="0" vectorEffect="non-scaling-stroke"><title>{`Lote ${String(index + 1).padStart(4, '0')}`} · {zone?.name || 'sem zona'}</title></polygon> })}<rect ref={areaRectOverlayRef} className="census-area-selection-rect window" display="none" pointerEvents="none" /></svg>{visibleLots.length === 0 && showOnlyUnassigned && <div className="census-map-filter-empty" role="status"><Filter size={20} /><strong>Nenhum lote corresponde a este filtro</strong><span>Desmarque “Ver lotes sem zona” para exibir todos os lotes.</span></div>}</> : <div className="census-map-empty"><MapPinned size={25} /><strong>Importe um mapa para começar</strong></div>}
           </div>
           <div className="census-map-legend"><span><i className="unassigned" />Sem zona</span><span><i className="selected" />Lote selecionado</span></div>
         </div>

@@ -15,5 +15,11 @@
 .medical-map-svg polygon:hover,
 .medical-map-svg polygon:focus-visible,
 .medical-map-svg polygon.selected{stroke:none!important;stroke-width:0!important;outline:none!important}
-.medical-map-svg polygon.selected{filter:brightness(1.12) saturate(1.1)!important}
+.medical-map-svg polygon{transform-box:fill-box;transform-origin:center;transition:transform .16s ease,filter .16s ease}
+.medical-map-svg polygon:hover,.medical-map-svg polygon:focus-visible{transform:scale(1.035);filter:brightness(1.2) saturate(1.18) drop-shadow(0 3px 2px #102f3d70)!important;animation:census-lot-hover-pulse .9s ease-in-out infinite alternate}
+.medical-map-svg polygon.selected{transform:scale(1.025);filter:brightness(1.24) saturate(1.2) drop-shadow(0 3px 3px #102f3d80)!important;animation:census-lot-selected-pulse 1s ease-in-out infinite!important}
+.medical-map-svg polygon:focus-visible{stroke:none!important;stroke-width:0!important;stroke-dasharray:none!important}
+@keyframes census-lot-hover-pulse{from{transform:scale(1.018)}to{transform:scale(1.04)}}
+@keyframes census-lot-selected-pulse{0%,100%{transform:scale(1.018);filter:brightness(1.12) saturate(1.12) drop-shadow(0 2px 2px #102f3d60)}50%{transform:scale(1.04);filter:brightness(1.34) saturate(1.3) drop-shadow(0 4px 4px #102f3d90)}}
+@media(prefers-reduced-motion:reduce){.medical-map-svg polygon:hover,.medical-map-svg polygon:focus-visible,.medical-map-svg polygon.selected{animation:none!important;transition:none;transform:scale(1.025)}}
 .medical-map-viewport{overscroll-behavior:contain}
