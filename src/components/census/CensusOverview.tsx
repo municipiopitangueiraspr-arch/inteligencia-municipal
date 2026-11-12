@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import './CensusOverview.css'
 
 type Zone = { id: string; name: string; color: string }
-type Lot = { id: string; zone_id: string | null }
+type Lot = { id: string; zone_id: string | null; indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null }
 type Household = { id: string; lot_id: string; label: string; created_at: string }
 type Visit = { id: string; household_id: string; acs_id: string | null; visit_date: string; status: string; created_at: string; completed_at: string | null }
 type Response = { id: string; visit_id: string; status: string; created_at: string; submitted_at: string | null }
@@ -88,8 +88,8 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
     setError('')
     try {
       const [imports, lots, households, visits, responses, zones, acs] = await Promise.all([
-        db.from('census_map_imports').select('id').in('status', ['DRAFT', 'PUBLISHED']).not('division_saved_at', 'is', null).limit(1),
-        pages<Lot>((from, to) => db.from('census_map_lots').select('id,zone_id').eq('is_valid', true).range(from, to)),
+        db.from('census_territory_map_imports').select('id').limit(1),
+        pages<Lot>((from, to) => db.from('census_territory_map_lots').select('id,zone_id,indicator_exclusion_reason').order('source_handle').order('id').range(from, to)),
         pages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,created_at').eq('active', true).range(from, to)),
         pages<Visit>((from, to) => db.from('census_visits').select('id,household_id,acs_id,visit_date,status,created_at,completed_at').order('created_at', { ascending: false }).range(from, to)),
         pages<Response>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,status,created_at,submitted_at').order('created_at', { ascending: false }).range(from, to)),
@@ -122,10 +122,11 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
     if (!data) return null
     const householdById = new Map(data.households.map((household) => [household.id, household]))
     const visitById = new Map(data.visits.map((visit) => [visit.id, visit]))
-    const lotIds = new Set(data.lots.map((lot) => lot.id))
+    const eligibleLots = data.lots.filter((lot) => !lot.indicator_exclusion_reason)
+    const lotIds = new Set(eligibleLots.map((lot) => lot.id))
     const confirmedLotIds = new Set(data.households.filter((household) => lotIds.has(household.lot_id)).map((household) => household.lot_id))
-    const visitedLotIds = new Set(data.visits.filter((visit) => visit.status === 'COMPLETED').map((visit) => householdById.get(visit.household_id)?.lot_id).filter((lotId): lotId is string => Boolean(lotId)))
-    const submittedLotIds = new Set(data.responses.filter((response) => response.status === 'SUBMITTED').map((response) => visitById.get(response.visit_id)).map((visit) => visit ? householdById.get(visit.household_id)?.lot_id : null).filter((lotId): lotId is string => Boolean(lotId)))
+    const visitedLotIds = new Set(data.visits.filter((visit) => visit.status === 'COMPLETED').map((visit) => householdById.get(visit.household_id)?.lot_id).filter((lotId): lotId is string => Boolean(lotId && lotIds.has(lotId))))
+    const submittedLotIds = new Set(data.responses.filter((response) => response.status === 'SUBMITTED').map((response) => visitById.get(response.visit_id)).map((visit) => visit ? householdById.get(visit.household_id)?.lot_id : null).filter((lotId): lotId is string => Boolean(lotId && lotIds.has(lotId))))
 
     const firstTimestampPerLot = (events: { lotId: string; timestamp: string | null }[]) => {
       const firstByLot = new Map<string, string>()
@@ -148,7 +149,9 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
         return { lotId: visit ? householdById.get(visit.household_id)?.lot_id || '' : '', timestamp: response.submitted_at }
       }))
 
-    const lots = data.lots.length
+    const lots = eligibleLots.length
+    const eligibleHouseholdIds = new Set(data.households.filter((household) => lotIds.has(household.lot_id)).map((household) => household.id))
+    const eligibleVisitIds = new Set(data.visits.filter((visit) => eligibleHouseholdIds.has(visit.household_id)).map((visit) => visit.id))
     const confirmed = confirmedLotIds.size
     const visited = visitedLotIds.size
     const submitted = submittedLotIds.size
@@ -160,6 +163,8 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
 
     return {
       lots,
+      territoryLots: data.lots.length,
+      excludedLots: data.lots.length - eligibleLots.length,
       confirmed,
       visited,
       submitted,
@@ -168,20 +173,21 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
       withoutZone: data.lots.filter((lot) => !lot.zone_id).length,
       zones: data.zones.length,
       acs: data.acs.length,
-      draftResponses: data.responses.filter((response) => response.status === 'DRAFT').length,
+      draftResponses: data.responses.filter((response) => response.status === 'DRAFT' && eligibleVisitIds.has(response.visit_id)).length,
       forecasts,
     }
   }, [data])
 
   const zoneStats = useMemo(() => data?.zones.map((zone) => {
-    const lots = data.lots.filter((lot) => lot.zone_id === zone.id)
+    const territoryLots = data.lots.filter((lot) => lot.zone_id === zone.id)
+    const lots = territoryLots.filter((lot) => !lot.indicator_exclusion_reason)
     const lotIds = new Set(lots.map((lot) => lot.id))
     const householdById = new Map(data.households.map((household) => [household.id, household]))
     const done = new Set(data.visits
       .filter((visit) => visit.status === 'COMPLETED')
       .map((visit) => householdById.get(visit.household_id)?.lot_id)
       .filter((lotId): lotId is string => Boolean(lotId && lotIds.has(lotId)))).size
-    return { ...zone, lots: lots.length, done, coverage: lots.length ? Math.round((done / lots.length) * 100) : 0 }
+    return { ...zone, lots: lots.length, territoryLots: territoryLots.length, excludedLots: territoryLots.length - lots.length, done, coverage: lots.length ? Math.round((done / lots.length) * 100) : 0 }
   }) || [], [data])
 
   const recent = useMemo(() => {
@@ -218,15 +224,16 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                 <BarChart3 size={21} />
               </div>
               {metrics.lots > 0 ? <div className="census-overview-funnel-stages">
-                <Funnel label="Lotes no mapa" value={metrics.lots} max={metrics.lots} color="var(--acs-chart-territory)" />
+                <Funnel label="Lotes incluídos nos indicadores" value={metrics.lots} max={metrics.lots} color="var(--acs-chart-territory)" />
                 <Funnel label="Lotes com domicílio confirmado" value={metrics.confirmed} max={metrics.lots} color="var(--acs-chart-completed)" />
                 <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="var(--acs-chart-completed)" />
                 <Funnel label="Lotes com questionário enviado" value={metrics.submitted} max={metrics.lots} color="var(--acs-chart-completed)" />
               </div> : <div className="census-overview-chart-empty" role="status">
-                <strong>Ainda não há lotes neste mapa</strong>
-                <span>Este resumo usa os lotes válidos do mapa territorial publicado.</span>
+                <strong>{metrics.territoryLots ? 'Nenhum lote elegível para os indicadores' : 'Ainda não há lotes neste mapa'}</strong>
+                <span>{metrics.territoryLots ? 'Os lotes permanecem no mapa, mas foram excluídos da base de cálculo.' : 'Este resumo usa os lotes válidos do mapa territorial publicado.'}</span>
               </div>}
-              <div className="census-overview-funnel-note"><Home size={15} /> {metrics.presumed.toLocaleString('pt-BR')} lote(s) ainda usam a estimativa inicial de um domicílio por lote.</div>
+              <div className="census-overview-funnel-note"><Home size={15} /> {metrics.presumed.toLocaleString('pt-BR')} lote(s) elegíveis ainda usam a estimativa inicial de um domicílio por lote.</div>
+              {metrics.excludedLots > 0 && <div className="census-overview-funnel-note"><MapPinned size={15} /> O território continua com {metrics.territoryLots.toLocaleString('pt-BR')} lotes; {metrics.excludedLots.toLocaleString('pt-BR')} ficam fora dos indicadores atuais e históricos.</div>}
             </section>
 
             <section className="fleet-panel census-overview-forecast" aria-labelledby="censusForecastTitle">
@@ -279,7 +286,7 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
                   <div className="census-overview-zone" key={zone.id}>
                     <div><span><i style={{ background: zone.color }} />{zone.name}</span><b>{zone.coverage}% com visita concluída</b></div>
                   <div className="census-overview-track"><i style={{ width: `${zone.coverage}%`, background: 'var(--acs-chart-completed)' }} /></div>
-                  <small>{zone.done} de {zone.lots} lote(s) com visita concluída</small>
+                  <small>{zone.done} de {zone.lots} lote(s) incluídos com visita concluída{zone.excludedLots ? ` · ${zone.excludedLots} fora dos indicadores` : ''}</small>
                 </div>
               ))}
             </section>

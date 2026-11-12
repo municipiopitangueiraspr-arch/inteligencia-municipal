@@ -354,3 +354,22 @@
 @keyframes census-lot-hover-pulse{from{transform:scale(1.018)}to{transform:scale(1.04)}}
 @keyframes census-lot-selected-pulse{0%,100%{transform:scale(1.018);filter:brightness(1.12) saturate(1.12) drop-shadow(0 2px 2px #102f3d60)}50%{transform:scale(1.04);filter:brightness(1.34) saturate(1.3) drop-shadow(0 4px 4px #102f3d90)}}
 @media(prefers-reduced-motion:reduce){.census-territory-svg polygon:not(.silhouette):hover,.census-territory-svg polygon:not(.silhouette):focus-visible,.census-territory-svg polygon:not(.silhouette).selected,.census-territory-svg polygon.silhouette:hover,.census-territory-svg polygon.silhouette:focus-visible,.census-territory-svg polygon.silhouette.selected{animation:none!important;transition:none;transform:scale(1.025)}}
+
+
+.census-lot-indicator-exclusion{display:grid;gap:8px;padding:12px;border:1px solid #cfe0dc;border-radius:10px;background:#f3f8f7;color:#264f54;font-size:12px}
+.census-lot-indicator-exclusion.excluded{border-color:#e6c98f;background:#fff8e9}
+.census-lot-exclusion-heading{display:flex;align-items:center;gap:7px;color:#285d56}
+.census-lot-indicator-exclusion.excluded .census-lot-exclusion-heading{color:#76540e}
+.census-lot-exclusion-heading strong{font-size:12px}
+.census-lot-exclusion-heading span{margin-left:auto;padding:3px 7px;border-radius:999px;background:#dfede8;color:#285d56;font-size:10px;font-weight:800}
+.census-lot-indicator-exclusion.excluded .census-lot-exclusion-heading span{background:#f4e8c9;color:#76540e}
+.census-lot-indicator-exclusion p{margin:0;color:#365b60;line-height:1.45}
+.census-lot-indicator-exclusion small{color:#52696d;font-size:11px;line-height:1.4}
+.census-lot-indicator-exclusion label{display:grid;gap:5px;color:#345b61;font-size:11px;font-weight:800}
+.census-lot-indicator-exclusion select{width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbdedb;border-radius:8px;background:#fff;color:#234c53;font:inherit}
+.census-lot-exclusion-action,.census-lot-exclusion-restore{justify-self:start;min-height:36px;padding:8px 11px;border:1px solid #bf7b38;border-radius:8px;background:#fff;color:#75440e;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.census-lot-exclusion-action:disabled,.census-lot-exclusion-restore:disabled{opacity:.55;cursor:not-allowed}
+.census-lot-exclusion-restore{border-color:#b8d0c7;color:#285d56}
+.census-map-exclusion-note{display:flex;align-items:flex-start;gap:8px;margin:0 0 10px;padding:9px 11px;border:1px solid #d7c89e;border-radius:8px;background:#fff9e9;color:#624d20;font-size:11px;line-height:1.4}
+.census-map-exclusion-note svg{flex:none;margin-top:1px}
+@media(max-width:560px){.census-lot-indicator-exclusion{padding:10px}.census-map-exclusion-note{font-size:12px}}

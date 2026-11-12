@@ -218,5 +218,7 @@
 .census-family-status-pill.in-progress,.census-family-questionnaire-pill.draft{background:#fff4df;color:#815a11}
 .census-family-status-pill.no-contact{background:#ffefed;color:#a93f35}
 .census-family-status-pill.cancelled,.census-family-status-pill.no-visit,.census-family-questionnaire-pill.none{background:#eef3f3;color:#4d666b}
+.census-family-exclusion-note{display:block;margin-top:7px;color:#72581c;font-size:10px;line-height:1.35}
+.census-family-excluded-badge{display:inline-flex;width:fit-content;max-width:100%;margin:3px 0;padding:3px 7px;border:1px solid #e6d49f;border-radius:999px;background:#fff8e8;color:#66501d;font-size:10px;font-weight:800;line-height:1.3}
 @media(max-width:560px){.census-family-total-badge{min-width:78px;padding-inline:7px}.census-family-total-badge small{font-size:9px}}
 .census-family-zone-chip.unassigned{color:#4d666b}

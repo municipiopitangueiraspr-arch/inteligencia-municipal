@@ -21,6 +21,8 @@ type QuestionnaireStatus = 'SUBMITTED' | 'DRAFT'
 type Zone = { id: string; name: string; color: string; active: boolean }
 type DashboardRow = {
   lot_id: string
+  indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null
+  indicator_excluded_at: string | null
   source_handle: string
   lot_label: string | null
   zone_id: string | null
@@ -53,9 +55,12 @@ type LotSummary = {
   id: string
   zone_id: string | null
   latest_status: VisitStatus | null
+  indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null
 }
 type ZoneSummary = Zone & {
   lot_count: number
+  territory_lot_count: number
+  excluded_lot_count: number
   completed: number
   in_progress: number
   no_contact: number
@@ -140,6 +145,10 @@ function questionnaireStatusClass(status: QuestionnaireStatus | null) {
   return 'none'
 }
 
+function indicatorExclusionLabel(reason: 'VACANT' | 'PUBLIC' | null) {
+  return reason === 'VACANT' ? 'Sem domicílio ocupado / lote vazio' : reason === 'PUBLIC' ? 'Área ou imóvel público/municipal' : ''
+}
+
 function MetricCard({
   icon,
   label,
@@ -206,7 +215,7 @@ async function fetchDashboardData(): Promise<DashboardData> {
       .limit(500),
     fetchPages<DashboardRow>((from, to) => db
       .from('census_families_visits_dashboard_rows')
-      .select('lot_id,source_handle,lot_label,zone_id,zone_name,zone_color,household_id,household_label,is_presumed,active_households_in_lot,household_created_at,latest_visit_status,latest_visit_date,latest_visit_acs_id,latest_visit_acs_name,visit_count,completed_visit_count,in_progress_visit_count,no_contact_visit_count,cancelled_visit_count,questionnaire_response_count,submitted_questionnaire_count,draft_questionnaire_count,latest_questionnaire_status,latest_questionnaire_created_at,lot_latest_visit_status,lot_latest_visit_date')
+      .select('lot_id,indicator_exclusion_reason,indicator_excluded_at,source_handle,lot_label,zone_id,zone_name,zone_color,household_id,household_label,is_presumed,active_households_in_lot,household_created_at,latest_visit_status,latest_visit_date,latest_visit_acs_id,latest_visit_acs_name,visit_count,completed_visit_count,in_progress_visit_count,no_contact_visit_count,cancelled_visit_count,questionnaire_response_count,submitted_questionnaire_count,draft_questionnaire_count,latest_questionnaire_status,latest_questionnaire_created_at,lot_latest_visit_status,lot_latest_visit_date')
       .order('source_handle')
       .order('lot_id')
       .order('household_id')
@@ -272,6 +281,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
         id: row.lot_id,
         zone_id: row.zone_id,
         latest_status: row.lot_latest_visit_status,
+        indicator_exclusion_reason: row.indicator_exclusion_reason,
       })
     }
     return [...lots.values()]
@@ -287,17 +297,21 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   }, [rows])
 
   const metrics = useMemo(() => {
+    const eligibleRows = rows.filter((row) => !row.indicator_exclusion_reason)
+    const eligibleLots = lotSummaries.filter((lot) => !lot.indicator_exclusion_reason)
     const sumRows = (key: keyof Pick<DashboardRow,
       'visit_count' | 'completed_visit_count' | 'in_progress_visit_count' | 'no_contact_visit_count' | 'cancelled_visit_count' | 'questionnaire_response_count' | 'submitted_questionnaire_count' | 'draft_questionnaire_count'
-    >) => rows.reduce((total, row) => total + count(row[key]), 0)
+    >) => eligibleRows.reduce((total, row) => total + count(row[key]), 0)
     const uniqueLotIds = new Set(rows.map((row) => row.lot_id))
 
     return {
       lots: uniqueLotIds.size,
+      eligibleLots: eligibleLots.length,
+      excludedLots: lotSummaries.length - eligibleLots.length,
       unzonedLots: lotSummaries.filter((lot) => !lot.zone_id).length,
-      registeredHouseholds: rows.filter((row) => !row.is_presumed).length,
-      presumedLots: rows.filter((row) => row.is_presumed).length,
-      lotsWithoutVisit: lotSummaries.filter((lot) => !lot.latest_status).length,
+      registeredHouseholds: eligibleRows.filter((row) => !row.is_presumed).length,
+      presumedLots: eligibleRows.filter((row) => row.is_presumed).length,
+      lotsWithoutVisit: eligibleLots.filter((lot) => !lot.latest_status).length,
       visits: {
         total: sumRows('visit_count'),
         completed: sumRows('completed_visit_count'),
@@ -340,7 +354,8 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   }, [rows])
 
   const zoneSummaries = useMemo<ZoneSummary[]>(() => visibleZones.map((zone) => {
-    const zoneLots = lotSummaries.filter((lot) => lot.zone_id === zone.id)
+    const territoryLots = lotSummaries.filter((lot) => lot.zone_id === zone.id)
+    const zoneLots = territoryLots.filter((lot) => !lot.indicator_exclusion_reason)
     const counts: Record<VisitStatus | 'NO_VISIT', number> = {
       COMPLETED: 0,
       IN_PROGRESS: 0,
@@ -352,6 +367,8 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     return {
       ...zone,
       lot_count: zoneLots.length,
+      territory_lot_count: territoryLots.length,
+      excluded_lot_count: territoryLots.length - zoneLots.length,
       completed: counts.COMPLETED,
       in_progress: counts.IN_PROGRESS,
       no_contact: counts.NO_CONTACT,
@@ -487,7 +504,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             <span className="fleet-kicker">1 · TERRITÓRIO</span>
             <h3 id="census-family-territory-title">Resumo do território</h3>
           </div>
-          <span className="census-family-unit-note">Lotes do mapa e domicílios são contagens diferentes.</span>
+          <span className="census-family-unit-note">Lotes do mapa e domicílios são contagens diferentes. {metrics.excludedLots ? `${formatCount(metrics.excludedLots)} lote(s) estão fora dos indicadores.` : ''}</span>
         </div>
         <div className="census-family-metrics">
           <MetricCard icon={<MapPinned size={20} />} label="Lotes no mapa" value={metrics.lots} note="Polígonos válidos na divisão salva" tone="blue" />
@@ -505,7 +522,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             icon={<Home size={20} />}
             label="Domicílios cadastrados"
             value={metrics.registeredHouseholds}
-            note="Registros ativos vinculados a lotes"
+            note="Registros ativos em lotes incluídos nos indicadores"
             tone="teal"
             active={householdFilter === 'REGISTERED'}
             onClick={() => filterByHouseholdType('REGISTERED')}
@@ -514,7 +531,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
           <MetricCard
             icon={<UsersRound size={20} />}
             label="Lotes sem domicílio ativo"
-            note={`de ${formatCount(metrics.lots)} lotes no mapa`}
+            note={`de ${formatCount(metrics.eligibleLots)} lotes incluídos nos indicadores`}
             value={metrics.presumedLots}
             tone="slate"
             active={householdFilter === 'PRESUMED'}
@@ -530,7 +547,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             <div>
               <span className="fleet-kicker">2 · VISITAS</span>
               <h3>Eventos de visita</h3>
-              <small>Eventos de domicílios ativos; a barra não representa lotes.</small>
+              <small>Eventos de domicílios ativos em lotes incluídos; a barra conta eventos, não lotes.</small>
             </div>
             <span className="census-family-total-badge"><strong>{formatCount(visitTotal)}</strong><small>eventos</small></span>
           </div>
@@ -605,7 +622,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
           <div>
             <span className="fleet-kicker">4 · COMPARAÇÃO TERRITORIAL</span>
             <h3 id="census-family-zone-title">Situação da visita mais recente por lote e zona</h3>
-            <small>Cada lote conta uma vez; lotes sem zona aparecem no resumo territorial acima.</small>
+            <small>Cada lote elegível conta uma vez; o total territorial continua incluindo os lotes fora dos indicadores.</small>
           </div>
           <MapPinned size={20} aria-hidden="true" />
         </div>
@@ -645,6 +662,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
                   {LOT_STATUS_LABELS[status]} <b>{formatCount(values[status])}</b>
                 </span>)}
               </span>
+              {zone.excluded_lot_count > 0 && <small className="census-family-exclusion-note">{formatCount(zone.excluded_lot_count)} de {formatCount(zone.territory_lot_count)} lote(s) territoriais fora dos indicadores</small>}
               <span className="census-family-zone-card-action">Ver domicílios e lotes desta zona</span>
             </button>
           })}
@@ -766,6 +784,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
                   <td data-label="Lote / domicílio">
                     <div className="census-family-record">
                       <strong>{lotCode(row.lot_id)}</strong>
+                      {row.indicator_exclusion_reason && <span className="census-family-excluded-badge">Fora dos indicadores · {indicatorExclusionLabel(row.indicator_exclusion_reason)}</span>}
                       <span>{row.is_presumed ? 'Domicílio presumido' : row.household_label || 'Domicílio cadastrado'}</span>
                       <small>{row.is_presumed
                         ? 'Sem cadastro ativo neste lote'
