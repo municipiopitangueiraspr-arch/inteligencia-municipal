@@ -246,6 +246,11 @@ try {
   assert.match(zoneAcsMigration, /census_zones_prevent_delete[\s\S]*BEFORE DELETE/, 'Banco bloqueia exclusão de zonas')
   assert.match(zoneAcsMigration, /ended_at[\s\S]*census_save_acs_zone_assignment/, 'Vínculos encerrados permanecem auditáveis')
   assert.match(zoneAcsMigration, /TG_OP = 'INSERT' AND NEW\.user_id IS NULL/, 'Banco impede criar ACS sem conta cadastrada')
+  assert.ok(censusModuleCode.indexOf('id="zoneStepTitle"') < censusModuleCode.indexOf('id="acsStepTitle"') && censusModuleCode.indexOf('id="acsStepTitle"') < censusModuleCode.indexOf('id="assignmentStepTitle"'), 'Tela guia a pessoa na ordem zonas, equipe ACS e responsáveis')
+  assert.ok(censusModuleCode.indexOf('census-zone-responsibilities') < censusModuleCode.indexOf('census-assignment-edit-form'), 'Lista atual Zona × ACS aparece antes do formulário de alteração')
+  assert.match(censusModuleCode, /showZoneForm &&/, 'Formulário de zona aparece sob demanda em vez de ocupar a tela inteira')
+  assert.match(censusModuleCode, /showAssignmentForm &&/, 'Formulário de vínculo aparece sob demanda depois da lista')
+  assert.match(censusModuleCss, /census-zones-step-guide[\s\S]*@media\(max-width:600px\)/, 'Etapas e controles se reorganizam em telas de celular')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

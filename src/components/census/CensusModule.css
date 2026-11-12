@@ -157,3 +157,93 @@
 .census-zone-form-actions,.census-link-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.census-link-heading-actions{justify-content:flex-end}.census-zone-row>span{display:grid;gap:3px;min-width:0;flex:1}.census-zone-row>span strong{color:#244d55}.census-zone-row>span small{color:#74888c;font-size:10px;line-height:1.35}.census-zone-row>em{font-size:10px;font-style:normal;font-weight:800;color:#287a56}.census-zone-row.inactive{opacity:.75}.census-zone-row.inactive>em{color:#7b8588}.census-zone-row>.fleet-secondary-button,.census-assignment-row>.fleet-secondary-button{min-height:34px;padding:0 10px;font-size:11px}.census-user-suggestions{display:grid;max-height:240px;overflow:auto;border:1px solid #d6e3e4;border-radius:10px;background:#fff;box-shadow:0 8px 20px #203e4814}.census-user-suggestions button{display:grid;gap:3px;padding:10px 12px;border:0;border-bottom:1px solid #edf2f2;background:#fff;text-align:left;cursor:pointer}.census-user-suggestions button:hover,.census-user-suggestions button:focus-visible{background:#eef7f5;outline:2px solid #4d9a8d;outline-offset:-2px}.census-user-suggestions button strong{color:#294f55;font-size:12px}.census-user-suggestions button small,.census-directory-help{color:#687d81;font-size:10px}.census-selected-user{display:grid;gap:3px;padding:10px 12px;border:1px solid #c7e3d1;border-radius:10px;background:#f0faf3}.census-selected-user strong{color:#276948;font-size:12px}.census-selected-user span{color:#557567;font-size:10px}.census-assignment-list{display:grid;gap:8px;margin-top:14px}.census-assignment-row{display:grid;grid-template-columns:minmax(120px,1fr) 18px minmax(140px,1.2fr) auto auto auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e1e9e9;border-radius:11px;background:#fff}.census-assignment-row.inactive{background:#f7f8f8;color:#768184}.census-assignment-zone{display:flex;align-items:center;gap:7px;min-width:0;color:#345960;font-size:12px;font-weight:800}.census-assignment-zone i{width:10px;height:10px;flex:none;border-radius:50%}.census-assignment-separator{color:#95a6a8;text-align:center}.census-assignment-row>strong{overflow:hidden;color:#254d55;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.census-assignment-row>small,.census-assignment-history-label{color:#738589;font-size:10px;white-space:nowrap}.census-assignment-empty{padding:18px;border:1px dashed #cbdada;border-radius:10px;color:#687d81;font-size:12px;text-align:center}.census-zones-page .census-management-card{min-width:0}.census-link-card .census-link-heading-actions>.fleet-secondary-button{display:inline-flex;align-items:center;gap:6px}
 @media(max-width:760px){.census-assignment-row{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) auto}.census-assignment-row>small,.census-assignment-history-label{grid-column:1/-1}.census-assignment-row>.fleet-secondary-button{grid-row:2}.census-assignment-row>.fleet-secondary-button:last-of-type{grid-column:4}.census-zone-row{flex-wrap:wrap}.census-zone-form-actions>*{flex:1;justify-content:center}}
 @media(max-width:520px){.census-assignment-row{grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr);gap:7px;padding:9px}.census-assignment-row>small,.census-assignment-history-label{grid-column:1/-1}.census-assignment-row>.fleet-secondary-button{grid-column:auto!important;grid-row:auto;justify-content:center}.census-link-heading-actions{width:100%;justify-content:space-between}.census-link-heading-actions .fleet-secondary-button{flex:1;justify-content:center}.census-zone-row>.fleet-secondary-button{flex:0 0 auto}}
+
+
+/* Fluxo guiado de Zonas e ACS: ver primeiro, agir depois, conferir por território. */
+.census-zones-intro{margin:0 0 18px;padding:22px 24px;border:1px solid #d7e5e5;border-radius:16px;background:linear-gradient(115deg,#f7fbfa,#edf6f5);color:#244e56}
+.census-zones-intro h2{margin:5px 0 6px;color:#17434c;font-size:24px;line-height:1.2}
+.census-zones-intro>p{max-width:760px;margin:0;color:#5d757a;font-size:14px;line-height:1.55}
+.census-zones-step-guide{display:flex;align-items:center;gap:13px;margin:18px 0 0;padding:0;list-style:none}
+.census-zones-step-guide li:not(.census-step-arrow){display:flex;align-items:center;gap:9px;min-width:0}
+.census-zones-step-guide li>span{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:50%;background:#1d6875;color:white;font-size:13px;font-weight:800}
+.census-zones-step-guide li>div{display:grid;gap:2px}
+.census-zones-step-guide strong{color:#2b535b;font-size:12px}
+.census-zones-step-guide small{color:#6e8387;font-size:10px}
+.census-step-arrow{color:#a4b9ba;font-size:23px;line-height:1}
+.census-zones-flow{display:grid;gap:16px}
+.census-zones-flow>.census-workflow-step,.census-zones-page .census-link-card{min-width:0;margin:0;padding:20px 22px;border:1px solid #dce7e7;border-radius:15px;background:#fff;box-shadow:0 5px 18px #244a4e08}
+.census-step-heading{display:flex;align-items:center;gap:12px;min-width:0}
+.census-step-heading>div{display:grid;gap:3px;flex:1;min-width:0}
+.census-step-heading>.fleet-kicker,.census-step-heading .fleet-kicker{color:#46808a}
+.census-step-heading h3{margin:0;color:#214d56;font-size:19px;line-height:1.25}
+.census-step-number{display:grid;place-items:center;width:38px;height:38px;flex:none;border:1px solid #b9d9d8;border-radius:12px;background:#eaf5f3;color:#1d6772;font-size:17px;font-weight:900}
+.census-workflow-step>p{margin:10px 0 16px 50px;color:#63797e;font-size:13px;line-height:1.5}
+.census-zone-directory{display:grid;gap:8px}
+.census-zone-directory-row{display:grid;grid-template-columns:16px minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 14px;border:1px solid #e0e9e9;border-radius:11px;background:#fbfdfd}
+.census-zone-directory-row.inactive{background:#f7f8f8}
+.census-zone-swatch{width:14px;height:14px;border-radius:4px;box-shadow:0 0 0 3px #edf2f2}
+.census-zone-directory-copy{display:grid;gap:3px;min-width:0}
+.census-zone-directory-copy strong{overflow:hidden;color:#264d55;font-size:14px;text-overflow:ellipsis;white-space:nowrap}
+.census-zone-directory-copy small{overflow:hidden;color:#6d8286;font-size:11px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
+.census-state-pill{padding:5px 9px;border-radius:999px;background:#eef0f1;color:#667579;font-size:10px;font-weight:800;white-space:nowrap}
+.census-state-pill.active{background:#e7f5ec;color:#26724d}
+.census-zone-directory-row>.fleet-secondary-button{min-height:36px;padding-inline:12px}
+.census-flow-empty{display:flex;align-items:center;gap:12px;padding:16px;border:1px dashed #c8dada;border-radius:11px;background:#fafcfc;color:#38707a}
+.census-flow-empty>span{display:grid;gap:3px}
+.census-flow-empty strong{color:#315a61;font-size:13px}
+.census-flow-empty small{color:#70858a;font-size:11px;line-height:1.4}
+.census-flow-empty.compact{padding:12px}
+.census-flow-form{display:grid;gap:14px;margin-top:14px;padding:16px;border:1px solid #cfe1df;border-radius:12px;background:#f7fbfa}
+.census-flow-form-title{display:grid;gap:4px}
+.census-flow-form-title strong{color:#254f57;font-size:14px}
+.census-flow-form-title small{color:#6a8084;font-size:11px;line-height:1.45}
+.census-zone-edit-fields{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:12px;align-items:end}
+.census-zone-edit-fields>label,.census-acs-search-panel>label{display:grid;gap:6px;color:#3d6067;font-size:12px;font-weight:800}
+.census-zone-edit-fields input,.census-acs-search-panel>label>input{width:100%;box-sizing:border-box;min-height:44px;padding:10px 12px;border:1px solid #cfdede;border-radius:9px;background:#fff;color:#284d54;font:inherit;font-size:14px;font-weight:500}
+.census-zone-form-actions{display:flex;gap:9px;flex-wrap:wrap}
+.census-zone-form-actions button{min-height:42px}
+.census-acs-work-area{display:grid;grid-template-columns:minmax(260px,.82fr) minmax(0,1.18fr);gap:18px;align-items:start}
+.census-acs-search-panel{display:grid;gap:10px;padding:15px;border:1px solid #e0e9e9;border-radius:12px;background:#f9fbfb}
+.census-acs-search-panel>.fleet-primary-button{min-height:44px;justify-self:start}
+.census-acs-directory{display:grid;gap:8px;min-width:0}
+.census-sublist-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 1px 8px;border-bottom:1px solid #e4eded}
+.census-sublist-heading strong{color:#31575e;font-size:12px}
+.census-sublist-heading span{color:#72868a;font-size:10px;text-align:right}
+.census-acs-directory-row{display:flex;align-items:center;gap:10px;min-width:0;padding:9px 11px;border:1px solid #e4ebeb;border-radius:10px;background:#fff}
+.census-acs-directory-row.legacy{background:#fafafa}
+.census-acs-directory-row>span:last-child{display:grid;gap:3px;min-width:0}
+.census-acs-directory-row>span:last-child strong{overflow:hidden;color:#2b5158;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.census-acs-directory-row>span:last-child small{color:#728589;font-size:10px;line-height:1.4}
+.census-acs-directory-row .fleet-user-avatar{width:34px;height:34px;flex:none;font-size:13px}
+.census-refresh-list{min-height:40px;padding-inline:12px;white-space:nowrap}
+.census-zone-responsibilities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.census-zone-responsibility{min-width:0;overflow:hidden;border:1px solid #dfe9e9;border-radius:12px;background:#fff}
+.census-zone-responsibility>header{display:flex;align-items:center;gap:10px;padding:12px 13px;background:#f7fbfa;border-bottom:1px solid #e7eeee}
+.census-zone-responsibility>header>i{width:13px;height:13px;flex:none;border:2px solid #fff;border-radius:4px;box-shadow:0 0 0 1px #d2dede}
+.census-zone-responsibility>header>div{display:grid;gap:3px;min-width:0}
+.census-zone-responsibility>header strong{overflow:hidden;color:#285159;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.census-zone-responsibility>header small{color:#728589;font-size:10px}
+.census-zone-responsibility.inactive{opacity:.78}
+.census-zone-responsibility-links{display:grid;gap:0;padding:0 12px}
+.census-zone-responsibility-link{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0;padding:10px 1px;border-bottom:1px solid #edf1f1}
+.census-zone-responsibility-link:last-child{border-bottom:0}
+.census-zone-responsibility-link>span{display:grid;gap:3px;min-width:0}
+.census-zone-responsibility-link strong{overflow:hidden;color:#284f56;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.census-zone-responsibility-link small{color:#75888b;font-size:10px}
+.census-zone-responsibility-link button{min-height:34px;padding-inline:10px;flex:none;font-size:10px}
+.census-zone-unassigned{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 1px;color:#7b8b8e;font-size:11px}
+.census-zone-unassigned button{padding:5px 8px;border:1px solid #c9dedd;border-radius:7px;background:#f4faf9;color:#246874;font:700 10px 'DM Sans',sans-serif;cursor:pointer}
+.census-zone-unassigned button:disabled{opacity:.5;cursor:not-allowed}
+.census-assignment-actions{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-top:14px}
+.census-assignment-actions>.fleet-primary-button{min-height:44px}
+.census-assignment-actions>small{color:#6d8084;font-size:11px}
+.census-link-card .census-link-form{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:end}
+.census-assignment-form-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.census-assignment-form-actions button{min-height:42px}
+.census-assignment-history{margin-top:14px;border-top:1px solid #e5eded;padding-top:11px;color:#526b70}
+.census-assignment-history summary{cursor:pointer;font-size:12px;font-weight:800;list-style-position:inside}
+.census-assignment-history-list{display:grid;gap:6px;margin-top:10px}
+.census-assignment-history-row{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:8px;background:#f7f9f9;font-size:11px}
+.census-assignment-history-row small{color:#738589;white-space:nowrap}
+@media(max-width:850px){.census-acs-work-area{grid-template-columns:1fr}.census-acs-directory{grid-template-columns:repeat(2,minmax(0,1fr))}.census-sublist-heading{grid-column:1/-1}.census-zone-responsibilities{grid-template-columns:1fr}.census-zones-flow>.census-workflow-step,.census-zones-page .census-link-card{padding:18px}}
+@media(max-width:600px){.census-zones-intro{padding:18px}.census-zones-intro h2{font-size:21px}.census-zones-intro>p{font-size:13px}.census-zones-step-guide{align-items:flex-start;justify-content:space-between;gap:5px}.census-zones-step-guide li:not(.census-step-arrow){align-items:flex-start;flex-direction:column;gap:5px;flex:1}.census-zones-step-guide li>span{width:27px;height:27px;font-size:12px}.census-zones-step-guide li>div{gap:1px}.census-zones-step-guide strong{font-size:10px}.census-zones-step-guide small{font-size:9px}.census-step-arrow{padding-top:2px}.census-step-heading{align-items:flex-start;gap:9px}.census-step-heading h3{font-size:16px}.census-step-heading .census-step-number{width:32px;height:32px;border-radius:10px;font-size:15px}.census-step-heading>.fleet-primary-button,.census-step-heading>.census-refresh-list{min-height:38px;padding-inline:10px;font-size:11px}.census-workflow-step>p{margin:9px 0 13px;font-size:12px}.census-zone-directory-row{grid-template-columns:14px minmax(0,1fr) auto;gap:9px;padding:10px}.census-zone-directory-copy small{white-space:normal}.census-zone-directory-row>.fleet-secondary-button{grid-column:2/4;justify-self:start;min-height:36px}.census-zone-edit-fields{grid-template-columns:1fr}.census-flow-form{padding:13px}.census-zone-form-actions>*{flex:1}.census-zone-form-actions button{min-height:44px}.census-acs-directory{grid-template-columns:1fr}.census-sublist-heading{grid-column:auto}.census-acs-search-panel{padding:12px}.census-acs-search-panel>.fleet-primary-button{width:100%}.census-zone-responsibility-link{align-items:flex-start;flex-direction:column}.census-zone-responsibility-link button{width:100%;min-height:40px}.census-assignment-actions>.fleet-primary-button{width:100%;min-height:46px}.census-assignment-actions>small{line-height:1.4}.census-link-card .census-link-form{grid-template-columns:1fr}.census-assignment-form-actions{display:grid;grid-template-columns:1fr 1fr}.census-assignment-form-actions button{min-height:44px}.census-refresh-list{width:auto}.census-assignment-history-row{flex-direction:column;gap:3px}.census-zones-flow>.census-workflow-step,.census-zones-page .census-link-card{padding:15px}}
