@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AlertCircle, ArrowRight, BarChart3, CalendarClock, ClipboardCheck, Home, LoaderCircle, MapPinned, RefreshCw, UsersRound } from 'lucide-react'
+import { AlertCircle, ArrowRight, BarChart3, CalendarClock, ClipboardCheck, Home, LoaderCircle, MapPinned, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import './CensusOverview.css'
 
@@ -203,11 +203,6 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
 
   return (
     <section className="fleet-section fleet-page-section census-overview-page">
-      <div className="census-overview-actions census-overview-toolbar">
-        <button type="button" className="fleet-secondary-button" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={14} /> Atualizar dados
-        </button>
-      </div>
       {error && <div className="fleet-inline-error"><AlertCircle size={15} />{error}</div>}
       {loading ? (
         <div className="fleet-loading"><LoaderCircle className="spin" size={20} />Carregando painel…</div>

@@ -634,7 +634,6 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const tooltipStatusColor = tooltipLot ? (tooltipLot.indicator_exclusion_reason ? '#6b7280' : mapMode === 'zones' ? tooltipZone?.color || 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[mapVisitStatus(tooltipLot)] : statusColors[mapStatus(tooltipLot)]) : ''
 
   return <section className="census-territory" aria-busy={loading || writing}>
-    <div className="census-territory-heading"><div className="census-territory-badges"><span><MapPinned size={15} />{visibleLots.length.toLocaleString('pt-BR')} lotes</span><span><UsersRound size={15} />{zones.length} zonas</span></div></div>
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">

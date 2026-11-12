@@ -7,7 +7,6 @@ import {
   Home,
   LoaderCircle,
   MapPinned,
-  RefreshCw,
   Search,
   UsersRound,
   X,
@@ -255,15 +254,6 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     setRows(nextRows)
   }, [])
 
-  const load = useCallback(() => {
-    setLoading(true)
-    setError('')
-    void fetchDashboardData()
-      .then(applyDashboard)
-      .catch((err: unknown) => setError(dashboardErrorMessage(err)))
-      .finally(() => setLoading(false))
-  }, [applyDashboard])
-
   useEffect(() => {
     let active = true
     void fetchDashboardData()
@@ -472,21 +462,6 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   const responseTotal = metrics.questionnaires.total
 
   return <section className="fleet-section fleet-page-section census-families-page" aria-busy={loading}>
-    <header className="census-family-page-header">
-      <div>
-        <span className="fleet-kicker">SAÚDE DA FAMÍLIA / ACS</span>
-        <p>Território, atividade de campo e questionários em uma única leitura.</p>
-      </div>
-      <div className="census-families-actions">
-        <button type="button" className="fleet-secondary-button" onClick={() => { setLoading(true); setError(''); void load() }} disabled={loading}>
-          <RefreshCw size={16} aria-hidden="true" /> Atualizar
-        </button>
-        <button type="button" className="fleet-primary-button" onClick={onOpenTerritory}>
-          <MapPinned size={16} aria-hidden="true" /> Abrir mapa territorial
-        </button>
-      </div>
-    </header>
-
     {error && <div className="fleet-inline-error" role="alert"><AlertCircle size={16} aria-hidden="true" />{error}</div>}
     {loading ? <div className="fleet-loading"><LoaderCircle className="spin" size={20} aria-hidden="true" />Carregando dados de campo…</div> : error ? null : !hasMap ? <div className="census-family-empty-state">
       <MapPinned size={30} aria-hidden="true" />
