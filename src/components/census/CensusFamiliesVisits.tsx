@@ -70,7 +70,8 @@ type ZoneFilter = 'ALL' | 'NO_ZONE' | string
 type HouseholdFilter = 'ALL' | 'REGISTERED' | 'PRESUMED'
 type VisitFilter = 'ALL' | 'NO_VISIT' | VisitStatus
 type LotVisitFilter = 'ALL' | 'NO_VISIT'
-type QuestionnaireFilter = 'ALL' | 'NO_RESPONSE' | QuestionnaireStatus
+type QuestionnaireFilter = 'ALL' | 'NO_RESPONSE' | 'PENDING' | QuestionnaireStatus
+type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 
 const PAGE_SIZE = 1000
 const VISIT_STATUSES: { key: VisitStatus; label: string; className: string }[] = [
@@ -234,7 +235,7 @@ function dashboardErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível carregar Famílias e visitas.'
 }
 
-export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () => void }) {
+export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }: { onOpenTerritory: () => void; initialFilter?: OperationalFilter }) {
   const [zones, setZones] = useState<Zone[]>([])
   const [rows, setRows] = useState<DashboardRow[]>([])
   const [hasMap, setHasMap] = useState(false)
@@ -246,7 +247,8 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
   const [lotVisitFilter, setLotVisitFilter] = useState<LotVisitFilter>('ALL')
   const [householdFilter, setHouseholdFilter] = useState<HouseholdFilter>('ALL')
   const [visitFilter, setVisitFilter] = useState<VisitFilter>('ALL')
-  const [questionnaireFilter, setQuestionnaireFilter] = useState<QuestionnaireFilter>('ALL')
+  const [questionnaireFilter, setQuestionnaireFilter] = useState<QuestionnaireFilter>(initialFilter === 'QUESTIONNAIRE' ? 'PENDING' : initialFilter === 'DRAFT' ? 'DRAFT' : 'ALL')
+  const [operationalFilter, setOperationalFilter] = useState<OperationalFilter>(initialFilter)
 
   const applyDashboard = useCallback(({ hasMap: mapExists, zones: nextZones, rows: nextRows }: DashboardData) => {
     setHasMap(mapExists)
@@ -390,7 +392,9 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
       const matchesQuestionnaire = questionnaireFilter === 'ALL'
         || (questionnaireFilter === 'NO_RESPONSE'
           ? !row.latest_questionnaire_status
-          : row.latest_questionnaire_status === questionnaireFilter)
+          : questionnaireFilter === 'PENDING'
+            ? row.latest_questionnaire_status !== 'SUBMITTED'
+            : row.latest_questionnaire_status === questionnaireFilter)
       return matchesSearch && matchesZone && matchesLotVisit && matchesAcs && matchesHousehold && matchesVisit && matchesQuestionnaire
     })
   }, [acsFilter, householdFilter, lotCodes, lotVisitFilter, questionnaireFilter, rows, search, visitFilter, zoneFilter])
@@ -411,6 +415,17 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     setHouseholdFilter('ALL')
     setVisitFilter('ALL')
     setQuestionnaireFilter('ALL')
+    setOperationalFilter('ALL')
+  }
+
+  const applyOperationalFilter = (filter: OperationalFilter) => {
+    setOperationalFilter(filter)
+    setSearch('')
+    setZoneFilter('ALL'); setAcsFilter('ALL'); setHouseholdFilter('ALL'); setLotVisitFilter('ALL'); setVisitFilter('ALL')
+    setQuestionnaireFilter(filter === 'QUESTIONNAIRE' ? 'PENDING' : filter === 'DRAFT' ? 'DRAFT' : 'ALL')
+    if (filter === 'NO_VISIT') setVisitFilter('NO_VISIT')
+    if (filter === 'NO_CONTACT') setVisitFilter('NO_CONTACT')
+    scrollToList()
   }
 
   const scrollToList = () => {
@@ -457,7 +472,6 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
     scrollToList()
   }
 
-  const lotCode = (id: string) => lotCodes.get(id) || 'Lote sem código'
   const visitTotal = metrics.visits.total
   const responseTotal = metrics.questionnaires.total
 
@@ -655,6 +669,14 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
             <Filter size={19} aria-hidden="true" />
           </div>
         </div>
+        <div className="census-family-operational-filters" role="group" aria-label="Atalhos de rotina do ACS">
+          <span className="acs-filter-caption">Atalhos de campo</span>
+          <button type="button" className={operationalFilter === 'NO_VISIT' ? 'active' : ''} onClick={() => applyOperationalFilter('NO_VISIT')}>Preciso visitar</button>
+          <button type="button" className={operationalFilter === 'NO_CONTACT' ? 'active' : ''} onClick={() => applyOperationalFilter('NO_CONTACT')}>Sem contato</button>
+          <button type="button" className={operationalFilter === 'QUESTIONNAIRE' ? 'active' : ''} onClick={() => applyOperationalFilter('QUESTIONNAIRE')}>Questionário pendente</button>
+          <button type="button" className={operationalFilter === 'DRAFT' ? 'active' : ''} onClick={() => applyOperationalFilter('DRAFT')}>Retomar rascunho</button>
+          {operationalFilter !== 'ALL' && <button type="button" className="clear" onClick={() => applyOperationalFilter('ALL')}>Todos</button>}
+        </div>
         <div className="census-family-filters">
           <label className="census-family-search acs-filter-search">
             <Search size={17} aria-hidden="true" />
@@ -723,6 +745,7 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
                   <select value={questionnaireFilter} onChange={(event) => setQuestionnaireFilter(event.target.value as QuestionnaireFilter)}>
                     <option value="ALL">Todos</option>
                     <option value="NO_RESPONSE">Sem resposta</option>
+                    <option value="PENDING">Pendente</option>
                     <option value="SUBMITTED">Enviado</option>
                     <option value="DRAFT">Rascunho</option>
                   </select>
@@ -758,9 +781,9 @@ export function CensusFamiliesVisits({ onOpenTerritory }: { onOpenTerritory: () 
                 return <tr key={`${row.lot_id}:${row.household_id || 'presumed'}`}>
                   <td data-label="Lote / domicílio">
                     <div className="census-family-record">
-                      <strong>{lotCode(row.lot_id)}</strong>
+                      <strong>{row.is_presumed ? 'Novo domicílio' : row.household_label || 'Domicílio sem identificação'}</strong>
                       {row.indicator_exclusion_reason && <span className="census-family-excluded-badge">Fora dos indicadores · {indicatorExclusionLabel(row.indicator_exclusion_reason)}</span>}
-                      <span>{row.is_presumed ? 'Domicílio presumido' : row.household_label || 'Domicílio cadastrado'}</span>
+                      <span>{row.is_presumed ? 'Ainda não cadastrado pelo ACS' : 'Referência informada pelo ACS'}</span>
                       <small>{row.is_presumed
                         ? 'Sem cadastro ativo neste lote'
                         : row.active_households_in_lot > 1

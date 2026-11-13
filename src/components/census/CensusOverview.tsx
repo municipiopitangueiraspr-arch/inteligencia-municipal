@@ -12,6 +12,8 @@ type Response = { id: string; visit_id: string; status: string; created_at: stri
 type Acs = { id: string; full_name: string }
 type OverviewData = { lots: Lot[]; households: Household[]; visits: Visit[]; responses: Response[]; zones: Zone[]; acs: Acs[]; importReady: boolean }
 type Forecast = { key: string; label: string; daysRemaining: number | null }
+type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
+type NextAction = { id: string; title: string; detail: string; cta: string; filter: OperationalFilter; tone: 'urgent' | 'pending' | 'neutral' }
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const FORECAST_WINDOW_DAYS = 30
@@ -72,7 +74,7 @@ function estimatedDate(days: number) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'America/Sao_Paulo' }).format(target)
 }
 
-export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms') => void }) {
+export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -201,6 +203,26 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
     }))
   }, [data])
 
+  const nextActions = useMemo<NextAction[]>(() => {
+    if (!data) return []
+    const visitsByHousehold = new Map<string, Visit[]>()
+    for (const visit of data.visits) visitsByHousehold.set(visit.household_id, [...(visitsByHousehold.get(visit.household_id) || []), visit])
+    const responsesByVisit = new Map<string, Response[]>()
+    for (const response of data.responses) responsesByVisit.set(response.visit_id, [...(responsesByVisit.get(response.visit_id) || []), response])
+    const actions: NextAction[] = []
+    for (const household of data.households) {
+      const visits = (visitsByHousehold.get(household.id) || []).sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
+      const latest = visits[0]
+      const hasDraft = visits.some((visit) => (responsesByVisit.get(visit.id) || []).some((response) => response.status === 'DRAFT'))
+      if (hasDraft) actions.push({ id: `draft-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'Questionário salvo como rascunho e pronto para continuar.', cta: 'Retomar questionário', filter: 'DRAFT', tone: 'pending' })
+      else if (!latest || latest.status === 'NO_CONTACT') actions.push({ id: `visit-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: latest?.status === 'NO_CONTACT' ? 'Não houve contato na última tentativa.' : 'Ainda não há visita registrada para este domicílio.', cta: latest?.status === 'NO_CONTACT' ? 'Tentar novamente' : 'Iniciar visita', filter: latest?.status === 'NO_CONTACT' ? 'NO_CONTACT' : 'NO_VISIT', tone: 'urgent' })
+      else if (latest.status === 'COMPLETED' && !visits.some((visit) => (responsesByVisit.get(visit.id) || []).some((response) => response.status === 'SUBMITTED'))) actions.push({ id: `form-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'A visita foi concluída, mas o questionário ainda não foi enviado.', cta: 'Aplicar questionário', filter: 'QUESTIONNAIRE', tone: 'pending' })
+      if (actions.length >= 6) break
+    }
+    if (!actions.length && data.households.length) actions.push({ id: 'all-done', title: 'Nenhuma pendência prioritária', detail: 'Os domicílios cadastrados não possuem uma próxima ação urgente.', cta: 'Ver meus domicílios', filter: 'ALL', tone: 'neutral' })
+    return actions
+  }, [data])
+
   return (
     <section className="fleet-section fleet-page-section census-overview-page">
       {error && <div className="fleet-inline-error"><AlertCircle size={15} />{error}</div>}
@@ -217,6 +239,12 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
             <button type="button" className="census-day-task questionnaire" onClick={() => onOpen('forms')}><span><ClipboardCheck size={19} /></span><strong>{Math.max(metrics.lots - metrics.submitted, 0).toLocaleString('pt-BR')}</strong><small>Questionários pendentes</small></button>
             <button type="button" className="census-day-task homes" onClick={() => onOpen('territory')}><span><Home size={19} /></span><strong>{metrics.presumed.toLocaleString('pt-BR')}</strong><small>Domicílios sem identificação</small></button>
           </div>
+          <section className="census-day-actions" aria-labelledby="censusNextActionsTitle">
+            <div className="census-overview-title"><div><span className="fleet-kicker">PRÓXIMOS PASSOS</span><h3 id="censusNextActionsTitle">Comece por aqui</h3></div><ArrowRight size={19} /></div>
+            <div className="census-day-action-list">
+              {nextActions.length ? nextActions.map((action) => <button type="button" key={action.id} className={`census-day-action ${action.tone}`} onClick={() => onOpen('families', action.filter)}><span><strong>{action.title}</strong><small>{action.detail}</small></span><b>{action.cta}<ArrowRight size={15} /></b></button>) : <span className="census-day-action-empty">Nenhum domicílio cadastrado ainda. Abra a lista para iniciar o cadastro.</span>}
+            </div>
+          </section>
           <div className="census-overview-progress-layout">
             <section className="fleet-panel census-overview-funnel census-overview-hero">
               <div className="census-overview-title">

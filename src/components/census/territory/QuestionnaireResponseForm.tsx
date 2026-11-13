@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Eraser, FileSignature, LoaderCircle, Save, Send, X } from 'lucide-react'
 import type { QuestionnaireQuestion, QuestionnaireRecord, QuestionnaireSection } from '../questionnaires/questionnaireTypes'
 import { CensusWriteConfirmation } from '../CensusWriteConfirmation'
@@ -16,15 +16,29 @@ type QuestionnaireResponseFormProps = {
   responseStatus: ResponseStatus
   contextLabel?: string
   onSave: (answers: QuestionnaireAnswers, status: ResponseStatus) => void
+  onAutoSave?: (answers: QuestionnaireAnswers) => Promise<boolean>
   onClose: () => void
 }
 
-export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, saving, responseStatus, contextLabel, onSave, onClose }: QuestionnaireResponseFormProps) {
+export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, saving, responseStatus, contextLabel, onSave, onAutoSave, onClose }: QuestionnaireResponseFormProps) {
   const [answers, setAnswers] = useState<QuestionnaireAnswers>(initialAnswers)
   const [validationError, setValidationError] = useState('')
   const [confirmClose, setConfirmClose] = useState(false)
+  const lastSavedAnswers = useRef(JSON.stringify(initialAnswers))
+  const autosaveInFlight = useRef(false)
   const answersErrors = useMemo(() => validateQuestionnaireResponse(form, answers), [form, answers])
   const isDirty = useMemo(() => JSON.stringify(answers) !== JSON.stringify(initialAnswers), [answers, initialAnswers])
+
+  useEffect(() => {
+    if (readOnly || !onAutoSave || saving) return
+    const serialized = JSON.stringify(answers)
+    if (serialized === lastSavedAnswers.current || autosaveInFlight.current) return
+    const timer = window.setTimeout(() => {
+      autosaveInFlight.current = true
+      void onAutoSave(answers).then((saved) => { if (saved) lastSavedAnswers.current = serialized }).finally(() => { autosaveInFlight.current = false })
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [answers, onAutoSave, readOnly, saving])
 
   function updateAnswer(id: string, value: unknown) {
     setAnswers((current) => ({ ...current, [id]: value }))
@@ -53,13 +67,13 @@ export function QuestionnaireResponseForm({ form, initialAnswers, readOnly, savi
         <button type="button" className="census-icon-button" aria-label="Fechar resposta" onClick={requestClose} disabled={saving}><X size={20} /></button>
       </header>
       {form.description && <p className="census-response-description">{form.description}</p>}
-      <div className="census-response-context"><FileSignature size={16} /><span>{contextLabel && <><strong>{contextLabel}.</strong> </>}{readOnly ? `Resposta ${responseStatus === 'SUBMITTED' ? 'enviada' : 'em rascunho'} · histórico preservado` : 'As respostas ficam vinculadas à visita e à versão deste questionário.'}</span></div>
+      <div className="census-response-context"><FileSignature size={16} /><span>{contextLabel && <><strong>{contextLabel}.</strong> </>}{readOnly ? `Resposta ${responseStatus === 'SUBMITTED' ? 'enviada' : 'em rascunho'} · histórico preservado` : 'As respostas são salvas automaticamente como rascunho enquanto você preenche.'}</span></div>
       {validationError && <div className="census-response-alert error" role="alert"><AlertCircle size={16} />{validationError}</div>}
       <div className="census-response-scroll">
         {form.form_schema.sections.map((section, index) => <ResponseSection key={section.id} section={section} sectionIndex={index} answers={answers} readOnly={readOnly} onChange={updateAnswer} />)}
       </div>
       <footer className="census-response-footer">
-        <span>{readOnly ? 'Somente leitura' : answersErrors.length ? `${answersErrors.length} campo(s) obrigatório(s) ou inválido(s)` : 'Campos válidos para envio'}</span>
+        <span>{readOnly ? 'Somente leitura' : saving ? 'Salvando rascunho…' : answersErrors.length ? `${answersErrors.length} campo(s) obrigatório(s) ou inválido(s)` : 'Salvamento automático ativado'}</span>
         <div>
           <button type="button" className="fleet-secondary-button" onClick={requestClose} disabled={saving}>Fechar</button>
           {!readOnly && <>

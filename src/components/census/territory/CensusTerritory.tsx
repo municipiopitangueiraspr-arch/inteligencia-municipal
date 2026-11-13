@@ -27,7 +27,7 @@ type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending'
 type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type MapTooltip = { lotId: string; x: number; y: number }
 type LotActivity = { householdCount: number; visitCount: number; latestVisit: Visit | null }
-type ResponseEditorState = { responseId: string | null; visitId: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
+type ResponseEditorState = { responseId: string | null; visitId: string; householdLabel: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type QuestionnaireApplyRequest = { household: Household; form: FormSnapshot; previousResponse: ResponseMeta | null; previousAnswers: QuestionnaireAnswers }
 type PendingWrite =
   | { kind: 'household'; lot: TerritoryLot; lotCode: string; label: string }
@@ -44,10 +44,6 @@ const PAGE_SIZE = 1000
 const indicatorExclusionLabels: Record<LotIndicatorExclusionReason, string> = {
   VACANT: 'Sem domicílio ocupado / lote vazio',
   PUBLIC: 'Área ou imóvel público/municipal',
-}
-
-function friendlyLotTitle(lot: TerritoryLot, index: number) {
-  return lot.cadastral_label || lot.label || getMapLotCode(lot.label, lot.source_handle, index)
 }
 
 function friendlyLotContext(lot: TerritoryLot) {
@@ -126,6 +122,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const [questionnaireApplyRequest, setQuestionnaireApplyRequest] = useState<QuestionnaireApplyRequest | null>(null)
   const [pendingWrite, setPendingWrite] = useState<PendingWrite | null>(null)
   const [writing, setWriting] = useState(false)
+  const [autosaving, setAutosaving] = useState(false)
   const [notice, setNotice] = useState('')
   const [noticeTone, setNoticeTone] = useState<NoticeTone>('info')
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -361,6 +358,12 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     }
     return result
   }, [coverageHouseholds, coverageVisits])
+  const householdLabelByLot = useMemo(() => {
+    const result = new Map<string, string>()
+    for (const household of coverageHouseholds) if (!result.has(household.lot_id) && household.label?.trim()) result.set(household.lot_id, household.label.trim())
+    return result
+  }, [coverageHouseholds])
+  const lotDisplayName = (lot: TerritoryLot) => householdLabelByLot.get(lot.id) || 'Novo domicílio'
   const latestSubmissionByLot = useMemo(() => {
     const householdLot = new Map(coverageHouseholds.map((household) => [household.id, household.lot_id]))
     const visitById = new Map(coverageVisits.map((visit) => [visit.id, visit]))
@@ -389,7 +392,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       const index = lots.findIndex((item) => item.id === lot.id) + 1
       const code = getMapLotCode(lot.label, lot.source_handle, index)
       const zoneName = zones.find((zone) => zone.id === lot.zone_id)?.name || ''
-      if (![code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
+      if (![lotDisplayName(lot), code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
     }
     if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
     if (mapMode === 'questionnaire' && coverageFormId && questionnaireStatusFilter !== 'all' && (lot.indicator_exclusion_reason || mapStatus(lot) !== questionnaireStatusFilter)) return false
@@ -397,11 +400,6 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   })
   const preserveContextLots = (mapMode === 'zones' || mapMode === 'questionnaire') && (zoneFilterIds.length > 0 || (mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all'))
   const mapLotsToRender = preserveContextLots ? lots : visibleLots
-  const lotIndexById = useMemo(() => {
-    const indexes = new Map<string, number>()
-    lots.forEach((lot, index) => indexes.set(lot.id, index))
-    return indexes
-  }, [lots])
   const mapMetrics = (() => {
     const eligibleLots = visibleLots.filter((lot) => !lot.indicator_exclusion_reason)
     const coverageStatuses = eligibleLots.map((lot) => mapStatus(lot))
@@ -535,8 +533,8 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     const householdVisits = coverageVisits.filter((visit) => visit.household_id === household.id)
     const visitIds = new Set(householdVisits.map((visit) => visit.id))
     const previous = coverageResponses
-      .filter((response) => response.questionnaire_id === form.id && response.status === 'SUBMITTED' && visitIds.has(response.visit_id))
-      .sort((a, b) => (b.submitted_at || b.created_at).localeCompare(a.submitted_at || a.created_at))[0] || null
+      .filter((response) => response.questionnaire_id === form.id && visitIds.has(response.visit_id))
+      .sort((a, b) => (a.status === 'DRAFT' ? -1 : 1) - (b.status === 'DRAFT' ? -1 : 1) || (b.submitted_at || b.created_at).localeCompare(a.submitted_at || a.created_at))[0] || null
     let previousAnswers: QuestionnaireAnswers = {}
     if (previous && supabase) {
       const { data, error } = await supabase.from('census_questionnaire_responses').select('answers').eq('id', previous.id).single()
@@ -552,9 +550,13 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     if (!request || !supabase) return
     setWriting(true); setPanelError('')
     try {
-      const { data, error } = await supabase.from('census_visits').insert({ household_id: request.household.id, visit_date: dateToday(), notes: '', status: 'IN_PROGRESS' }).select('id').single()
-      if (error) throw new Error(error.message)
-      setResponseEditor({ responseId: null, visitId: data.id, form: request.form, answers: request.previousAnswers, status: 'DRAFT', readOnly: false })
+      if (request.previousResponse?.status === 'DRAFT') {
+        setResponseEditor({ responseId: request.previousResponse.id, visitId: request.previousResponse.visit_id, householdLabel: request.household.label, form: request.form, answers: request.previousAnswers, status: 'DRAFT', readOnly: false })
+      } else {
+        const { data, error } = await supabase.from('census_visits').insert({ household_id: request.household.id, visit_date: dateToday(), notes: '', status: 'IN_PROGRESS' }).select('id').single()
+        if (error) throw new Error(error.message)
+        setResponseEditor({ responseId: null, visitId: data.id, householdLabel: request.household.label, form: request.form, answers: request.previousAnswers, status: 'DRAFT', readOnly: false })
+      }
     } catch (error) {
       setPanelError(`Não foi possível iniciar o questionário: ${error instanceof Error ? error.message : 'tente novamente.'}`)
     } finally { setWriting(false) }
@@ -563,6 +565,23 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   function requestResponseSave(answers: QuestionnaireAnswers, status: 'DRAFT' | 'SUBMITTED') {
     if (!responseEditor || responseEditor.readOnly) return
     setPendingWrite({ kind: 'response', editor: responseEditor, answers, status })
+  }
+
+  async function autoSaveResponse(answers: QuestionnaireAnswers) {
+    if (!responseEditor || responseEditor.readOnly || !supabase) return false
+    setAutosaving(true); setPanelError('')
+    try {
+      const payload = { answers, status: 'DRAFT' as const }
+      const result = responseEditor.responseId
+        ? await supabase.from('census_questionnaire_responses').update(payload).eq('id', responseEditor.responseId).select('id').single()
+        : await supabase.from('census_questionnaire_responses').insert({ visit_id: responseEditor.visitId, questionnaire_id: responseEditor.form.id, questionnaire_version: responseEditor.form.version, ...payload }).select('id').single()
+      if (result.error) throw new Error(result.error.message)
+      setResponseEditor((current) => current ? { ...current, responseId: result.data.id, answers, status: 'DRAFT' } : current)
+      return true
+    } catch (error) {
+      setPanelError(`O salvamento automático falhou. Tente salvar manualmente: ${error instanceof Error ? error.message : 'erro desconhecido.'}`)
+      return false
+    } finally { setAutosaving(false) }
   }
 
   const confirmation = pendingWrite?.kind === 'household'
@@ -640,9 +659,8 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
 
   const selectedZone = selectedLot ? zones.find((zone) => zone.id === selectedLot.zone_id) : null
   const selectedIndex = selectedLot ? lots.findIndex((lot) => lot.id === selectedLot.id) + 1 : 0
-  const lotLabel = selectedLot ? friendlyLotTitle(selectedLot, selectedIndex) : ''
+  const lotLabel = selectedLot ? lotDisplayName(selectedLot) : ''
   const tooltipLot = mapTooltip ? lots.find((lot) => lot.id === mapTooltip.lotId) || null : null
-  const tooltipIndex = tooltipLot ? lots.findIndex((lot) => lot.id === tooltipLot.id) + 1 : 0
   const tooltipZone = tooltipLot ? zones.find((zone) => zone.id === tooltipLot.zone_id) : null
   const tooltipActivity = tooltipLot ? activityByLot.get(tooltipLot.id) : null
   const tooltipLatestCensus = tooltipLot ? latestSubmissionByLot.get(tooltipLot.id) : null
@@ -688,12 +706,11 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
                 const zone = zones.find((item) => item.id === lot.zone_id)
                 const status = mapStatus(lot)
                 const visitStatus = mapVisitStatus(lot)
-                const index = lotIndexById.get(lot.id) ?? 0
                 const isSelected = selectedLot?.id === lot.id
                 const outsideZoneFilter = zoneFilterIds.length > 0 && (mapMode === 'zones' || mapMode === 'questionnaire') && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))
                 const outsideStatusFilter = mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all' && (Boolean(lot.indicator_exclusion_reason) || mapStatus(lot) !== questionnaireStatusFilter)
                 const silhouette = outsideZoneFilter || outsideStatusFilter
-                const mapCode = friendlyLotTitle(lot, index + 1)
+                const mapCode = lotDisplayName(lot)
                 const mapContext = friendlyLotContext(lot)
                 const visualLabel = mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
                 const fill = lot.indicator_exclusion_reason && mapMode !== 'zones' ? '#6b7280' : mapMode === 'zones' ? lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
@@ -702,7 +719,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
             </svg>
             {visibleLots.length === 0 && <div className="census-territory-empty-filter" role="status"><Filter size={20} /><strong>Nenhum lote corresponde aos filtros</strong><span>Ajuste o filtro de zona ou de situação do questionário.</span></div>}
             {mapTooltip && tooltipLot && <div id="territory-map-tooltip" className={`census-map-tooltip${mapTooltip.y < 100 ? ' below' : ''}`} role="tooltip" style={{ left: mapTooltip.x, top: mapTooltip.y }}>
-              <strong>{friendlyLotTitle(tooltipLot, tooltipIndex)}</strong>
+              <strong>{lotDisplayName(tooltipLot)}</strong>
               {friendlyLotContext(tooltipLot) && <span>{friendlyLotContext(tooltipLot)}</span>}
               {mapMode !== 'zones' && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />{tooltipStatus}</span>}
               {mapMode === 'zones' && tooltipLot.indicator_exclusion_reason && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />Fora dos indicadores · {indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason]}</span>}
@@ -722,7 +739,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       </div>
 
       {selectedLot && <aside className="census-territory-panel" aria-label={`Dossiê do ${lotLabel}`}>
-        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ TERRITORIAL</span><h3>{lotLabel}</h3>{selectedLot && friendlyLotContext(selectedLot) && <small className="census-territory-zone-context">{friendlyLotContext(selectedLot)}</small>}<span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
+        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ DO DOMICÍLIO</span><h3>{households[0]?.label || 'Novo domicílio'}</h3>{selectedLot && friendlyLotContext(selectedLot) && <small className="census-territory-zone-context">{friendlyLotContext(selectedLot)}</small>}<span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
         {panelError && <div className="census-territory-panel-error" role="alert"><AlertCircle size={16} />{panelError}</div>}
         {detailLoading ? <div className="census-territory-panel-loading"><LoaderCircle className="spin" size={19} />Carregando dossiê…</div> : authorized && <div className="census-territory-panel-scroll census-territory-dossier-simple">
           <section className="census-territory-acs-card" aria-label="ACS responsável pelo lote">
@@ -756,14 +773,14 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     </div>
     <section className="census-territory-list-card" aria-label="Lista de domicílios">
       <header><div><span className="fleet-kicker">LISTA DE DOMICÍLIOS</span><strong>Inicie uma atividade pelo cadastro</strong></div><small>{visibleLots.length > 100 ? 'Mostrando os 100 primeiros resultados' : 'Selecione uma linha para abrir o dossiê'}</small></header>
-      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const index = lotIndexById.get(lot.id) ?? 0; const code = friendlyLotTitle(lot, index + 1); const context = friendlyLotContext(lot); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: zone?.color || '#c8a15b' }} /><span><strong>{code}</strong><small>{context || 'Referência territorial ainda não associada'} · {zone?.name || 'Sem zona'}</small></span><em className={activity?.visitCount ? 'has-activity' : 'needs-activity'}>{activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
+      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const context = friendlyLotContext(lot); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: zone?.color || '#c8a15b' }} /><span><strong>{lotDisplayName(lot)}</strong><small>{context || 'Referência territorial ainda não associada'} · {zone?.name || 'Sem zona'}</small></span><em className={activity?.visitCount ? 'has-activity' : 'needs-activity'}>{activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
       {!visibleLots.length && <div className="census-territory-list-empty">Nenhum domicílio corresponde à busca ou aos filtros selecionados.</div>}
     </section>
 
 
 
-    {responseEditor && <QuestionnaireResponseForm key={`${responseEditor.responseId || responseEditor.visitId}-${responseEditor.form.id}`} form={responseEditor.form} initialAnswers={responseEditor.answers} readOnly={responseEditor.readOnly} saving={writing} responseStatus={responseEditor.status} contextLabel={`Lote ${lotLabel} · ${selectedZone?.name || 'Sem zona'}`} onSave={requestResponseSave} onClose={() => setResponseEditor(null)} />}
-    {questionnaireApplyRequest && <CensusWriteConfirmation title={questionnaireApplyRequest.previousResponse ? 'Criar nova versão desta resposta?' : 'Aplicar este questionário?'} description={questionnaireApplyRequest.previousResponse ? `“${questionnaireApplyRequest.form.title}” já foi enviado para ${questionnaireApplyRequest.household.label}. A resposta anterior será preservada no histórico e uma nova versão será aberta com as respostas anteriores preenchidas para revisão.` : `“${questionnaireApplyRequest.form.title}” será aplicado a ${questionnaireApplyRequest.household.label}. O questionário será aberto para preenchimento.`} confirmLabel={questionnaireApplyRequest.previousResponse ? 'Criar nova versão' : 'Aplicar questionário'} onCancel={() => setQuestionnaireApplyRequest(null)} onConfirm={() => void confirmQuestionnaireApply()} />}
+    {responseEditor && <QuestionnaireResponseForm key={`${responseEditor.responseId || responseEditor.visitId}-${responseEditor.form.id}`} form={responseEditor.form} initialAnswers={responseEditor.answers} readOnly={responseEditor.readOnly} saving={writing || autosaving} responseStatus={responseEditor.status} contextLabel={`Lote ${lotLabel} · ${selectedZone?.name || 'Sem zona'}`} onSave={requestResponseSave} onAutoSave={autoSaveResponse} onClose={() => setResponseEditor(null)} />}
+    {questionnaireApplyRequest && <CensusWriteConfirmation title={questionnaireApplyRequest.previousResponse?.status === 'DRAFT' ? 'Retomar este rascunho?' : questionnaireApplyRequest.previousResponse ? 'Criar nova versão desta resposta?' : 'Aplicar este questionário?'} description={questionnaireApplyRequest.previousResponse?.status === 'DRAFT' ? `“${questionnaireApplyRequest.form.title}” tem um rascunho salvo para ${questionnaireApplyRequest.household.label}. O preenchimento será retomado de onde parou.` : questionnaireApplyRequest.previousResponse ? `“${questionnaireApplyRequest.form.title}” já foi enviado para ${questionnaireApplyRequest.household.label}. A resposta anterior será preservada no histórico e uma nova versão será aberta com as respostas anteriores preenchidas para revisão.` : `“${questionnaireApplyRequest.form.title}” será aplicado a ${questionnaireApplyRequest.household.label}. O questionário será aberto para preenchimento.`} confirmLabel={questionnaireApplyRequest.previousResponse?.status === 'DRAFT' ? 'Retomar questionário' : questionnaireApplyRequest.previousResponse ? 'Criar nova versão' : 'Aplicar questionário'} onCancel={() => setQuestionnaireApplyRequest(null)} onConfirm={() => void confirmQuestionnaireApply()} />}
     {confirmation && <CensusWriteConfirmation {...confirmation} onCancel={() => setPendingWrite(null)} onConfirm={() => void confirmPendingWrite()} />}
   </section>
 }

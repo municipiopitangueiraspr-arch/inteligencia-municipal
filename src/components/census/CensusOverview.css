@@ -164,3 +164,20 @@
 .census-overview-activity-status.no_contact{background:#b42318!important}
 .census-overview-activity-status.in_progress{background:#a15c00!important}
 .census-overview-activity-status.cancelled{background:#475569!important}
+
+/* Meu dia: próxima ação apresentada como fila de trabalho clicável. */
+.census-day-actions{display:grid;gap:12px;padding:18px 20px;border:1px solid #d8e8e7;border-radius:14px;background:#fff;box-shadow:0 5px 16px #265b5d08}
+.census-day-actions .census-overview-title{margin-bottom:0}
+.census-day-action-list{display:grid;gap:8px}
+.census-day-action{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;padding:12px 14px;border:1px solid #dbe8e8;border-left:4px solid #64748b;border-radius:10px;background:#fbfdfd;color:#294d53;text-align:left;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.census-day-action:hover{border-color:#74aeb1;box-shadow:0 4px 14px #265b5d12;transform:translateY(-1px)}
+.census-day-action>span{display:grid;gap:3px;min-width:0}
+.census-day-action strong{overflow:hidden;color:#214d56;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.census-day-action small{overflow:hidden;color:#607a7f;font-size:11px;line-height:1.4;text-overflow:ellipsis;white-space:nowrap}
+.census-day-action>b{display:inline-flex;align-items:center;gap:6px;flex:none;color:#1d6670;font-size:11px;font-weight:900;white-space:nowrap}
+.census-day-action.urgent{border-left-color:#b42318}.census-day-action.urgent>b{color:#b42318}
+.census-day-action.pending{border-left-color:#a15c00}.census-day-action.pending>b{color:#a15c00}
+.census-day-action.neutral{border-left-color:#147a4b}
+.census-day-action-empty{padding:12px;border:1px dashed #b9d0d0;border-radius:9px;color:#607a7f;font-size:12px}
+.census-day-action:focus-visible{outline:3px solid #1d6670;outline-offset:3px}
+@media(max-width:650px){.census-day-actions{padding:15px}.census-day-action{align-items:flex-start;flex-direction:column;gap:8px}.census-day-action small{white-space:normal}.census-day-action>b{align-self:flex-end}}
