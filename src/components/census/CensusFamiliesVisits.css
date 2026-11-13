@@ -222,3 +222,11 @@
 .census-family-excluded-badge{display:inline-flex;width:fit-content;max-width:100%;margin:3px 0;padding:3px 7px;border:1px solid #e6d49f;border-radius:999px;background:#fff8e8;color:#66501d;font-size:10px;font-weight:800;line-height:1.3}
 @media(max-width:560px){.census-family-total-badge{min-width:78px;padding-inline:7px}.census-family-total-badge small{font-size:9px}}
 .census-family-zone-chip.unassigned{color:#4d666b}
+
+/* Tags gerenciais: mesma linguagem visual usada pelo ACS. */
+.census-family-status-pill,.census-family-questionnaire-pill,.census-family-excluded-badge{border:0;color:#fff!important;font-weight:900;box-shadow:inset 0 0 0 1px #ffffff26,0 1px 2px #173b4526}
+.census-family-status-pill.completed,.census-family-questionnaire-pill.submitted{background:#147a4b!important}
+.census-family-status-pill.in-progress,.census-family-questionnaire-pill.draft{background:#a15c00!important}
+.census-family-status-pill.no-contact{background:#b42318!important}
+.census-family-status-pill.cancelled,.census-family-status-pill.no-visit,.census-family-questionnaire-pill.none{background:#475569!important}
+.census-family-excluded-badge{background:#1d4ed8!important}
