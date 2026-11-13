@@ -13,7 +13,7 @@ import './CensusTerritory.css'
 type Point = [number, number]
 type Bbox = { minX: number; minY: number; maxX: number; maxY: number }
 type LotIndicatorExclusionReason = 'VACANT' | 'PUBLIC'
-type TerritoryLot = { id: string; source_handle: string; label: string | null; layer_name: string; geometry: Point[]; area: number | null; is_valid: boolean; zone_number: number | null; zone_id: string | null; indicator_exclusion_reason: LotIndicatorExclusionReason | null; indicator_excluded_at: string | null }
+type TerritoryLot = { id: string; source_handle: string; label: string | null; cadastral_label: string | null; street_name: string | null; neighborhood_name: string | null; block_reference: string | null; layer_name: string; geometry: Point[]; area: number | null; is_valid: boolean; zone_number: number | null; zone_id: string | null; indicator_exclusion_reason: LotIndicatorExclusionReason | null; indicator_excluded_at: string | null }
 type CensusZone = { id: string; name: string; color: string; active: boolean }
 type MapImport = { id: string; file_name: string; status: 'DRAFT' | 'PUBLISHED' | 'ERROR'; bbox: Bbox | null; updated_at: string; division_saved_at: string }
 type Household = { id: string; lot_id: string; label: string; active: boolean; created_at: string }
@@ -38,12 +38,20 @@ type PendingWrite =
 type NoticeTone = 'success' | 'error' | 'info'
 type PageResult<T> = { data: T[] | null; error: { message: string } | null }
 
-const mapSelect = 'id,source_handle,label,layer_name,geometry,area,is_valid,zone_number,zone_id,indicator_exclusion_reason,indicator_excluded_at'
+const mapSelect = 'id,source_handle,label,cadastral_label,street_name,neighborhood_name,block_reference,layer_name,geometry,area,is_valid,zone_number,zone_id,indicator_exclusion_reason,indicator_excluded_at'
 const formSelect = 'id,slug,title,subtitle,description,status,version,form_schema,created_at,updated_at'
 const PAGE_SIZE = 1000
 const indicatorExclusionLabels: Record<LotIndicatorExclusionReason, string> = {
   VACANT: 'Sem domicílio ocupado / lote vazio',
   PUBLIC: 'Área ou imóvel público/municipal',
+}
+
+function friendlyLotTitle(lot: TerritoryLot, index: number) {
+  return lot.cadastral_label || lot.label || getMapLotCode(lot.label, lot.source_handle, index)
+}
+
+function friendlyLotContext(lot: TerritoryLot) {
+  return [lot.street_name, lot.neighborhood_name, lot.block_reference ? `Quadra ${lot.block_reference}` : null].filter(Boolean).join(' · ')
 }
 
 async function fetchAllPages<T>(loadPage: (from: number, to: number) => PromiseLike<PageResult<T>>): Promise<T[]> {
@@ -381,7 +389,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       const index = lots.findIndex((item) => item.id === lot.id) + 1
       const code = getMapLotCode(lot.label, lot.source_handle, index)
       const zoneName = zones.find((zone) => zone.id === lot.zone_id)?.name || ''
-      if (![code, lot.label || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
+      if (![code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
     }
     if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
     if (mapMode === 'questionnaire' && coverageFormId && questionnaireStatusFilter !== 'all' && (lot.indicator_exclusion_reason || mapStatus(lot) !== questionnaireStatusFilter)) return false
@@ -632,7 +640,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
 
   const selectedZone = selectedLot ? zones.find((zone) => zone.id === selectedLot.zone_id) : null
   const selectedIndex = selectedLot ? lots.findIndex((lot) => lot.id === selectedLot.id) + 1 : 0
-  const lotLabel = selectedLot ? getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex) : ''
+  const lotLabel = selectedLot ? friendlyLotTitle(selectedLot, selectedIndex) : ''
   const tooltipLot = mapTooltip ? lots.find((lot) => lot.id === mapTooltip.lotId) || null : null
   const tooltipIndex = tooltipLot ? lots.findIndex((lot) => lot.id === tooltipLot.id) + 1 : 0
   const tooltipZone = tooltipLot ? zones.find((zone) => zone.id === tooltipLot.zone_id) : null
@@ -685,15 +693,17 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
                 const outsideZoneFilter = zoneFilterIds.length > 0 && (mapMode === 'zones' || mapMode === 'questionnaire') && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))
                 const outsideStatusFilter = mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all' && (Boolean(lot.indicator_exclusion_reason) || mapStatus(lot) !== questionnaireStatusFilter)
                 const silhouette = outsideZoneFilter || outsideStatusFilter
-                const mapCode = getMapLotCode(lot.label, lot.source_handle, index + 1)
+                const mapCode = friendlyLotTitle(lot, index + 1)
+                const mapContext = friendlyLotContext(lot)
                 const visualLabel = mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
                 const fill = lot.indicator_exclusion_reason && mapMode !== 'zones' ? '#6b7280' : mapMode === 'zones' ? lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
                 const lotStyle = silhouette ? { fill: 'none', stroke: '#202833', strokeWidth: 1.5, vectorEffect: 'non-scaling-stroke' as const } : { fill }
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={silhouette ? 'none' : fill} style={lotStyle} className={`${isSelected ? 'selected' : ''}${silhouette ? ' silhouette' : ''}${lot.indicator_exclusion_reason ? ' indicator-excluded' : ''}`} tabIndex={0} role="button" aria-label={`${mapCode}, ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? `, fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} aria-describedby={mapTooltip?.lotId === lot.id ? 'territory-map-tooltip' : undefined} onPointerEnter={(event) => showMapTooltip(lot.id, event.currentTarget)} onPointerLeave={() => hideMapTooltip(lot.id)} onFocus={(event) => showMapTooltip(lot.id, event.currentTarget)} onBlur={() => hideMapTooltip(lot.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode} · ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? ` · Fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon> })}
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={silhouette ? 'none' : fill} style={lotStyle} className={`${isSelected ? 'selected' : ''}${silhouette ? ' silhouette' : ''}${lot.indicator_exclusion_reason ? ' indicator-excluded' : ''}`} tabIndex={0} role="button" aria-label={`${mapCode}${mapContext ? `, ${mapContext}` : ''}, ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? `, fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} aria-describedby={mapTooltip?.lotId === lot.id ? 'territory-map-tooltip' : undefined} onPointerEnter={(event) => showMapTooltip(lot.id, event.currentTarget)} onPointerLeave={() => hideMapTooltip(lot.id)} onFocus={(event) => showMapTooltip(lot.id, event.currentTarget)} onBlur={() => hideMapTooltip(lot.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode}${mapContext ? ` · ${mapContext}` : ''} · ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? ` · Fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon> })}
             </svg>
             {visibleLots.length === 0 && <div className="census-territory-empty-filter" role="status"><Filter size={20} /><strong>Nenhum lote corresponde aos filtros</strong><span>Ajuste o filtro de zona ou de situação do questionário.</span></div>}
             {mapTooltip && tooltipLot && <div id="territory-map-tooltip" className={`census-map-tooltip${mapTooltip.y < 100 ? ' below' : ''}`} role="tooltip" style={{ left: mapTooltip.x, top: mapTooltip.y }}>
-              <strong>{getMapLotCode(tooltipLot.label, tooltipLot.source_handle, tooltipIndex)}</strong>
+              <strong>{friendlyLotTitle(tooltipLot, tooltipIndex)}</strong>
+              {friendlyLotContext(tooltipLot) && <span>{friendlyLotContext(tooltipLot)}</span>}
               {mapMode !== 'zones' && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />{tooltipStatus}</span>}
               {mapMode === 'zones' && tooltipLot.indicator_exclusion_reason && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />Fora dos indicadores · {indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason]}</span>}
               <span>Zona: {tooltipZone?.name || 'Sem zona'}</span>
@@ -712,7 +722,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       </div>
 
       {selectedLot && <aside className="census-territory-panel" aria-label={`Dossiê do ${lotLabel}`}>
-        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ TERRITORIAL</span><h3>{lotLabel}</h3><span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
+        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ TERRITORIAL</span><h3>{lotLabel}</h3>{selectedLot && friendlyLotContext(selectedLot) && <small className="census-territory-zone-context">{friendlyLotContext(selectedLot)}</small>}<span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
         {panelError && <div className="census-territory-panel-error" role="alert"><AlertCircle size={16} />{panelError}</div>}
         {detailLoading ? <div className="census-territory-panel-loading"><LoaderCircle className="spin" size={19} />Carregando dossiê…</div> : authorized && <div className="census-territory-panel-scroll census-territory-dossier-simple">
           <section className="census-territory-acs-card" aria-label="ACS responsável pelo lote">
@@ -746,7 +756,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     </div>
     <section className="census-territory-list-card" aria-label="Lista de domicílios">
       <header><div><span className="fleet-kicker">LISTA DE DOMICÍLIOS</span><strong>Inicie uma atividade pelo cadastro</strong></div><small>{visibleLots.length > 100 ? 'Mostrando os 100 primeiros resultados' : 'Selecione uma linha para abrir o dossiê'}</small></header>
-      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const index = lotIndexById.get(lot.id) ?? 0; const code = getMapLotCode(lot.label, lot.source_handle, index + 1); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: zone?.color || '#c8a15b' }} /><span><strong>{code}</strong><small>{lot.label || 'Domicílio sem identificação'} · {zone?.name || 'Sem zona'}</small></span><em>{activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
+      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const index = lotIndexById.get(lot.id) ?? 0; const code = friendlyLotTitle(lot, index + 1); const context = friendlyLotContext(lot); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: zone?.color || '#c8a15b' }} /><span><strong>{code}</strong><small>{context || 'Referência territorial ainda não associada'} · {zone?.name || 'Sem zona'}</small></span><em>{activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
       {!visibleLots.length && <div className="census-territory-list-empty">Nenhum domicílio corresponde à busca ou aos filtros selecionados.</div>}
     </section>
 

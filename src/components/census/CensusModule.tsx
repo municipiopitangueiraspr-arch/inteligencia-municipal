@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
 import { CensusOverview } from './CensusOverview'
 import { assignLotToZone, assignLotsToZone, filterUnassignedLots, getLotFillColor, getLotKey, groupLotSaveAssignments, matchDraftLotsToCurrent, mergeSelectedLotKeys, parseDxfLotBoundaries, selectLotKeysInRect, shouldStartMapPan, withLotIds, zoomMapViewAtOffset } from './mapLogic'
+import type { DxfEntity } from './mapLogic'
 import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
 import { CensusTerritory } from './territory/CensusTerritory'
 import '../FleetModule.css'
@@ -17,6 +18,10 @@ type Lot = {
   id?: string
   source_handle: string
   label: string | null
+  cadastral_label?: string | null
+  street_name?: string | null
+  neighborhood_name?: string | null
+  block_reference?: string | null
   layer_name: string
   geometry: Point[]
   area: number
@@ -74,7 +79,7 @@ async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Pr
 async function fetchTerritoryLots(db: NonNullable<typeof supabase>, importId: string) {
   const rows: Lot[] = []
   for (let from = 0; ; from += TERRITORY_PAGE_SIZE) {
-    const { data, error } = await db.from('census_territory_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,zone_number,zone_id').eq('import_id', importId).order('source_handle').order('id').range(from, from + TERRITORY_PAGE_SIZE - 1)
+    const { data, error } = await db.from('census_territory_map_lots').select('id,source_handle,label,cadastral_label,street_name,neighborhood_name,block_reference,layer_name,geometry,area,is_valid,zone_number,zone_id').eq('import_id', importId).order('source_handle').order('id').range(from, from + TERRITORY_PAGE_SIZE - 1)
     if (error) throw new Error(`Não foi possível carregar os lotes publicados: ${error.message}`)
     const page = (data || []) as Lot[]
     rows.push(...page)
@@ -85,7 +90,7 @@ async function fetchTerritoryLots(db: NonNullable<typeof supabase>, importId: st
 async function fetchPreparationLots(db: NonNullable<typeof supabase>, importId: string) {
   const rows: Lot[] = []
   for (let from = 0; ; from += TERRITORY_PAGE_SIZE) {
-    const { data, error } = await db.from('census_map_lots').select('id,source_handle,label,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id,matched_lot_id,merge_status').eq('import_id', importId).order('source_handle').order('id').range(from, from + TERRITORY_PAGE_SIZE - 1)
+    const { data, error } = await db.from('census_map_lots').select('id,source_handle,label,cadastral_label,street_name,neighborhood_name,block_reference,layer_name,geometry,area,is_valid,problem_reasons,zone_number,zone_id,matched_lot_id,merge_status').eq('import_id', importId).order('source_handle').order('id').range(from, from + TERRITORY_PAGE_SIZE - 1)
     if (error) throw new Error(`Não foi possível carregar o rascunho: ${error.message}`)
     const page = (data || []) as Lot[]
     rows.push(...page)
@@ -368,7 +373,7 @@ function MapPreparationWorkspace() {
   const [notice, setNotice] = useState('')
   const [noticeTone, setNoticeTone] = useState<CensusNoticeTone>('success')
   const [pendingWrite, setPendingWrite] = useState<'import' | 'save' | 'publish' | null>(null)
-  const [activeWrite, setActiveWrite] = useState<'import' | 'save' | 'publish' | null>(null)
+  const [activeWrite, setActiveWrite] = useState<'import' | 'save' | 'publish' | 'export' | null>(null)
   const [mapView, setMapView] = useState({ zoom: 1, pan: { x: 0, y: 0 } })
   const { zoom, pan } = mapView
   const [dragging, setDragging] = useState(false)
@@ -636,17 +641,20 @@ function MapPreparationWorkspace() {
       if (draftError) throw new Error(draftError.message)
       if (existingDrafts?.length) throw new Error('Já existe um rascunho em preparação. Salve e publique-o antes de importar outro mapa.')
       if (!/\.dxf$/i.test(file.name)) throw new Error('Selecione um arquivo DXF ASCII.')
-      const parsed = parseDxfLotBoundaries(await file.text())
+      const dxfBytes = await file.arrayBuffer()
+      const parsed = parseDxfLotBoundaries(new TextDecoder('windows-1252').decode(dxfBytes))
       if (!parsed.lots.length) throw new Error('A camada Lotes Urbanos não contém polígonos fechados com área válida.')
       const id = crypto.randomUUID(); const path = `imports/${id}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const matchedRows = matchDraftLotsToCurrent(withLotIds(parsed.lots, () => crypto.randomUUID()), publishedLots)
       const upload = await db.storage.from('census-maps').upload(path, file, { contentType: file.type || 'application/dxf', upsert: false })
       if (upload.error) throw new Error(upload.error.message)
-      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', is_current: false, total_features: parsed.lots.length + parsed.ignoredGeometryCount, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, division_saved_at: null, raw_metadata: { parser: 'client-dxf-boundaries-v3', ignored_geometry_count: parsed.ignoredGeometryCount, exact_geometry_matches: matchedRows.filter((lot) => lot.merge_status === 'MATCHED').length } }
+      const record = { id, file_name: file.name, mime_type: file.type || 'application/dxf', file_size: file.size, storage_path: path, source_layer: parsed.sourceLayer, status: 'DRAFT', is_current: false, total_features: parsed.entities.length, valid_features: parsed.lots.length, problematic_features: parsed.ignoredGeometryCount, bbox: parsed.bbox, division_saved_at: null, raw_metadata: { parser: 'client-dxf-entities-v4', entity_count: parsed.entities.length, ignored_geometry_count: parsed.ignoredGeometryCount, text_entity_count: parsed.entities.filter((entity) => Boolean(entity.text_content)).length, exact_geometry_matches: matchedRows.filter((lot) => lot.merge_status === 'MATCHED').length } }
       const inserted = await db.from('census_map_imports').insert(record)
       if (inserted.error) throw new Error(inserted.error.message)
       const rows = matchedRows.map((lot) => ({ ...lot, import_id: id }))
       await chunks(rows, 100, async (chunk) => { const result = await db.from('census_map_lots').insert(chunk); if (result.error) throw new Error(result.error.message) })
+      const entityRows = parsed.entities.map((entity: DxfEntity) => ({ import_id: id, ...entity }))
+      await chunks(entityRows, 100, async (chunk) => { const result = await db.from('census_map_dxf_entities').insert(chunk); if (result.error) throw new Error(`Não foi possível preservar as entidades originais do DXF: ${result.error.message}`) })
       setMapImport({ ...record, status: 'DRAFT', updated_at: new Date().toISOString(), published_at: null, division_saved_at: null } as MapImport); setLots(rows as Lot[]); setShowOnlyUnassigned(false); setShowOnlyNewLots(false); setFile(null); resetView(); setNoticeTone('success'); setNotice(`${parsed.lots.length.toLocaleString('pt-BR')} lotes no rascunho; ${matchedRows.filter((lot) => lot.merge_status === 'MATCHED').length.toLocaleString('pt-BR')} correspondem exatamente ao mapa operacional e herdaram suas zonas. ${matchedRows.filter((lot) => lot.merge_status !== 'MATCHED').length.toLocaleString('pt-BR')} são novos ou tiveram geometria alterada e precisam de revisão.${parsed.ignoredGeometryCount ? ` ${parsed.ignoredGeometryCount.toLocaleString('pt-BR')} geometria(s) inválida(s) foram ignoradas.` : ''} A versão dos ACSs não foi alterada.`)
     } catch (error) { setNoticeTone('error'); setNotice(error instanceof Error ? error.message : 'Não foi possível importar o mapa.') }
     finally { setSaving(false); setActiveWrite(null) }
@@ -705,6 +713,38 @@ function MapPreparationWorkspace() {
     } finally { setSaving(false); setActiveWrite(null) }
   }
 
+  async function exportDxfPackage() {
+    const db = supabase
+    if (!db || !mapImport) return
+    setSaving(true); setActiveWrite('export'); setNotice('')
+    try {
+      const entities: DxfEntity[] = []
+      for (let from = 0; ; from += TERRITORY_PAGE_SIZE) {
+        const { data, error } = await db.from('census_map_dxf_entities').select('entity_index,entity_type,layer_name,handle,text_content,insertion_point,geometry,raw_pairs,metadata').eq('import_id', mapImport.id).order('entity_index').range(from, from + TERRITORY_PAGE_SIZE - 1)
+        if (error) throw new Error(error.message)
+        const page = (data || []) as DxfEntity[]
+        entities.push(...page)
+        if (page.length < TERRITORY_PAGE_SIZE) break
+      }
+      const lots = await fetchPreparationLots(db, mapImport.id)
+      const original = await db.storage.from('census-maps').createSignedUrl(mapImport.storage_path, 3600)
+      const payload = { format: 'inteligencia-municipal.dxf-archive.v1', exported_at: new Date().toISOString(), original_dxf: { file_name: mapImport.file_name, storage_path: mapImport.storage_path, signed_url: original.data?.signedUrl || null }, import: mapImport, entities, lots }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${mapImport.file_name.replace(/\.dxf$/i, '')}-dados-completos.json`; anchor.click(); URL.revokeObjectURL(url)
+      setNoticeTone('success'); setNotice(`Exportação concluída com ${entities.length.toLocaleString('pt-BR')} entidades DXF e ${lots.length.toLocaleString('pt-BR')} lotes.`)
+    } catch (error) { setNoticeTone('error'); setNotice(`Não foi possível exportar os dados originais do DXF: ${error instanceof Error ? error.message : 'tente novamente.'}`) }
+    finally { setSaving(false); setActiveWrite(null) }
+  }
+
+  async function downloadOriginalDxf() {
+    const db = supabase
+    if (!db || !mapImport) return
+    const result = await db.storage.from('census-maps').createSignedUrl(mapImport.storage_path, 3600)
+    if (result.error || !result.data?.signedUrl) { setNoticeTone('error'); setNotice('Não foi possível gerar o download do DXF original.'); return }
+    const anchor = document.createElement('a'); anchor.href = result.data.signedUrl; anchor.download = mapImport.file_name; anchor.target = '_blank'; anchor.rel = 'noreferrer'; anchor.click()
+  }
+
   function confirmPendingWrite() {
     const action = pendingWrite
     setPendingWrite(null)
@@ -726,6 +766,7 @@ function MapPreparationWorkspace() {
         <div className="census-workspace-upload">
           <label className="census-file-picker"><Upload size={18} /><span><strong>{file ? file.name : 'Importar novo mapa DXF'}</strong><small>{file ? 'Arquivo selecionado para um rascunho' : mapImport?.status === 'DRAFT' ? 'Finalize ou publique o rascunho atual antes de importar outro' : 'O mapa operacional continuará ativo durante a preparação'}</small></span><input type="file" accept=".dxf,application/dxf" disabled={saving || mapImport?.status === 'DRAFT'} onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
           <button type="button" className="fleet-primary-button" disabled={!file || saving || mapImport?.status === 'DRAFT'} onClick={() => setPendingWrite('import')}>{activeWrite === 'import' ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />}{activeWrite === 'import' ? 'Importando mapa…' : 'Importar como rascunho'}</button>
+          {mapImport && <><button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => void downloadOriginalDxf()}><Download size={15} />Baixar DXF original</button><button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => void exportDxfPackage()}><Download size={15} />Exportar dados completos</button></>}
         </div>
       </div>
       {mapImport?.status === 'PUBLISHED' && <div className="census-workspace-notice info" role="status"><MapPinned size={16} />Esta é a versão operacional publicada. Para mudar o mapa ou a divisão, importe um DXF; suas alterações ficarão em rascunho até você publicar.</div>}

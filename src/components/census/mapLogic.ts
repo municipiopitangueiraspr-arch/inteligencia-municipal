@@ -18,7 +18,11 @@ export type LotSaveGroup = { zoneId: string | null; lotIds: string[] }
 export type DxfLotBoundary = {
   id?: string
   source_handle: string
-  label: null
+  label: string | null
+  cadastral_label?: string | null
+  street_name?: string | null
+  neighborhood_name?: string | null
+  block_reference?: string | null
   layer_name: string
   geometry: [number, number][]
   area: number
@@ -26,8 +30,20 @@ export type DxfLotBoundary = {
   problem_reasons: string[]
   zone_number: null
 }
+export type DxfEntity = {
+  entity_index: number
+  entity_type: string
+  layer_name: string | null
+  handle: string | null
+  text_content: string | null
+  insertion_point: [number, number] | null
+  geometry: [number, number][] | null
+  raw_pairs: [string, string][]
+  metadata: { closed?: boolean }
+}
 export type DxfLotParseResult = {
   lots: DxfLotBoundary[]
+  entities: DxfEntity[]
   bbox: { minX: number; minY: number; maxX: number; maxY: number } | null
   sourceLayer: string
   ignoredGeometryCount: number
@@ -140,77 +156,82 @@ export function isImportableLotGeometry(layer: string, closed: boolean, points: 
   return area > 0
 }
 
+function cleanDxfText(value: string) {
+  return value
+    .replace(/\\f[^;]+;/gi, '')
+    .replace(/\\H[^;]+;/gi, '')
+    .replace(/\\[Pp]/g, ' ')
+    .replace(/\\~/g, ' ')
+    .replace(/\\U\+[0-9A-F]{4}/gi, (match) => String.fromCharCode(parseInt(match.slice(3), 16)))
+    .replace(/\\/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function parseDxfLotBoundaries(text: string): DxfLotParseResult {
   const lines = text.replace(/\r/g, '').split('\n').map((line) => line.trim())
-  const polylines: Array<{ handle: string; layer: string; closed: boolean; points: [number, number][] }> = []
+  const pairs: [string, string][] = []
+  for (let i = 0; i + 1 < lines.length; i += 2) pairs.push([lines[i], lines[i + 1]])
+  const entities: DxfEntity[] = []
   let section = ''
-  let waitingForSectionName = false
-  let entity: { type: string; handle: string; layer: string; closed: boolean; points: [number, number][] } | null = null
-
+  let entity: { type: string; layer: string | null; handle: string | null; text: string[]; x: number | null; y: number | null; pendingX: number | null; closed: boolean; geometry: [number, number][]; raw: [string, string][] } | null = null
   const flush = () => {
-    if (entity?.type === 'LWPOLYLINE') {
-      polylines.push({ handle: entity.handle, layer: entity.layer, closed: entity.closed, points: entity.points })
-    }
+    if (!entity || section !== 'ENTITIES') return
+    entities.push({
+      entity_index: entities.length,
+      entity_type: entity.type,
+      layer_name: entity.layer,
+      handle: entity.handle,
+      text_content: entity.text.length ? cleanDxfText(entity.text.join('')) : null,
+      insertion_point: entity.x !== null && entity.y !== null ? [entity.x, entity.y] : null,
+      geometry: entity.geometry.length ? entity.geometry : null,
+      raw_pairs: entity.raw,
+      metadata: { closed: entity.closed },
+    })
   }
-
-  for (let i = 0; i < lines.length - 1; i += 2) {
-    const code = lines[i]
-    const value = lines[i + 1]
-
-    if (code === '0' && value === 'SECTION') {
-      flush()
-      entity = null
-      waitingForSectionName = true
-      continue
-    }
-    if (waitingForSectionName && code === '2') {
-      section = value.toUpperCase()
-      waitingForSectionName = false
-      continue
-    }
-    if (code === '0' && value === 'ENDSEC') {
-      flush()
-      entity = null
-      section = ''
-      waitingForSectionName = false
-      continue
-    }
-    if (code === '0') {
-      flush()
-      entity = section === 'ENTITIES' ? { type: value, handle: '', layer: '', closed: false, points: [] } : null
-      continue
-    }
+  for (const [code, value] of pairs) {
+    if (code === '0' && value === 'SECTION') { flush(); entity = null; section = 'PENDING'; continue }
+    if (section === 'PENDING' && code === '2') { section = value.toUpperCase(); continue }
+    if (code === '0' && value === 'ENDSEC') { flush(); entity = null; section = ''; continue }
+    if (code === '0') { flush(); entity = section === 'ENTITIES' ? { type: value, layer: null, handle: null, text: [], x: null, y: null, pendingX: null, closed: false, geometry: [], raw: [] } : null; continue }
     if (!entity || section !== 'ENTITIES') continue
-
+    entity.raw.push([code, value])
     if (code === '5') entity.handle = value
     if (code === '8') entity.layer = value
-    if (entity.type === 'LWPOLYLINE') {
-      if (code === '70') entity.closed = (Number(value) & 1) === 1
-      if (code === '10') {
-        const x = Number(value)
-        const nextCode = lines[i + 2]
-        const y = nextCode === '20' ? Number(lines[i + 3]) : NaN
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          entity.points.push([x, y])
-          i += 2
-        }
-      }
-    }
+    if (code === '1' || code === '3') entity.text.push(value)
+    if (code === '10') { const x = Number(value); if (Number.isFinite(x)) { entity.x = entity.x ?? x; entity.pendingX = x } }
+    if (code === '20') { const y = Number(value); if (Number.isFinite(y)) { entity.y = entity.y ?? y; if (entity.pendingX !== null && entity.type === 'LWPOLYLINE') { entity.geometry.push([entity.pendingX, y]); entity.pendingX = null } } }
+    if (code === '70' && entity.type === 'LWPOLYLINE') entity.closed = (Number(value) & 1) === 1
   }
   flush()
 
-  const candidates = polylines.filter((polyline) => polyline.layer.trim().toLowerCase() === 'lotes urbanos')
-  const source = candidates.filter((polyline) => isImportableLotGeometry(polyline.layer, polyline.closed, polyline.points))
-  const lots: DxfLotBoundary[] = source.map((polyline, index) => {
-    const area = Math.abs(polyline.points.reduce((sum, point, pointIndex) => {
-      const next = polyline.points[(pointIndex + 1) % polyline.points.length]
+  const candidates = entities.filter((item) => item.entity_type === 'LWPOLYLINE' && item.layer_name?.trim().toLowerCase() === 'lotes urbanos')
+  const source = candidates.filter((item) => isImportableLotGeometry(item.layer_name || '', Boolean(item.metadata.closed), item.geometry || []))
+  const cadastralTexts = entities.filter((item) => item.entity_type === 'MTEXT' && item.layer_name?.trim().toLowerCase() === 'lotes urbanos' && item.text_content && item.insertion_point)
+  const streetTexts = entities.filter((item) => item.entity_type === 'MTEXT' && item.layer_name === 'Sistema_Viario' && item.text_content && item.insertion_point)
+  const neighborhoodTexts = entities.filter((item) => item.entity_type === 'MTEXT' && item.layer_name === 'Quadras_Point' && item.text_content && item.insertion_point)
+  const centroid = (points: [number, number][]) => points.reduce((acc, point) => [acc[0] + point[0] / points.length, acc[1] + point[1] / points.length], [0, 0] as [number, number])
+  const nearestText = (point: [number, number], rows: DxfEntity[]) => rows.reduce<{ distance: number; text: string | null } | null>((best, row) => { const at = row.insertion_point as [number, number]; const distance = Math.hypot(at[0] - point[0], at[1] - point[1]); return !best || distance < best.distance ? { distance, text: row.text_content } : best }, null)?.text || null
+  const textInside = (point: [number, number], polygon: [number, number][]) => { let inside = false; for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) { const a = polygon[i]; const b = polygon[j]; const cross = ((a[1] > point[1]) !== (b[1] > point[1])) && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]; if (cross) inside = !inside } return inside }
+  const lots: DxfLotBoundary[] = source.map((item, index) => {
+    const geometry = (item.geometry || []) as [number, number][]
+    const area = Math.abs(geometry.reduce((sum, point, pointIndex) => {
+      const next = geometry[(pointIndex + 1) % geometry.length]
       return sum + point[0] * next[1] - next[0] * point[1]
     }, 0) / 2)
+    const center = centroid(geometry)
+    const cadastral = cadastralTexts.find((text) => text.insertion_point && textInside(text.insertion_point, geometry))?.text_content || null
+    const neighborhood = nearestText(center, neighborhoodTexts)
+    const neighborhoodMatch = neighborhood?.match(/^([^\s]+)\s+(.+)$/)
     return {
-      source_handle: polyline.handle || `entity-${index + 1}`,
-      label: null,
-      layer_name: polyline.layer,
-      geometry: polyline.points,
+      source_handle: item.handle || `entity-${index + 1}`,
+      label: cadastral,
+      cadastral_label: cadastral,
+      street_name: nearestText(center, streetTexts),
+      neighborhood_name: neighborhoodMatch?.[2]?.trim() || neighborhood,
+      block_reference: neighborhoodMatch?.[1] || neighborhood,
+      layer_name: item.layer_name || 'Lotes Urbanos',
+      geometry,
       area,
       is_valid: true,
       problem_reasons: [],
@@ -233,8 +254,9 @@ export function parseDxfLotBoundaries(text: string): DxfLotParseResult {
 
   return {
     lots,
+    entities,
     bbox,
-    sourceLayer: source[0]?.layer || candidates[0]?.layer || 'Lotes Urbanos',
+    sourceLayer: source[0]?.layer_name || candidates[0]?.layer_name || 'Lotes Urbanos',
     ignoredGeometryCount: candidates.length - source.length,
   }
 }
