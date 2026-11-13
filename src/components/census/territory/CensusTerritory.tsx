@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { AlertCircle, BarChart3, CheckCircle2, ClipboardCheck, Eye, FileText, Filter, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, ShieldCheck, UsersRound, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardCheck, Eye, FileText, Filter, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, ShieldCheck, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { CensusWriteConfirmation } from '../CensusWriteConfirmation'
 import { getLotFillColor, zoomMapViewAtOffset } from '../mapLogic'
@@ -637,11 +637,11 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
-      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">ESCOLHA A VISUALIZAÇÃO</span><strong>O que você quer consultar?</strong></div></div>
+      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">ESCOLHA UMA ATIVIDADE</span><strong>O que você precisa fazer?</strong></div></div>
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
-        <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><MapPinned size={15} />Divisão por zonas</button>
-        <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><BarChart3 size={15} />Cobertura do questionário</button>
-        <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('visits') }}><ClipboardCheck size={15} />Situação das visitas</button>
+        <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><Home size={15} />Cadastro de domicílios</button>
+        <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><FileText size={15} />Questionários</button>
+        <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('visits') }}><ClipboardCheck size={15} />Fazer visita</button>
       </div>
       {(mapMode === 'zones' || mapMode === 'questionnaire') && <div className="census-map-step-group census-map-step-filters"><div className="census-map-stage-heading compact"><span className="census-map-stage-number">2</span><div><span className="fleet-kicker">REFINE O RECORTE</span><strong>{mapMode === 'questionnaire' ? 'Escolha a zona em foco' : 'Quais zonas deseja ver?'}</strong></div></div><div className="census-map-zone-filters" role="group" aria-label="Filtrar lotes por zona">
         <div className="census-map-zone-filter-options"><span className="census-map-filter-caption"><Filter size={14} />Zonas exibidas</span><button type="button" className={`census-map-zone-chip all${zoneFilterIds.length === 0 ? ' active' : ''}`} aria-pressed={zoneFilterIds.length === 0} onClick={resetZoneFilter}>Todas as zonas</button>{zones.filter((zone) => zone.active).map((zone) => <button type="button" key={zone.id} className={`census-map-zone-chip${zoneFilterIds.includes(zone.id) ? ' active' : ''}`} aria-pressed={zoneFilterIds.includes(zone.id)} onClick={() => toggleZoneFilter(zone.id)}><i style={{ background: zone.color }} />{zone.name}</button>)}</div>

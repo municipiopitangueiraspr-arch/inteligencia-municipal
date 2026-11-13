@@ -397,3 +397,11 @@
 .census-map-filter-subheading{display:flex;align-items:center;gap:7px;color:#4b7076;font-size:11px}
 .census-map-filter-subheading svg{color:#4b8790}
 .census-map-filter-subheading strong{font-size:11px}
+
+/* Atividades principais do ACS: prioridade visual e leitura imediata. */
+.census-map-mode-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.census-map-mode-tabs button{min-height:58px;padding:12px 14px;border:2px solid #bdd3d5;border-radius:11px;background:#f4f8f8;color:#245c67;font-size:13px;font-weight:900;box-shadow:0 3px 8px #1b515c12;transition:transform .15s ease,background .15s ease,border-color .15s ease,box-shadow .15s ease}
+.census-map-mode-tabs button:hover{border-color:#1b7180;background:#e5f3f2;transform:translateY(-1px)}
+.census-map-mode-tabs button.active{border-color:#0e5263;background:#0e5263;color:#fff;box-shadow:0 8px 18px #0e526340}
+.census-map-mode-tabs button.active svg{color:#f4d17d}
+@media(max-width:760px){.census-map-mode-tabs{grid-template-columns:1fr;gap:8px}.census-map-mode-tabs button{justify-content:flex-start;min-height:52px}}
