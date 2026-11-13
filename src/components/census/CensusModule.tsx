@@ -49,17 +49,24 @@ type MapImport = {
   is_current?: boolean
 }
 type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
+type CensusRole = 'acs' | 'manager'
+type CensusAccess = { role: CensusRole; label: string; description: string; acsId: string | null }
 type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
 type CensusNoticeTone = 'success' | 'error' | 'info'
 const TERRITORY_PAGE_SIZE = 1000
 
-const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
+const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'territory', label: 'Domicílios', icon: MapPinned },
   { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'families', label: 'Visitas', icon: UsersRound },
   { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
+]
+const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
+  { id: 'territory', label: 'Meus domicílios', icon: MapPinned },
+  { id: 'families', label: 'Minhas visitas', icon: UsersRound },
 ]
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
   for (let index = 0; index < values.length; index += size) await callback(values.slice(index, index + size))
@@ -90,7 +97,10 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
   const [view, setView] = useState<CensusSection>('overview')
   const [menuOpen, setMenuOpen] = useState(false)
   const [profile, setProfile] = useState<{ name: string; photo: string | null }>({ name: userEmail || 'Usuário autenticado', photo: null })
+  const [access, setAccess] = useState<CensusAccess>({ role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+  const [accessLoading, setAccessLoading] = useState(true)
   const [zones, setZones] = useState<CensusZone[]>([])
+  const navItems = access.role === 'acs' ? acsNavItems : managerNavItems
   const loadZones = async () => {
     if (!supabase) return
     const { data } = await supabase.from('census_zones').select('id,name,color,active').order('created_at').limit(500)
@@ -108,23 +118,38 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
       const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || authUser.email || 'Usuário autenticado'
       const photo = String(metadata.avatar_url || metadata.picture || metadata.photo_url || '').trim() || null
       if (mounted) setProfile({ name, photo })
+      const { data: acsRows } = await supabase.from('census_acs').select('id,full_name').eq('user_id', authUser.id).eq('active', true).limit(1)
+      const acs = acsRows?.[0] as { id?: string; full_name?: string } | undefined
+      const profileText = [metadata.perfil, metadata.perfil_municipal, metadata.role, metadata.cargo].map((value) => String(value || '').toUpperCase()).join(' ')
+      const isAcs = Boolean(acs?.id) || /\bACS\b|AGENTE\s+COMUNIT/.test(profileText)
+      if (mounted) {
+        setAccess(isAcs
+          ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: acs?.id || null }
+          : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+        setAccessLoading(false)
+      }
     }
     void loadProfile()
-    return () => { mounted = false }
+    const timeout = window.setTimeout(() => { if (mounted) setAccessLoading(false) }, 4000)
+    return () => { mounted = false; window.clearTimeout(timeout) }
   }, [userEmail])
 
-  const selectView = (nextView: CensusSection) => { setView(nextView); setMenuOpen(false) }
+  const selectView = (nextView: CensusSection) => {
+    if (access.role === 'acs' && !acsNavItems.some((item) => item.id === nextView)) return
+    setView(nextView); setMenuOpen(false)
+  }
   const profileInitials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
+  const openOverview = (nextView: 'territory' | 'families' | 'dwg' | 'zones' | 'forms') => selectView(access.role === 'acs' && nextView === 'forms' ? 'territory' : nextView)
 
   return <div className="fleet-shell census-shell">
-    <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Saúde da Família/ACS</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">GESTÃO TERRITORIAL</div><nav className="fleet-nav" aria-label="Navegação de Saúde da Família/ACS">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
-    <main className="fleet-main census-main"><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
-      {view === 'overview' && <CensusOverview onOpen={selectView} />}
+    <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Saúde da Família/ACS</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">{access.role === 'acs' ? 'ROTINA DE CAMPO' : 'GESTÃO TERRITORIAL'}</div><nav className="fleet-nav" aria-label="Navegação de Saúde da Família/ACS">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong><small>{access.label}</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
+    <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
+      {view === 'overview' && <CensusOverview onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits onOpenTerritory={() => setView('territory')} />}
-      {view === 'territory' && <CensusTerritory onOpenQuestionnaires={() => setView('forms')} />}
-      {view === 'zones' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
-      {view === 'dwg' && <MapPreparationWorkspace />}
-      {view === 'forms' && <QuestionnairesManagement />}
+      {view === 'territory' && <CensusTerritory onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
+      {view === 'zones' && access.role === 'manager' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
+      {view === 'dwg' && access.role === 'manager' && <MapPreparationWorkspace />}
+      {view === 'forms' && access.role === 'manager' && <QuestionnairesManagement />}
 
     </div></main>
   </div>
