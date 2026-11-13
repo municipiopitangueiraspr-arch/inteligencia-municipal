@@ -54,11 +54,11 @@ type CensusNoticeTone = 'success' | 'error' | 'info'
 const TERRITORY_PAGE_SIZE = 1000
 
 const navItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'territory', label: 'Mapa territorial', icon: MapPinned },
-  { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
-  { id: 'families', label: 'Famílias e visitas', icon: UsersRound },
+  { id: 'territory', label: 'Domicílios', icon: MapPinned },
   { id: 'forms', label: 'Questionários', icon: FileText },
+  { id: 'families', label: 'Visitas', icon: UsersRound },
+  { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
+  { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
 ]
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {

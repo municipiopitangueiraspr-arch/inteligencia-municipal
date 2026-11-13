@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { AlertCircle, CheckCircle2, ClipboardCheck, Eye, FileText, Filter, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, ShieldCheck, UsersRound, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClipboardCheck, Eye, FileText, Filter, Home, LoaderCircle, MapPinned, Minus, Plus, RotateCcw, Save, Search, ShieldCheck, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { CensusWriteConfirmation } from '../CensusWriteConfirmation'
 import { getLotFillColor, zoomMapViewAtOffset } from '../mapLogic'
@@ -89,6 +89,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const [mapError, setMapError] = useState('')
   const [mapMode, setMapMode] = useState<MapMode>('zones')
   const [zoneFilterIds, setZoneFilterIds] = useState<string[]>([])
+  const [lotSearch, setLotSearch] = useState('')
   const [coverageFormId, setCoverageFormId] = useState('')
   const [questionnaireStatusFilter, setQuestionnaireStatusFilter] = useState<'all' | CoverageStatus>('all')
   const [coverageHouseholds, setCoverageHouseholds] = useState<Household[]>([])
@@ -375,6 +376,13 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
   const activeMapForm = activeForms.find((form) => form.id === coverageFormId)
   const zoneScopedLots = lots.filter((lot) => !(mapMode === 'zones' || mapMode === 'questionnaire') || !zoneFilterIds.length || Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id)))
   const visibleLots = lots.filter((lot) => {
+    const normalizedSearch = lotSearch.trim().toLowerCase()
+    if (normalizedSearch) {
+      const index = lots.findIndex((item) => item.id === lot.id) + 1
+      const code = getMapLotCode(lot.label, lot.source_handle, index)
+      const zoneName = zones.find((zone) => zone.id === lot.zone_id)?.name || ''
+      if (![code, lot.label || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
+    }
     if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
     if (mapMode === 'questionnaire' && coverageFormId && questionnaireStatusFilter !== 'all' && (lot.indicator_exclusion_reason || mapStatus(lot) !== questionnaireStatusFilter)) return false
     return true
@@ -637,7 +645,7 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
-      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">ESCOLHA UMA ATIVIDADE</span><strong>O que você precisa fazer?</strong></div></div>
+      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">ESCOLHA A VISUALIZAÇÃO</span><strong>O que você precisa fazer?</strong></div></div>
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
         <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><Home size={15} />Cadastro de domicílios</button>
         <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><FileText size={15} />Questionários</button>
@@ -660,7 +668,8 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
       {mapMode === 'zones' && <div className="census-map-metrics zone-metrics" aria-label={`Resumo territorial de ${visibleLots.length.toLocaleString('pt-BR')} lotes selecionados`}><div><strong>{visibleLots.length.toLocaleString('pt-BR')}</strong><span>Lotes na seleção</span></div><div><strong>{(zoneFilterIds.length || zones.filter((zone) => zone.active).length).toLocaleString('pt-BR')}</strong><span>Zonas em foco</span></div><div className="no-activity"><strong>{visibleLots.filter((lot) => !lot.zone_id).length.toLocaleString('pt-BR')}<small>/ {visibleLots.length.toLocaleString('pt-BR')}</small></strong><span>Lotes sem zona</span></div></div>}
       {mapMode === 'questionnaire' && !coverageFormId && <div className="census-map-empty-filter"><Eye size={16} />Selecione um questionário para colorir o mapa pela cobertura.</div>}
     </section>
-    <div className="census-map-stage-heading census-map-explore-heading"><span className="census-map-stage-number">4</span><div><span className="fleet-kicker">EXPLORAÇÃO DO TERRITÓRIO</span><strong>Mapa e detalhes do lote</strong></div><small>Passe o cursor ou toque em um lote para identificá-lo; selecione para abrir o dossiê.</small></div>
+    <div className="census-map-stage-heading census-map-explore-heading"><span className="census-map-stage-number">4</span><div><span className="fleet-kicker">EXPLORAÇÃO DO TERRITÓRIO</span><strong>Mapa, lista e busca</strong></div><small>Escolha um domicílio pelo mapa ou pesquise pelo código, identificação ou zona.</small></div>
+    <label className="census-territory-search"><Search size={16} /><input value={lotSearch} onChange={(event) => setLotSearch(event.target.value)} placeholder="Buscar código, identificação ou zona" aria-label="Buscar domicílio" /><span>{visibleLots.length.toLocaleString('pt-BR')} resultado(s)</span></label>
     <div className={`census-territory-workspace${selectedLot ? ' with-panel' : ''}`}>
       <div className="census-territory-map-card">
         <div className="census-territory-toolbar"><span><MapPinned size={15} />{mapMode === 'zones' ? 'As cores identificam as zonas selecionadas' : mapMode === 'visits' ? 'Cores indicam a situação das visitas' : activeMapForm ? `Cobertura do questionário: ${activeMapForm.title}` : 'Selecione um questionário para consultar a cobertura'} · Selecione um lote para abrir o dossiê; arraste o mapa para deslocá-lo.</span><div><button type="button" onClick={() => setZoom((current) => Math.min(24, current * 1.25))} aria-label="Aumentar zoom" disabled={loading || !lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(0.65, current / 1.25))} aria-label="Reduzir zoom" disabled={loading || !lots.length}><Minus size={16} /></button><button type="button" onClick={resetMap} aria-label="Restaurar mapa" disabled={loading || !lots.length}><RotateCcw size={15} /></button></div></div>
@@ -735,6 +744,11 @@ export function CensusTerritory({ onOpenQuestionnaires }: { onOpenQuestionnaires
         </div>}
       </aside>}
     </div>
+    <section className="census-territory-list-card" aria-label="Lista de domicílios">
+      <header><div><span className="fleet-kicker">LISTA DE DOMICÍLIOS</span><strong>Inicie uma atividade pelo cadastro</strong></div><small>{visibleLots.length > 100 ? 'Mostrando os 100 primeiros resultados' : 'Selecione uma linha para abrir o dossiê'}</small></header>
+      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const index = lotIndexById.get(lot.id) ?? 0; const code = getMapLotCode(lot.label, lot.source_handle, index + 1); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: zone?.color || '#c8a15b' }} /><span><strong>{code}</strong><small>{lot.label || 'Domicílio sem identificação'} · {zone?.name || 'Sem zona'}</small></span><em>{activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
+      {!visibleLots.length && <div className="census-territory-list-empty">Nenhum domicílio corresponde à busca ou aos filtros selecionados.</div>}
+    </section>
 
 
 

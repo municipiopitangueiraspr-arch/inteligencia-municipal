@@ -208,6 +208,15 @@ export function CensusOverview({ onOpen }: { onOpen: (view: 'territory' | 'famil
         <div className="fleet-loading"><LoaderCircle className="spin" size={20} />Carregando painel…</div>
       ) : metrics && data ? (
         <>
+          <section className="census-day-hero" aria-labelledby="censusDayTitle">
+            <div><span className="fleet-kicker">ROTINA DO ACS</span><h2 id="censusDayTitle">Meu dia</h2><p>Veja o que precisa de atenção e continue a próxima atividade sem procurar no sistema.</p></div>
+            <button type="button" className="census-day-continue" onClick={() => onOpen(metrics.pending ? 'families' : metrics.draftResponses ? 'forms' : 'territory')}><ArrowRight size={17} />Continuar atividade</button>
+          </section>
+          <div className="census-day-task-grid">
+            <button type="button" className="census-day-task pending" onClick={() => onOpen('families')}><span><UsersRound size={19} /></span><strong>{metrics.pending.toLocaleString('pt-BR')}</strong><small>Visitas pendentes</small></button>
+            <button type="button" className="census-day-task questionnaire" onClick={() => onOpen('forms')}><span><ClipboardCheck size={19} /></span><strong>{Math.max(metrics.lots - metrics.submitted, 0).toLocaleString('pt-BR')}</strong><small>Questionários pendentes</small></button>
+            <button type="button" className="census-day-task homes" onClick={() => onOpen('territory')}><span><Home size={19} /></span><strong>{metrics.presumed.toLocaleString('pt-BR')}</strong><small>Domicílios sem identificação</small></button>
+          </div>
           <div className="census-overview-progress-layout">
             <section className="fleet-panel census-overview-funnel census-overview-hero">
               <div className="census-overview-title">
