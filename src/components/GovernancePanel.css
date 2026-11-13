@@ -879,3 +879,70 @@
   .governance-shell *::before,
   .governance-shell *::after { transition: none !important; }
 }
+
+
+.governance-org-list {
+  display: grid;
+  gap: 8px;
+}
+
+.governance-org-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(29, 78, 84, 0.025);
+}
+
+.governance-org-row.is-inactive {
+  opacity: 0.68;
+  background: #fafcfc;
+}
+
+.governance-org-code {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #1c6672;
+  background: #eaf5f2;
+  font: 800 10px 'Manrope', sans-serif;
+  letter-spacing: .45px;
+}
+
+.governance-org-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.governance-org-copy strong {
+  overflow: hidden;
+  color: #244e56;
+  font: 800 13px/1.35 'Manrope', sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-org-copy span {
+  overflow: hidden;
+  color: #71858a;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .governance-org-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px 10px;
+  }
+  .governance-org-code { grid-column: 1; }
+  .governance-org-copy { grid-column: 1 / -1; grid-row: 2; }
+  .governance-org-row .governance-status { grid-column: 2; grid-row: 1; }
+  .governance-org-row .governance-edit-button { grid-column: 1 / -1; justify-self: start; }
+}

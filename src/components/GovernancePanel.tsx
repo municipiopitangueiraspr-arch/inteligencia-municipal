@@ -7,6 +7,7 @@ import {
   CircleAlert,
   FilePlus2,
   LayoutGrid,
+  ListTree,
   LogOut,
   MailPlus,
   Pencil,
@@ -62,7 +63,29 @@ type UserDraft = {
   module_ids: string[]
 }
 
-type PanelTab = 'secretariats' | 'users' | 'modules'
+type OrgUnit = {
+  id: string
+  parent_id: string | null
+  code: string
+  name: string
+  unit_type: string
+  description: string
+  sort_order: number
+  is_active: boolean
+}
+
+type OrgUnitDraft = {
+  id: string
+  parent_id: string
+  code: string
+  name: string
+  unit_type: string
+  description: string
+  sort_order: string
+  is_active: boolean
+}
+
+type PanelTab = 'organization' | 'secretariats' | 'users' | 'modules'
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.'
@@ -90,7 +113,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [users, setUsers] = useState<GovernanceUser[]>([])
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([])
   const [secretariatDraft, setSecretariatDraft] = useState<SecretariatDraft | null>(null)
+  const [orgUnitDraft, setOrgUnitDraft] = useState<OrgUnitDraft | null>(null)
   const [userDraft, setUserDraft] = useState<UserDraft | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -112,12 +137,13 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     }
     setAuthorized(true)
 
-    const [secretariatResult, moduleResult, userResult] = await Promise.all([
+    const [secretariatResult, moduleResult, userResult, orgResult] = await Promise.all([
       supabase.from('municipal_secretariats').select('id,name,description,icon_name,sort_order,is_active').order('sort_order', { ascending: true }),
       supabase.from('municipal_modules').select('id,label,description,icon_name,is_ready,status_label,sort_order').order('sort_order', { ascending: true }),
       supabase.rpc('municipal_governance_list_users'),
+      supabase.rpc('municipal_governance_list_org_units'),
     ])
-    const failed = secretariatResult.error || moduleResult.error || userResult.error
+    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error
     if (failed) {
       setLoadError('Não foi possível carregar os cadastros de Governança. Verifique se a estrutura do Supabase está atualizada.')
       setLoading(false)
@@ -127,6 +153,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setSecretariats((secretariatResult.data || []) as unknown as MunicipalSecretariat[])
     setModules((moduleResult.data || []) as unknown as MunicipalModule[])
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
+    setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
     setLoading(false)
   }, [])
 
@@ -169,6 +196,37 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setSecretariatDraft(null)
     setSaving(false)
     setMessage({ type: 'success', text: secretariatDraft.id ? 'Secretaria atualizada.' : 'Secretaria cadastrada.' })
+    await loadPanel(false)
+  }
+
+  const saveOrgUnit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!supabase || !orgUnitDraft) return
+    const id = slugify(orgUnitDraft.id || orgUnitDraft.name)
+    const sortOrder = Number(orgUnitDraft.sort_order)
+    if (!id || !orgUnitDraft.code.trim() || !orgUnitDraft.name.trim() || !Number.isInteger(sortOrder)) {
+      setMessage({ type: 'error', text: 'Informe identificador, sigla, nome e uma ordem inteira para a unidade.' })
+      return
+    }
+    setSaving(true)
+    setMessage(null)
+    const { error } = await supabase.rpc('municipal_governance_save_org_unit', {
+      p_id: id,
+      p_parent_id: orgUnitDraft.parent_id || null,
+      p_code: orgUnitDraft.code.trim(),
+      p_name: orgUnitDraft.name.trim(),
+      p_unit_type: orgUnitDraft.unit_type,
+      p_description: orgUnitDraft.description.trim(),
+      p_sort_order: sortOrder,
+      p_is_active: orgUnitDraft.is_active,
+    })
+    setSaving(false)
+    if (error) {
+      setMessage({ type: 'error', text: errorText(error) })
+      return
+    }
+    setOrgUnitDraft(null)
+    setMessage({ type: 'success', text: 'Unidade organizacional salva.' })
     await loadPanel(false)
   }
 
@@ -232,6 +290,11 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     })
   }
 
+  const openNewOrgUnit = () => {
+    setMessage(null)
+    setOrgUnitDraft({ id: '', parent_id: 'municipality', code: '', name: '', unit_type: 'UNIDADE', description: '', sort_order: String(orgUnits.length + 1), is_active: true })
+  }
+
   const openEditUser = (user: GovernanceUser) => {
     setMessage(null)
     setUserDraft({
@@ -286,16 +349,37 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
               <aside className="governance-policy-note" role="note">
                 <CircleAlert size={20} aria-hidden="true" />
-              <p><strong>Etapa cadastral:</strong> perfis e vínculos com secretarias/módulos ficam registrados no Supabase, mas não filtram o acesso aos módulos. Somente o perfil Administrador permite abrir este painel; as permissões atuais de Frotas, Saúde da Família/ACS e demais módulos permanecem como estão.</p>
+              <p><strong>Núcleo de acesso ativo:</strong> a estrutura organizacional, os papéis e as concessões de módulo são mantidos no Supabase. O módulo Saúde da Família/ACS já usa essa concessão em conjunto com o escopo territorial de zona e lote.</p>
               </aside>
 
               {message && <div className={`governance-message governance-message--${message.type}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.type === 'success' ? <Check size={17} /> : <CircleAlert size={17} />}{message.text}</div>}
 
               <nav className="governance-tabs" aria-label="Seções de Governança">
+                <button className={activeTab === 'organization' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'organization'} onClick={() => setActiveTab('organization')}><ListTree size={17} />Estrutura<span>{orgUnits.length}</span></button>
                 <button className={activeTab === 'secretariats' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'secretariats'} onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span>{activeSecretariatCount}</span></button>
                 <button className={activeTab === 'users' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'users'} onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span>{users.length}</span></button>
                 <button className={activeTab === 'modules' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'modules'} onClick={() => setActiveTab('modules')}><LayoutGrid size={17} />Catálogo de módulos<span>{modules.length}</span></button>
               </nav>
+
+              {activeTab === 'organization' && (
+                <section className="governance-section" aria-labelledby="organizationHeading">
+                  <div className="governance-section-heading">
+                    <div><h2 id="organizationHeading">Estrutura organizacional</h2><p>Unidades permanentes do organograma. Inativar uma unidade preserva o histórico e impede novos vínculos.</p></div>
+                    <button className="governance-primary-button" type="button" onClick={openNewOrgUnit}><FilePlus2 size={17} />Nova unidade</button>
+                  </div>
+                  <div className="governance-org-list">
+                    {orgUnits.map((unit) => {
+                      const parent = unit.parent_id ? orgUnits.find((item) => item.id === unit.parent_id) : null
+                      return <article className={`governance-org-row${unit.is_active ? '' : ' is-inactive'}`} key={unit.id}>
+                        <span className="governance-org-code">{unit.code}</span>
+                        <div className="governance-org-copy"><strong>{unit.name}</strong><span>{parent ? `${parent.name} · ` : ''}{unit.unit_type}{unit.description ? ` · ${unit.description}` : ''}</span></div>
+                        <span className={`governance-status${unit.is_active ? ' is-active' : ''}`}>{unit.is_active ? 'Ativa' : 'Inativa'}</span>
+                        <button className="governance-edit-button" type="button" onClick={() => setOrgUnitDraft({ id: unit.id, parent_id: unit.parent_id || '', code: unit.code, name: unit.name, unit_type: unit.unit_type, description: unit.description, sort_order: String(unit.sort_order), is_active: unit.is_active })}><Pencil size={16} /><span>Editar</span></button>
+                      </article>
+                    })}
+                  </div>
+                </section>
+              )}
 
               {activeTab === 'secretariats' && (
                 <section className="governance-section" aria-labelledby="secretariatsHeading">
@@ -386,6 +470,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
           onSubmit={(event) => void saveSecretariat(event)}
         />
       )}
+      {orgUnitDraft && (
+        <OrgUnitDialog draft={orgUnitDraft} units={orgUnits} saving={saving} onChange={setOrgUnitDraft} onCancel={() => setOrgUnitDraft(null)} onSubmit={(event) => void saveOrgUnit(event)} />
+      )}
       {userDraft && (
         <UserDialog
           initial={userDraft}
@@ -396,6 +483,44 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
           onSubmit={(draft) => void saveUser(draft)}
         />
       )}
+    </div>
+  )
+}
+
+function OrgUnitDialog({
+  draft,
+  units,
+  saving,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  draft: OrgUnitDraft
+  units: OrgUnit[]
+  saving: boolean
+  onChange: (draft: OrgUnitDraft) => void
+  onCancel: () => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}) {
+  const unitTypes = ['ORGAO', 'SECRETARIA', 'DEPARTAMENTO', 'DIVISAO', 'ASSESSORIA', 'COMISSAO', 'UNIDADE']
+  return (
+    <div className="governance-overlay">
+      <section className="governance-dialog" role="dialog" aria-modal="true" aria-labelledby="orgUnitDialogTitle">
+        <div className="governance-dialog-heading"><div><span className="governance-eyebrow">ESTRUTURA PERMANENTE</span><h2 id="orgUnitDialogTitle">{draft.id ? 'Editar unidade' : 'Nova unidade'}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div>
+        <form onSubmit={onSubmit}>
+          <div className="governance-form-grid governance-form-grid--two">
+            <label className="governance-field">Identificador<input value={draft.id} onChange={(event) => onChange({ ...draft, id: event.target.value })} placeholder="ex.: saude-familia" maxLength={80} required /></label>
+            <label className="governance-field">Sigla ou código<input value={draft.code} onChange={(event) => onChange({ ...draft, code: event.target.value })} maxLength={40} required /></label>
+            <label className="governance-field governance-field--full">Nome da unidade<input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} maxLength={160} required /></label>
+            <label className="governance-field">Unidade superior<select value={draft.parent_id} onChange={(event) => onChange({ ...draft, parent_id: event.target.value })}><option value="">Sem superior</option>{units.filter((unit) => unit.id !== draft.id).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label>
+            <label className="governance-field">Tipo<select value={draft.unit_type} onChange={(event) => onChange({ ...draft, unit_type: event.target.value })}>{unitTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+            <label className="governance-field">Ordem<input type="number" min={0} step={1} value={draft.sort_order} onChange={(event) => onChange({ ...draft, sort_order: event.target.value })} required /></label>
+            <label className="governance-field governance-field--full">Descrição<textarea value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} rows={3} maxLength={500} /></label>
+            <label className="governance-check governance-field--full"><input type="checkbox" checked={draft.is_active} onChange={(event) => onChange({ ...draft, is_active: event.target.checked })} /><span><strong>Unidade ativa</strong><small>Unidades inativas não recebem novos vínculos, mas permanecem no histórico.</small></span></label>
+          </div>
+          <div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={onCancel}>Cancelar</button><button className="governance-primary-button" type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Salvar unidade'}</button></div>
+        </form>
+      </section>
     </div>
   )
 }

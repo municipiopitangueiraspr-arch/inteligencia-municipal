@@ -138,3 +138,27 @@ Não alterar autenticação, banco, permissões, módulos internos, manifestos d
 - Uma importação só aparece no Mapa territorial depois que `division_saved_at` é preenchido após todos os lotes terem sido gravados com sucesso; ao iniciar novo salvamento, o marcador é invalidado até a conclusão. Imports antigos só são marcados como salvos quando todas as geometrias válidas já têm zona. Policies também protegem consultas diretas às tabelas-base e restringem DXF privado, ACS, vínculos e gestão de questionários a administradores; ACS consulta somente mapas/lotes autorizados e questionários ativos.
 - Componentes e lógica novos ficam em `src/components/census/territory/`; reutilizar o shell e o cliente Supabase existentes. A visão de resumo é um view com `security_invoker`, limitado aos campos necessários. Não adicionar amostras de dados pessoais nem persistência offline nesta etapa.
 - A migration `202611091915_census_households_visits_responses.sql` é aditiva e não apaga registros; substitui policies abertas por acesso ADMIN/ACS vinculado. Foi aplicada ao Supabase compartilhado após autorização explícita em 9 de novembro de 2026; metadados de tabelas e policies foram verificados sem consultar respostas pessoais. Testes sintéticos e build passaram sem escrita de dados de teste. O PR #8 foi mesclado no commit `801a695c2f526cbfc0a21b960f371d8675d195a2`; o workflow Pages `42753046114` concluiu com sucesso, e a página pública/bundle foram verificados via HTTP 200 e marcadores do módulo territorial.
+
+
+# Plano — Núcleo de Governança de Acessos e migração do ACS
+
+## Objetivo
+Evoluir o painel de Governança já existente, que hoje apenas cadastra secretarias, usuários e módulos, para um núcleo transversal de identidade, estrutura organizacional, papéis, permissões, atribuições e escopos. Migrar o cadastro atual de ACS para uma atribuição formal no módulo Saúde da Família/ACS, preservando vínculos de zona e lote.
+
+## Implementação
+- Criar no Supabase a hierarquia permanente do organograma em `municipal_org_units`, com pai, código, tipo, ordem, situação e descrição; omitir unidades temporárias identificadas por ano, processo ou PAD.
+- Criar catálogos de `municipal_roles` e `municipal_permissions`, relações papel-permissão e atribuições por unidade.
+- Criar concessões de módulo e escopo associadas à atribuição, com validade e auditoria.
+- Migrar administradores existentes para Governança e usuários ACS vinculados para papel `ACS`, unidade Saúde da Família e módulo `census`, sem alterar vínculos territoriais atuais.
+- Exigir no backend concessão central do módulo antes de liberar o acesso operacional, mantendo as políticas territoriais existentes para decidir quais lotes/domicílios o ACS pode consultar ou alterar.
+- Ampliar o painel para administrar unidades organizacionais e apresentar atribuições, mantendo o convite por e-mail e o primeiro acesso do Supabase Auth.
+
+## Estrutura do projeto
+- `supabase/migrations/`: DDL, seed permanente e funções/RLS da Governança.
+- `supabase/functions/invite-municipal-user/`: convite de identidade via Supabase Auth.
+- `src/components/GovernancePanel.tsx`: painel de unidades, pessoas, papéis, módulos e atribuições.
+- `src/lib/municipal-catalog.ts`: tipos e catálogo visual compartilhado.
+- `src/components/census/`: módulo operacional ACS, consumidor da concessão central e do escopo territorial.
+
+## Design
+Estilo: **governança institucional clara**. Interface com abas, listas densas, hierarquia organizacional visível, estados de alto contraste e ações reversíveis. Azul petróleo e cinza institucional indicam controle; verde indica ativo/aprovado; âmbar indica pendência; vermelho indica inativo/revogado. Editar uma unidade não apaga histórico; inativar impede novos vínculos, preservando auditoria. Convites deixam explícito que a senha será criada pelo próprio usuário.

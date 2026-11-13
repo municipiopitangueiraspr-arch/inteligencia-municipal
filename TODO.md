@@ -262,3 +262,26 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Remover os estilos obsoletos e verificar ausência de mensagens de demonstração na interface.
 - [x] Validar build/lint: `npm run build` e `npm run lint` concluídos com sucesso; nenhuma mensagem de demo remanescente em `src`.
 - [x] Publicar no GitHub Pages para teste remoto: commit `8f92a9cd6b479b40c46e2c7d63416f5c061b5920`, workflow `43006750783` concluído com sucesso; HTML, JavaScript e CSS responderam HTTP 200 e os marcadores do aviso/demo não estão nos assets públicos. URL: <https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/>.
+
+
+# Núcleo de Governança de Acessos — etapa atual
+
+## Estrutura organizacional permanente
+- [ ] Cadastrar a Prefeitura, órgãos de administração específica, superior e de assistência superior, secretarias, departamentos, divisões, assessorias e comissões permanentes do organograma enviado.
+- [ ] Desconsiderar unidades temporárias identificadas por ano, número de PAD, processo ou comissão circunstancial.
+- [ ] Permitir ao administrador criar, editar e inativar unidades sem apagar registros históricos.
+
+## Identidade e acesso
+- [ ] Manter uma identidade municipal única por pessoa, com convite por e-mail e criação da senha pelo próprio usuário.
+- [ ] Associar usuário a unidade organizacional, papel, módulo e escopo, com validade e auditoria.
+- [ ] Preservar administradores existentes e permitir gerenciamento posterior das atribuições.
+
+## Migração do ACS
+- [ ] Criar atribuição formal de ACS no módulo Saúde da Família/ACS para usuários ACS já vinculados.
+- [ ] Preservar vínculos atuais de zona e lote.
+- [ ] Exigir concessão central do módulo antes de liberar o acesso operacional, sem substituir o escopo territorial do ACS.
+
+## Painel de Governança
+- [ ] Exibir unidades organizacionais, usuários, papéis, módulos e atribuições.
+- [ ] Manter o convite municipal existente e indicar claramente o primeiro acesso.
+- [ ] Aplicar autorização no Supabase/RLS/RPCs, não apenas na interface.
