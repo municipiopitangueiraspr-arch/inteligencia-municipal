@@ -34,15 +34,6 @@ const moduleToneById: Record<string, string> = {
   acts: 'official',
 }
 
-const plannedHealthAreas = [
-  { id: 'health-surveillance', label: 'Vigilância Sanitária', description: 'Inspeções, licenças e acompanhamento sanitário.', icon_name: 'ShieldCheck' },
-  { id: 'primary-care', label: 'Atenção Básica', description: 'Linhas de cuidado e acompanhamento da rede.', icon_name: 'HeartPulse' },
-  { id: 'pharmacy', label: 'Farmácia e Assistência', description: 'Gestão de medicamentos e dispensação.', icon_name: 'Package' },
-  { id: 'medical-regulation', label: 'Regulação e Encaminhamentos', description: 'Organização de solicitações e referências.', icon_name: 'Stethoscope' },
-  { id: 'dental-care', label: 'Saúde Bucal', description: 'Atendimento e acompanhamento odontológico.', icon_name: 'HeartHandshake' },
-  { id: 'health-transport', label: 'Transporte Sanitário', description: 'Solicitações e logística de deslocamentos.', icon_name: 'Truck' },
-] as const
-
 export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenGovernance, onLogout }: DashboardProps) {
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
@@ -133,15 +124,11 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
     if (!normalizedModuleQuery) return true
     return `${module.label} ${module.description || ''} ${module.status_label || ''}`.toLocaleLowerCase('pt-BR').includes(normalizedModuleQuery)
   })
-  const filteredPlannedHealthAreas = plannedHealthAreas.filter((area) => {
-    if (!normalizedModuleQuery) return true
-    return `${area.label} ${area.description}`.toLocaleLowerCase('pt-BR').includes(normalizedModuleQuery)
-  })
   const searchItems = selectedSecretariat
-    ? [...availableModules.map((module) => ({ id: module.id, name: module.label, description: module.description })), ...plannedHealthAreas.map((area) => ({ id: area.id, name: area.label, description: area.description }))]
+    ? availableModules.map((module) => ({ id: module.id, name: module.label, description: module.description }))
     : secretariats.map((secretariat) => ({ id: secretariat.id, name: secretariat.name, description: secretariat.description }))
   const handleHeaderSearchSelect = selectedSecretariat
-    ? (id: string) => setModuleSearchQuery(availableModules.find((module) => module.id === id)?.label || plannedHealthAreas.find((area) => area.id === id)?.label || '')
+    ? (id: string) => setModuleSearchQuery(availableModules.find((module) => module.id === id)?.label || '')
     : selectSecretariat
 
   const openModule = (id: string) => {
@@ -186,53 +173,24 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
               </div>
 
               {selectedSecretariat.id === 'health' ? (
-                <div className="health-command-panel">
-                  <div className="health-panel-intro">
-                    <div>
-                      <span className="health-panel-kicker">CENTRAL DA SECRETARIA</span>
-                      <h2>Painel de Saúde</h2>
-                      <p>Central de módulos, operações e acompanhamento da Secretaria de Saúde.</p>
+                visibleModules.length > 0 ? (
+                  <div className="health-access-panel" aria-label="Módulos disponíveis para o usuário">
+                    <div className="health-access-heading"><span className="health-panel-kicker">ACESSO DISPONÍVEL</span><h2>Módulos da Secretaria</h2><p>Você está visualizando apenas os módulos liberados para o seu acesso.</p></div>
+                    <div className="health-access-grid">
+                      {visibleModules.map((module) => {
+                        const Icon = getMunicipalIcon(module.icon_name)
+                        const hasRoute = module.id === 'fleet' || module.id === 'census' || (module.id === 'medical-visits' && canManageGovernance)
+                        const canOpen = module.is_ready && hasRoute
+                        return <button key={module.id} className={`module-card module-card--${moduleToneById[module.id] || 'fleet'}`} type="button" disabled={!canOpen} aria-label={canOpen ? `Acessar ${module.label}` : `${module.label}, ${module.status_label}`} onClick={() => openModule(module.id)}>
+                          <span className="module-card-top"><span className="module-icon"><Icon size={30} strokeWidth={2.2} aria-hidden="true" /></span>{module.id !== 'census' && <span className={`module-status${module.is_ready ? ' module-status--active' : ''}`}><span className="status-dot" aria-hidden="true" />{module.status_label}</span>}</span>
+                          <span className="module-card-title">{module.label}</span><span className="module-card-description">{module.description}</span><span className={`module-card-action${canOpen ? '' : ' module-card-action--disabled'}`}>{canOpen ? 'Acessar módulo' : 'Em breve'}{canOpen && <ArrowRight size={17} aria-hidden="true" />}</span>
+                        </button>
+                      })}
                     </div>
-                    <span className="health-panel-status"><span className="health-status-dot" /> Ambiente operacional</span>
                   </div>
-
-                  <div className="health-metrics" aria-label="Resumo da Secretaria de Saúde">
-                    <div><strong>{availableModules.length}</strong><span>Módulos ativos</span></div>
-                    <div><strong>{plannedHealthAreas.length}</strong><span>Áreas planejadas</span></div>
-                    <div><strong>{availableModules.length + plannedHealthAreas.length}</strong><span>Frentes da Saúde</span></div>
-                    <div><strong>Atual</strong><span>Acesso disponível</span></div>
-                  </div>
-
-                  {visibleModules.length > 0 || filteredPlannedHealthAreas.length > 0 ? (
-                    <>
-                      <div className="health-section-heading">
-                        <div><span className="health-panel-kicker">MÓDULO PRINCIPAL</span><h2>Operação em destaque</h2></div>
-                        <span>{visibleModules.length} operacional{visibleModules.length === 1 ? '' : 'is'}</span>
-                      </div>
-                      <div className="health-feature-layout">
-                        {visibleModules.slice(0, 1).map((module) => {
-                          const Icon = getMunicipalIcon(module.icon_name)
-                          const hasRoute = module.id === 'fleet' || module.id === 'census' || (module.id === 'medical-visits' && canManageGovernance)
-                          const canOpen = module.is_ready && hasRoute
-                          return <button key={module.id} className={`module-card module-card--featured module-card--${moduleToneById[module.id] || 'fleet'}`} type="button" disabled={!canOpen} onClick={() => openModule(module.id)}>
-                            <span className="module-card-top"><span className="module-icon"><Icon size={30} strokeWidth={2.2} aria-hidden="true" /></span><span className="module-status module-status--active"><span className="status-dot" />Operacional</span></span>
-                            <span className="module-card-title">{module.label}</span>
-                            <span className="module-card-description">{module.description}</span>
-                            <span className="module-card-action">Acessar módulo <ArrowRight size={17} aria-hidden="true" /></span>
-                          </button>
-                        })}
-                        <div className="health-planned-panel">
-                          <div className="health-section-heading health-section-heading--compact"><div><span className="health-panel-kicker">EXPANSÃO</span><h2>Próximas áreas</h2></div><span>{filteredPlannedHealthAreas.length} planejadas</span></div>
-                          <div className="health-planned-grid">
-                            {filteredPlannedHealthAreas.map((area) => { const Icon = getMunicipalIcon(area.icon_name); return <div className="health-planned-card" key={area.id}><span className="health-planned-icon"><Icon size={19} aria-hidden="true" /></span><span><strong>{area.label}</strong><small>{area.description}</small></span><em>Planejado</em></div> })}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="secretariat-empty" role="status"><span className="secretariat-empty-icon"><Building2 size={24} aria-hidden="true" /></span><h2>Nenhum módulo encontrado</h2><p>Não encontramos uma área para “{moduleSearchQuery}”.</p></div>
-                  )}
-                </div>
+                ) : (
+                  <div className="secretariat-empty" role="status"><span className="secretariat-empty-icon"><Building2 size={24} aria-hidden="true" /></span><h2>Nenhum módulo encontrado</h2><p>Não encontramos módulos para “{moduleSearchQuery}”.</p></div>
+                )
               ) : visibleModules.length > 0 ? (
                 <div className={`module-grid${selectedSecretariat.id === 'health' ? ' module-grid--health' : ''}`} aria-label={`Módulos de ${selectedSecretariat.name}`}>
                   {visibleModules.map((module) => {
