@@ -25,8 +25,8 @@ import {
 import type { MunicipalModule, MunicipalSecretariat } from '../lib/municipal-catalog'
 import { supabase } from '../lib/supabase'
 import './GovernancePanel.css'
+import './FleetModule.css'
 
-const assetBase = import.meta.env.BASE_URL
 const BUSINESS_ROLE_IDS = new Set(['GOVERNANCE_ADMIN', 'EXECUTIVE_VIEW', 'UNIT_MANAGER', 'OPERATOR', 'READ_ONLY'])
 
 type GovernancePanelProps = {
@@ -483,25 +483,30 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
   const orderedOrgUnits = orderOrgUnits(orgUnits)
+  const activeTabLabel = activeTab === 'organization' ? 'Estrutura organizacional' : activeTab === 'secretariats' ? 'Secretarias' : activeTab === 'users' ? 'Usuários e acessos' : activeTab === 'modules' ? 'Catálogo de módulos' : 'Histórico de acessos'
 
   return (
-    <div className="governance-shell">
-      <header className="governance-header">
-        <div className="governance-header-inner">
-          <div className="governance-brand">
-            <span className="governance-brand-mark"><img src={`${assetBase}assets/brasao-pref.png`} alt="" /></span>
-            <span><strong>Inteligência Municipal</strong><small>Governança</small></span>
-          </div>
-          <div className="governance-header-actions">
-            <span className="governance-user-email">{userEmail || 'Administrador'}</span>
-            <button className="governance-logout" type="button" onClick={onLogout} aria-label="Sair do sistema"><LogOut size={17} /><span>Sair</span></button>
-          </div>
+    <div className="fleet-shell governance-fleet-shell">
+      <aside className="fleet-sidebar">
+        <div className="fleet-sidebar-top">
+          <button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button>
+          <div className="fleet-brand"><span className="fleet-brand-icon"><ShieldCheck size={20} /></span><div><strong>Governança municipal</strong><small>Inteligência Municipal</small></div></div>
         </div>
-      </header>
+        <div className="fleet-section-label">ADMINISTRAÇÃO DO SISTEMA</div>
+        <nav className="fleet-nav" aria-label="Navegação da Governança">
+          <button className={`fleet-nav-item${activeTab === 'organization' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('organization')}><ListTree size={17} />Estrutura<span className="fleet-nav-count">{orgUnits.length}</span></button>
+          <button className={`fleet-nav-item${activeTab === 'secretariats' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span className="fleet-nav-count">{activeSecretariatCount}</span></button>
+          <button className={`fleet-nav-item${activeTab === 'users' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span className="fleet-nav-count">{users.length}</span></button>
+          <button className={`fleet-nav-item${activeTab === 'modules' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('modules')}><LayoutGrid size={17} />Módulos<span className="fleet-nav-count">{modules.length}</span></button>
+          <button className={`fleet-nav-item${activeTab === 'audit' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('audit')}><History size={17} />Histórico<span className="fleet-nav-count">{audit.length}</span></button>
+          <button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button>
+        </nav>
+        <div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{(userEmail?.[0] || 'A').toUpperCase()}</span><div><strong>{userEmail || 'Administrador'}</strong><small>Admin do Sistema</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div>
+      </aside>
 
-      <main className="governance-main">
-        <div className="governance-content">
-          <button className="governance-back" type="button" onClick={onBack}><ArrowLeft size={17} />Voltar ao hall</button>
+      <main className="fleet-main governance-main">
+        <header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · ADMINISTRAÇÃO</p><h1>{activeTabLabel}</h1><small className="governance-role-description">Controle de estrutura, usuários, módulos e acessos da Plataforma.</small></div><div className="fleet-header-actions"><span className="fleet-protected"><ShieldCheck size={16} /> Dados protegidos</span></div></header>
+        <div className="fleet-content governance-content">
 
           {loading ? (
             <div className="governance-empty" role="status">Verificando acesso e carregando cadastros…</div>
@@ -527,14 +532,6 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
               </aside>
 
               {message && <div className={`governance-message governance-message--${message.type}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.type === 'success' ? <Check size={17} /> : <CircleAlert size={17} />}{message.text}</div>}
-
-              <nav className="governance-tabs" aria-label="Seções de Governança">
-                <button className={activeTab === 'organization' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'organization'} onClick={() => setActiveTab('organization')}><ListTree size={17} />Estrutura<span>{orgUnits.length}</span></button>
-                <button className={activeTab === 'secretariats' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'secretariats'} onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span>{activeSecretariatCount}</span></button>
-                <button className={activeTab === 'users' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'users'} onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span>{users.length}</span></button>
-                <button className={activeTab === 'modules' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'modules'} onClick={() => setActiveTab('modules')}><LayoutGrid size={17} />Catálogo de módulos<span>{modules.length}</span></button>
-                <button className={activeTab === 'audit' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'audit'} onClick={() => setActiveTab('audit')}><History size={17} />Histórico<span>{audit.length}</span></button>
-              </nav>
 
               {activeTab === 'organization' && (
                 <section className="governance-section" aria-labelledby="organizationHeading">

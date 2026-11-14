@@ -1087,3 +1087,89 @@
   .governance-audit-row { grid-template-columns: 1fr; gap: 6px; }
   .governance-audit-row code { white-space: normal; word-break: break-word; }
 }
+
+
+/* Governança dentro do mesmo shell visual do módulo ACS/Fleet. */
+.governance-fleet-shell .governance-content { width: auto; max-width: none; margin: 0; padding: 0; }
+.governance-fleet-shell .governance-heading { align-items: center; margin: 0 0 22px; }
+.governance-fleet-shell .governance-heading h1,
+.governance-fleet-shell .governance-section-heading h2,
+.governance-fleet-shell .governance-dialog-heading h2 { color: #17384d; }
+.governance-fleet-shell .governance-heading p,
+.governance-fleet-shell .governance-section-heading p { color: #8497a0; }
+.governance-fleet-shell .governance-eyebrow { color: #9b7427; }
+.governance-fleet-shell .governance-primary-button { min-height: 37px; padding: 0 13px; border: 0; border-radius: 7px; color: #fff; background: #0f5873; box-shadow: 0 6px 14px rgba(15,88,115,.16); font-size: 11px; }
+.governance-fleet-shell .governance-primary-button:hover:not(:disabled) { border: 0; background: #0b4660; }
+.governance-fleet-shell .governance-secondary-button,
+.governance-fleet-shell .governance-edit-button { min-height: 37px; border: 1px solid #d9e5e8; border-radius: 7px; color: #607b86; background: #fff; font-size: 11px; }
+.governance-fleet-shell .governance-secondary-button:hover,
+.governance-fleet-shell .governance-edit-button:hover { border-color: #b8ccd2; color: #315e70; background: #f7fafb; }
+.governance-fleet-shell .governance-text-button { color: #1b6684; }
+.governance-fleet-shell .governance-text-button:hover { border-color: #d9e5e8; background: #f4f8fa; }
+.governance-fleet-shell .governance-policy-note,
+.governance-fleet-shell .governance-assignment-note { border-color: #efe3c6; border-radius: 8px; color: #83621f; background: #fffaf0; }
+.governance-fleet-shell .governance-policy-note svg,
+.governance-fleet-shell .governance-assignment-note svg { color: #ac781b; }
+.governance-fleet-shell .governance-tabs { display: none; }
+.governance-fleet-shell .governance-section-heading { margin-bottom: 15px; }
+.governance-fleet-shell .governance-section-heading h2 { font-size: 18px; }
+.governance-fleet-shell .governance-secretariat-card,
+.governance-fleet-shell .governance-module-card,
+.governance-fleet-shell .governance-user-row,
+.governance-fleet-shell .governance-org-row,
+.governance-fleet-shell .governance-audit-row { border-color: #e4edef; border-radius: 10px; box-shadow: none; }
+.governance-fleet-shell .governance-secretariat-card,
+.governance-fleet-shell .governance-module-card,
+.governance-fleet-shell .governance-user-row,
+.governance-fleet-shell .governance-audit-row { background: #fff; }
+.governance-fleet-shell .governance-secretariat-icon,
+.governance-fleet-shell .governance-module-icon { background: #e4f2f7; color: #22719a; }
+.governance-fleet-shell .governance-user-avatar { color: #fff; background: #0f5873; }
+.governance-fleet-shell .governance-secretariat-card h3,
+.governance-fleet-shell .governance-module-card h3,
+.governance-fleet-shell .governance-user-main strong,
+.governance-fleet-shell .governance-org-copy strong,
+.governance-fleet-shell .governance-audit-main strong { color: #17384d; }
+.governance-fleet-shell .governance-status.is-active { border-color: #c7e8d5; color: #287452; background: #eaf7f0; }
+.governance-fleet-shell .governance-profile-badge { border-color: #d6e7ed; color: #1b6684; background: #eaf4f8; }
+.governance-fleet-shell .governance-org-list { border-color: #e4edef; border-radius: 10px; background: #f8fafb; }
+.governance-fleet-shell .governance-org-row--orgao { border-left-color: #0f5873; }
+.governance-fleet-shell .governance-org-code { color: #1b6684; background: #e4f2f7; }
+.governance-fleet-shell .governance-field input,
+.governance-fleet-shell .governance-field textarea,
+.governance-fleet-shell .governance-field select { border-color: #dbe7e9; border-radius: 7px; color: #294757; background: #fcfdfd; }
+.governance-fleet-shell .governance-field input:focus,
+.governance-fleet-shell .governance-field textarea:focus,
+.governance-fleet-shell .governance-field select:focus { outline: 0; border-color: #5593a5; box-shadow: 0 0 0 3px rgba(85,147,165,.12); }
+.governance-fleet-shell .governance-check input { accent-color: #0f5873; }
+.governance-fleet-shell .governance-overlay { background: #102d34a8; }
+.governance-fleet-shell .governance-dialog { border-color: #e4edef; border-radius: 12px; box-shadow: 0 24px 70px #092f3850; }
+.governance-fleet-shell .governance-dialog-heading { border-bottom-color: #edf2f3; }
+.governance-fleet-shell .governance-close { border-color: #d9e5e8; color: #607b86; border-radius: 7px; }
+.governance-fleet-shell button:focus-visible,
+.governance-fleet-shell input:focus-visible,
+.governance-fleet-shell select:focus-visible,
+.governance-fleet-shell textarea:focus-visible { outline: 3px solid #d5a74a; outline-offset: 2px; }
+.governance-role-description { display: block; margin-top: 5px; color: #8497a0; font-size: 11px; }
+@media (max-width: 1100px) {
+  .governance-fleet-shell .fleet-sidebar { position: static; width: 100%; min-height: 0; padding: 13px 28px; }
+  .governance-fleet-shell .fleet-sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+  .governance-fleet-shell .fleet-brand { padding: 0; border: 0; }
+  .governance-fleet-shell .fleet-back { margin: 0; order: 2; }
+  .governance-fleet-shell .fleet-section-label,
+  .governance-fleet-shell .fleet-sidebar-bottom { display: none; }
+  .governance-fleet-shell .fleet-nav { display: flex; overflow-x: auto; gap: 5px; padding-top: 12px; }
+  .governance-fleet-shell .fleet-nav-item { flex: 0 0 auto; }
+  .governance-fleet-shell .fleet-main { width: 100%; margin: 0; }
+  .governance-fleet-shell .fleet-header { padding: 0 28px; }
+  .governance-fleet-shell .fleet-content { padding: 28px; }
+}
+@media (max-width: 600px) {
+  .governance-fleet-shell .fleet-sidebar { padding: 11px 17px; }
+  .governance-fleet-shell .fleet-sidebar-top { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .governance-fleet-shell .fleet-back { order: 0; padding-left: 0; }
+  .governance-fleet-shell .fleet-header { padding: 16px 17px; }
+  .governance-fleet-shell .fleet-content { padding: 20px 17px; }
+  .governance-fleet-shell .governance-section-heading { align-items: flex-start; flex-direction: column; }
+  .governance-fleet-shell .governance-primary-button { width: 100%; }
+}
