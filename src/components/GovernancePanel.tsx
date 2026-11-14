@@ -42,7 +42,27 @@ type GovernanceUser = {
   legacy_admin: boolean
   secretariat_ids: string[] | null
   module_ids: string[] | null
+  primeiro_acesso: boolean
+  convite_enviado_em: string | null
+  convite_aceito_em: string | null
+  perfil_legacy: string | null
+  assignments: GovernanceAssignment[]
 }
+
+type GovernanceAssignment = {
+  id: string
+  org_unit_id: string
+  org_unit_name: string
+  org_unit_code: string
+  role_id: string
+  role_label: string
+  active: boolean
+  valid_from: string
+  valid_until: string | null
+  module_ids: string[]
+}
+
+type GovernanceRole = { id: string; label: string; description: string; is_active: boolean }
 
 type SecretariatDraft = {
   id: string | null
@@ -53,14 +73,29 @@ type SecretariatDraft = {
   is_active: boolean
 }
 
+type ModuleDraft = {
+  id: string | null
+  label: string
+  description: string
+  icon_name: string
+  status_label: string
+  sort_order: string
+  is_ready: boolean
+}
+
 type UserDraft = {
   user_id: number | null
+  assignment_id: string | null
   name: string
   email: string
   perfil_municipal: string
   legacy_admin: boolean
   secretariat_ids: string[]
   module_ids: string[]
+  org_unit_id: string
+  role_id: string
+  active: boolean
+  valid_until: string
 }
 
 type OrgUnit = {
@@ -141,8 +176,10 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [users, setUsers] = useState<GovernanceUser[]>([])
+  const [roles, setRoles] = useState<GovernanceRole[]>([])
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([])
   const [secretariatDraft, setSecretariatDraft] = useState<SecretariatDraft | null>(null)
+  const [moduleDraft, setModuleDraft] = useState<ModuleDraft | null>(null)
   const [orgUnitDraft, setOrgUnitDraft] = useState<OrgUnitDraft | null>(null)
   const [userDraft, setUserDraft] = useState<UserDraft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -165,13 +202,14 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     }
     setAuthorized(true)
 
-    const [secretariatResult, moduleResult, userResult, orgResult] = await Promise.all([
+    const [secretariatResult, moduleResult, userResult, orgResult, roleResult] = await Promise.all([
       supabase.from('municipal_secretariats').select('id,name,description,icon_name,sort_order,is_active').order('sort_order', { ascending: true }),
       supabase.from('municipal_modules').select('id,label,description,icon_name,is_ready,status_label,sort_order').order('sort_order', { ascending: true }),
-      supabase.rpc('municipal_governance_list_users'),
+      supabase.rpc('municipal_governance_list_users_v2'),
       supabase.rpc('municipal_governance_list_org_units'),
+      supabase.rpc('municipal_governance_list_roles'),
     ])
-    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error
+    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error
     if (failed) {
       setLoadError('Não foi possível carregar os cadastros de Governança. Verifique se a estrutura do Supabase está atualizada.')
       setLoading(false)
@@ -182,6 +220,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setModules((moduleResult.data || []) as unknown as MunicipalModule[])
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
     setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
+    setRoles((roleResult.data || []) as unknown as GovernanceRole[])
     setLoading(false)
   }, [])
 
@@ -258,10 +297,33 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     await loadPanel(false)
   }
 
+  const saveModule = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!supabase || !moduleDraft) return
+    const id = slugify(moduleDraft.id || moduleDraft.label)
+    const sortOrder = Number(moduleDraft.sort_order)
+    if (!id || !moduleDraft.label.trim() || !Number.isInteger(sortOrder) || sortOrder < 1) {
+      setMessage({ type: 'error', text: 'Informe identificador, nome e uma ordem inteira maior que zero para o módulo.' })
+      return
+    }
+    setSaving(true)
+    setMessage(null)
+    const payload = { label: moduleDraft.label.trim(), description: moduleDraft.description.trim(), icon_name: moduleDraft.icon_name, status_label: moduleDraft.status_label.trim() || (moduleDraft.is_ready ? 'Disponível' : 'Em preparação'), sort_order: sortOrder, is_ready: moduleDraft.is_ready, updated_at: new Date().toISOString() }
+    const result = moduleDraft.id ? await supabase.from('municipal_modules').update(payload).eq('id', id) : await supabase.from('municipal_modules').insert({ id, ...payload })
+    setSaving(false)
+    if (result.error) {
+      setMessage({ type: 'error', text: result.error.code === '23505' ? 'Já existe um módulo com esse identificador.' : errorText(result.error) })
+      return
+    }
+    setModuleDraft(null)
+    setMessage({ type: 'success', text: moduleDraft.id ? 'Módulo atualizado.' : 'Módulo cadastrado.' })
+    await loadPanel(false)
+  }
+
   const saveUser = async (draft: UserDraft) => {
     if (!supabase) return
-    if (!draft.perfil_municipal) {
-      setMessage({ type: 'error', text: 'Selecione um perfil municipal.' })
+    if (!draft.role_id || !draft.org_unit_id) {
+      setMessage({ type: 'error', text: 'Selecione a unidade organizacional e o papel da pessoa.' })
       return
     }
     setSaving(true)
@@ -275,6 +337,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
             perfil_municipal: draft.perfil_municipal,
             secretariat_ids: draft.secretariat_ids,
             module_ids: draft.module_ids,
+            org_unit_id: draft.org_unit_id,
+            role_id: draft.role_id,
+            assignment_module_ids: draft.module_ids,
           },
         })
         if (error) throw new Error(error.message || 'Não foi possível enviar o convite.')
@@ -288,15 +353,18 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
         setUserDraft(null)
         setMessage({ type: 'success', text: `Convite enviado para ${draft.email.trim()}. O usuário definirá a própria senha no primeiro acesso.` })
       } else {
-        const { error } = await supabase.rpc('municipal_governance_save_user_assignments', {
+        const { error } = await supabase.rpc('municipal_governance_save_assignment', {
+          p_assignment_id: draft.assignment_id,
           p_user_id: draft.user_id,
-          p_profile: draft.perfil_municipal,
-          p_secretariat_ids: draft.secretariat_ids,
+          p_org_unit_id: draft.org_unit_id,
+          p_role_id: draft.role_id,
           p_module_ids: draft.module_ids,
+          p_active: draft.active,
+          p_valid_until: draft.valid_until || null,
         })
         if (error) throw error
         setUserDraft(null)
-        setMessage({ type: 'success', text: 'Perfil e vínculos cadastrais atualizados. Os acessos atuais permanecem inalterados.' })
+        setMessage({ type: 'success', text: 'Atribuição, módulos e validade atualizados.' })
       }
       await loadPanel(false)
     } catch (error) {
@@ -327,13 +395,32 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setMessage(null)
     setUserDraft({
       user_id: user.user_id,
+      assignment_id: user.assignments[0]?.id || null,
       name: user.name || '',
       email: user.email,
       perfil_municipal: user.perfil_municipal || '',
       legacy_admin: user.legacy_admin,
       secretariat_ids: user.secretariat_ids || [],
-      module_ids: user.module_ids || [],
+      module_ids: user.assignments[0]?.module_ids || user.module_ids || [],
+      org_unit_id: user.assignments[0]?.org_unit_id || 'municipality',
+      role_id: user.assignments[0]?.role_id || 'READ_ONLY',
+      active: user.assignments[0]?.active ?? user.ativo,
+      valid_until: user.assignments[0]?.valid_until || '',
     })
+  }
+
+  const setUserActive = async (user: GovernanceUser) => {
+    if (!supabase) return
+    setSaving(true)
+    setMessage(null)
+    const { error } = await supabase.rpc('municipal_governance_set_user_active', { p_user_id: user.user_id, p_active: !user.ativo })
+    setSaving(false)
+    if (error) {
+      setMessage({ type: 'error', text: errorText(error) })
+      return
+    }
+    setMessage({ type: 'success', text: user.ativo ? 'Usuário inativado e atribuições suspensas.' : 'Usuário reativado.' })
+    await loadPanel(false)
   }
 
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
@@ -445,19 +532,20 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
               {activeTab === 'users' && (
                 <section className="governance-section" aria-labelledby="usersHeading">
                   <div className="governance-section-heading">
-                    <div><h2 id="usersHeading">Usuários</h2><p>Associe uma pessoa a várias secretarias e escolha módulos sem depender dessas associações.</p></div>
-                <button className="governance-primary-button" type="button" onClick={() => { setMessage(null); setUserDraft({ user_id: null, name: '', email: '', perfil_municipal: '', legacy_admin: false, secretariat_ids: [], module_ids: [] }) }}><MailPlus size={17} />Convidar usuário</button>
+                    <div><h2 id="usersHeading">Usuários e acessos</h2><p>Gerencie situação da conta, lotação, papel, módulos autorizados, validade e primeiro acesso.</p></div>
+                <button className="governance-primary-button" type="button" onClick={() => { setMessage(null); setUserDraft({ user_id: null, assignment_id: null, name: '', email: '', perfil_municipal: 'ADMINISTRATIVO', legacy_admin: false, secretariat_ids: [], module_ids: [], org_unit_id: 'municipality', role_id: 'READ_ONLY', active: true, valid_until: '' }) }}><MailPlus size={17} />Convidar usuário</button>
                   </div>
                   {users.length === 0 ? (
                     <div className="governance-empty">Nenhum usuário municipal ativo foi encontrado.</div>
                   ) : (
                     <div className="governance-user-list">
                       {users.map((user) => (
-                        <article className="governance-user-row" key={user.user_id}>
+                        <article className={`governance-user-row${user.ativo ? '' : ' is-inactive'}`} key={user.user_id}>
                           <span className="governance-user-avatar" aria-hidden="true">{(user.name || user.email || 'U').trim()[0]?.toUpperCase()}</span>
                           <div className="governance-user-main"><strong>{user.name || 'Nome não informado'}</strong><span>{user.email}</span></div>
-                          <span className="governance-profile-badge">{profileLabel(user.perfil_municipal)}</span>
-                          <span className="governance-user-summary">{user.secretariat_ids?.length || 0} secretarias · {user.module_ids?.length || 0} módulos</span>
+                          <span className="governance-profile-badge">{user.assignments[0]?.role_label || profileLabel(user.perfil_legacy || user.perfil_municipal)}</span>
+                          <span className="governance-user-summary">{user.assignments.length} atribuição(ões) · {user.assignments.reduce((total, assignment) => total + assignment.module_ids.length, 0)} módulo(s) · {user.ativo ? 'Ativo' : 'Inativo'}</span>
+                          <button className="governance-text-button" type="button" onClick={() => void setUserActive(user)} disabled={saving}>{user.ativo ? 'Inativar' : 'Reativar'}</button>
                           <button className="governance-edit-button" type="button" aria-label={`Editar perfil e vínculos de ${user.name || user.email}`} onClick={() => openEditUser(user)}><Pencil size={16} /><span>Editar</span></button>
                         </article>
                       ))}
@@ -469,7 +557,8 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
               {activeTab === 'modules' && (
                 <section className="governance-section" aria-labelledby="modulesHeading">
                   <div className="governance-section-heading">
-                    <div><h2 id="modulesHeading">Catálogo de módulos</h2><p>Este catálogo serve para registrar atribuições. A situação do módulo não altera o acesso atual.</p></div>
+                    <div><h2 id="modulesHeading">Catálogo de módulos</h2><p>Cadastre as áreas do produto, marque a prontidão e mantenha a situação apresentada aos gestores.</p></div>
+                    <button className="governance-primary-button" type="button" onClick={() => { setMessage(null); setModuleDraft({ id: null, label: '', description: '', icon_name: 'Building2', status_label: 'Em preparação', sort_order: String(Math.max(0, ...modules.map((item) => item.sort_order)) + 1), is_ready: false }) }}><FilePlus2 size={17} />Novo módulo</button>
                   </div>
                   <div className="governance-module-grid">
                     {modules.map((module) => {
@@ -478,7 +567,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                         <article className="governance-module-card" key={module.id}>
                           <span className="governance-module-icon"><Icon size={22} aria-hidden="true" /></span>
                           <div className="governance-module-copy"><h3>{module.label}</h3><p>{module.description}</p></div>
-                          <span className={`governance-status${module.is_ready ? ' is-active' : ''}`}>{module.status_label}</span>
+                          <div className="governance-module-actions"><span className={`governance-status${module.is_ready ? ' is-active' : ''}`}>{module.status_label}</span><button className="governance-text-button" type="button" onClick={() => setModuleDraft({ id: module.id, label: module.label, description: module.description, icon_name: module.icon_name, status_label: module.status_label, sort_order: String(module.sort_order), is_ready: module.is_ready })}><Pencil size={15} />Editar</button></div>
                         </article>
                       )
                     })}
@@ -502,16 +591,54 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
       {orgUnitDraft && (
         <OrgUnitDialog draft={orgUnitDraft} units={orgUnits} saving={saving} onChange={setOrgUnitDraft} onCancel={() => setOrgUnitDraft(null)} onSubmit={(event) => void saveOrgUnit(event)} />
       )}
+      {moduleDraft && (
+        <ModuleDialog draft={moduleDraft} saving={saving} onChange={setModuleDraft} onCancel={() => setModuleDraft(null)} onSubmit={(event) => void saveModule(event)} />
+      )}
       {userDraft && (
         <UserDialog
           initial={userDraft}
-          secretariats={secretariats}
+          orgUnits={orgUnits}
+          roles={roles}
           modules={modules}
           saving={saving}
           onCancel={() => setUserDraft(null)}
           onSubmit={(draft) => void saveUser(draft)}
         />
       )}
+    </div>
+  )
+}
+
+function ModuleDialog({
+  draft,
+  saving,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  draft: ModuleDraft
+  saving: boolean
+  onChange: (draft: ModuleDraft) => void
+  onCancel: () => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}) {
+  return (
+    <div className="governance-overlay">
+      <section className="governance-dialog" role="dialog" aria-modal="true" aria-labelledby="moduleDialogTitle">
+        <div className="governance-dialog-heading"><div><span className="governance-eyebrow">CATÁLOGO DO PRODUTO</span><h2 id="moduleDialogTitle">{draft.id ? 'Editar módulo' : 'Novo módulo'}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div>
+        <form onSubmit={onSubmit}>
+          <div className="governance-form-grid governance-form-grid--two">
+            <label className="governance-field">Identificador<input value={draft.id || ''} onChange={(event) => onChange({ ...draft, id: event.target.value })} placeholder="ex.: saude-familia" maxLength={80} required /></label>
+            <label className="governance-field">Ícone<select value={draft.icon_name} onChange={(event) => onChange({ ...draft, icon_name: event.target.value })}>{MUNICIPAL_ICON_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label className="governance-field governance-field--full">Nome do módulo<input value={draft.label} onChange={(event) => onChange({ ...draft, label: event.target.value })} maxLength={120} required /></label>
+            <label className="governance-field governance-field--full">Descrição<textarea value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} rows={3} maxLength={500} /></label>
+            <label className="governance-field">Situação exibida<input value={draft.status_label} onChange={(event) => onChange({ ...draft, status_label: event.target.value })} maxLength={80} placeholder="Disponível" /></label>
+            <label className="governance-field">Ordem<input type="number" min={1} step={1} value={draft.sort_order} onChange={(event) => onChange({ ...draft, sort_order: event.target.value })} required /></label>
+            <label className="governance-check governance-field--full"><input type="checkbox" checked={draft.is_ready} onChange={(event) => onChange({ ...draft, is_ready: event.target.checked })} /><span><strong>Módulo pronto para uso</strong><small>Quando desmarcado, fica identificado como em preparação no catálogo.</small></span></label>
+          </div>
+          <div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={onCancel}>Cancelar</button><button className="governance-primary-button" type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Salvar módulo'}</button></div>
+        </form>
+      </section>
     </div>
   )
 }
@@ -588,14 +715,16 @@ function SecretariatDialog({
 
 function UserDialog({
   initial,
-  secretariats,
+  orgUnits,
+  roles,
   modules,
   saving,
   onCancel,
   onSubmit,
 }: {
   initial: UserDraft
-  secretariats: MunicipalSecretariat[]
+  orgUnits: OrgUnit[]
+  roles: GovernanceRole[]
   modules: MunicipalModule[]
   saving: boolean
   onCancel: () => void
@@ -604,7 +733,8 @@ function UserDialog({
   const [draft, setDraft] = useState<UserDraft>(initial)
   const isInvite = draft.user_id === null
 
-  const toggleId = (key: 'secretariat_ids' | 'module_ids', id: string) => {
+  const toggleModule = (id: string) => {
+    const key = 'module_ids'
     const current = draft[key]
     setDraft({ ...draft, [key]: current.includes(id) ? current.filter((item) => item !== id) : [...current, id] })
   }
@@ -628,31 +758,27 @@ function UserDialog({
             <div className="governance-user-identity"><strong>{draft.name || 'Nome não informado'}</strong><span>{draft.email}</span></div>
           )}
 
-          <label className="governance-field governance-profile-field">Perfil municipal<select value={draft.perfil_municipal} onChange={(event) => setDraft({ ...draft, perfil_municipal: event.target.value })} required disabled={draft.legacy_admin}><option value="">Selecione um perfil</option>{MUNICIPAL_PROFILES.map((profile) => <option key={profile.value} value={profile.value}>{profile.label}</option>)}</select>{draft.legacy_admin && <small className="governance-field-hint">O administrador ativo existente permanece administrador nesta etapa.</small>}</label>
-
-          <div className="governance-assignment-note"><ShieldCheck size={18} aria-hidden="true" /><p>É possível selecionar mais de uma secretaria e módulos de qualquer área. Nesta etapa, os vínculos são apenas registrados e não alteram os acessos atuais.</p></div>
+          <div className="governance-assignment-note"><ShieldCheck size={18} aria-hidden="true" /><p>A atribuição define onde a pessoa trabalha, qual papel exerce e quais módulos pode acessar. O escopo territorial e as regras específicas continuam protegidos pelo backend.</p></div>
 
           <div className="governance-assignment-columns">
             <fieldset className="governance-check-group">
-              <legend>Secretarias associadas</legend>
-              <p>Selecione todas as áreas às quais a pessoa pertence.</p>
-              <div className="governance-checkbox-list">
-                {secretariats.map((secretariat) => (
-                  <label className="governance-check" key={secretariat.id}>
-                    <input type="checkbox" checked={draft.secretariat_ids.includes(secretariat.id)} onChange={() => toggleId('secretariat_ids', secretariat.id)} />
-                    <span><strong>{secretariat.name}</strong>{!secretariat.is_active && <small>Inativa no hall</small>}</span>
-                  </label>
-                ))}
+              <legend>Lotação e papel</legend>
+              <p>A unidade organizacional e o papel formam a atribuição institucional.</p>
+              <label className="governance-field">Unidade organizacional<select value={draft.org_unit_id} onChange={(event) => setDraft({ ...draft, org_unit_id: event.target.value })} required><option value="">Selecione uma unidade</option>{orgUnits.filter((unit) => unit.is_active).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label>
+              <label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => setDraft({ ...draft, role_id: event.target.value })} required><option value="">Selecione um papel</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label>
+              <div className="governance-form-grid governance-form-grid--two">
+                <label className="governance-field">Válida até<input type="date" value={draft.valid_until} onChange={(event) => setDraft({ ...draft, valid_until: event.target.value })} /></label>
+                <label className="governance-check"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span><strong>Atribuição ativa</strong><small>Pode acessar os módulos autorizados.</small></span></label>
               </div>
             </fieldset>
 
             <fieldset className="governance-check-group">
               <legend>Módulos atribuídos</legend>
-              <p>Escolha independentemente das secretarias associadas.</p>
+              <p>Escolha os módulos que essa atribuição pode abrir.</p>
               <div className="governance-checkbox-list">
                 {modules.map((module) => (
                   <label className="governance-check" key={module.id}>
-                    <input type="checkbox" checked={draft.module_ids.includes(module.id)} onChange={() => toggleId('module_ids', module.id)} />
+                    <input type="checkbox" checked={draft.module_ids.includes(module.id)} onChange={() => toggleModule(module.id)} />
                     <span><strong>{module.label}</strong><small>{module.status_label}</small></span>
                   </label>
                 ))}

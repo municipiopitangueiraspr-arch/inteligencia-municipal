@@ -1004,3 +1004,31 @@
   .governance-org-row .governance-status { grid-column: 2; grid-row: 1; }
   .governance-org-row .governance-edit-button { grid-column: 1 / -1; justify-self: start; }
 }
+
+
+.governance-module-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.governance-user-row.is-inactive {
+  opacity: .66;
+  background: #fafcfc;
+}
+
+.governance-user-row .governance-text-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 940px) {
+  .governance-user-row {
+    grid-template-columns: 40px minmax(160px, 1fr) auto;
+  }
+  .governance-user-summary { grid-column: 2 / -1; }
+  .governance-user-row .governance-text-button,
+  .governance-user-row .governance-edit-button { grid-row: 1; }
+}

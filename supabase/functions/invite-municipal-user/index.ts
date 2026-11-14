@@ -43,10 +43,14 @@ Deno.serve(async (request: Request) => {
     const profile = typeof body.perfil_municipal === "string" ? body.perfil_municipal : "";
     const secretariatIds = stringIds(body.secretariat_ids);
     const moduleIds = stringIds(body.module_ids);
+    const orgUnitId = typeof body.org_unit_id === "string" ? body.org_unit_id.trim() : "";
+    const roleId = typeof body.role_id === "string" ? body.role_id.trim() : "";
+    const assignmentModuleIds = stringIds(body.assignment_module_ids) || moduleIds;
     if (name.length < 2 || name.length > 160) return json(request, { error: "Informe o nome completo do usuário." }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return json(request, { error: "Informe um e-mail válido." }, 400);
     if (!profiles.has(profile)) return json(request, { error: "Perfil municipal inválido." }, 400);
     if (!secretariatIds || !moduleIds) return json(request, { error: "Listas de secretarias e módulos inválidas." }, 400);
+    if (!orgUnitId || !roleId || !assignmentModuleIds) return json(request, { error: "A unidade, o papel e os módulos da atribuição são obrigatórios." }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -81,6 +85,21 @@ Deno.serve(async (request: Request) => {
       if ((knownModules || []).length !== moduleIds.length) return json(request, { error: "Um ou mais módulos selecionados não existem mais. Atualize a tela e tente novamente." }, 400);
     }
 
+    const { data: knownOrgUnit, error: orgUnitError } = await serviceClient.from("municipal_org_units")
+      .select("id").eq("id", orgUnitId).eq("is_active", true).maybeSingle();
+    if (orgUnitError) throw orgUnitError;
+    if (!knownOrgUnit) return json(request, { error: "A unidade organizacional selecionada não existe mais ou está inativa." }, 400);
+    const { data: knownRole, error: roleError } = await serviceClient.from("municipal_roles")
+      .select("id").eq("id", roleId).eq("is_active", true).maybeSingle();
+    if (roleError) throw roleError;
+    if (!knownRole) return json(request, { error: "O papel selecionado não existe mais ou está inativo." }, 400);
+    if (assignmentModuleIds.length > 0) {
+      const { data: knownAssignmentModules, error: assignmentModuleError } = await serviceClient.from("municipal_modules")
+        .select("id").in("id", assignmentModuleIds);
+      if (assignmentModuleError) throw assignmentModuleError;
+      if ((knownAssignmentModules || []).length !== assignmentModuleIds.length) return json(request, { error: "Um dos módulos da atribuição não existe mais." }, 400);
+    }
+
     const redirectTo = Deno.env.get("MUNICIPAL_PORTAL_URL") || fallbackPortal;
     const { data: invitation, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(email, {
       redirectTo,
@@ -98,6 +117,13 @@ Deno.serve(async (request: Request) => {
       p_module_ids: moduleIds,
     });
     if (registrationError) throw registrationError;
+    const { error: assignmentError } = await serviceClient.rpc("municipal_governance_register_invited_assignment", {
+      p_auth_user_id: invitation.user.id,
+      p_org_unit_id: orgUnitId,
+      p_role_id: roleId,
+      p_module_ids: assignmentModuleIds,
+    });
+    if (assignmentError) throw assignmentError;
     return json(request, { ok: true, invitation_sent: true, user_id: registration, perfil_municipal: profile });
   } catch (error) {
     if (invitedUserId) {
