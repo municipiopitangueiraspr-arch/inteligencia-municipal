@@ -799,6 +799,14 @@
   border-top: 1px solid #edf2f2;
 }
 
+.governance-assignment-list { display: grid; gap: 8px; margin: 18px 0; }
+.governance-assignment-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 15px; border: 1px solid #dce8e8; border-radius: 11px; background: #fff; }
+.governance-assignment-item > div:first-child { display: grid; gap: 4px; }
+.governance-assignment-item strong { color: #244e56; font: 800 12px 'Manrope', sans-serif; }
+.governance-assignment-item span { color: #71858a; font-size: 11px; }
+.governance-assignment-editor { display: grid; gap: 14px; padding-top: 15px; border-top: 1px solid #e2ecec; }
+.governance-text-button--danger { color: #b33737; }
+
 .governance-shell button:focus-visible,
 .governance-shell input:focus-visible,
 .governance-shell select:focus-visible,
@@ -1031,4 +1039,51 @@
   .governance-user-summary { grid-column: 2 / -1; }
   .governance-user-row .governance-text-button,
   .governance-user-row .governance-edit-button { grid-row: 1; }
+}
+
+
+.governance-audit-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.governance-audit-search svg { color: #568088; flex: 0 0 auto; }
+.governance-audit-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: #244e56;
+  background: transparent;
+  font: 500 12px 'DM Sans', sans-serif;
+}
+
+.governance-audit-list { display: grid; gap: 8px; }
+.governance-audit-row {
+  display: grid;
+  grid-template-columns: 150px minmax(180px, 1fr) minmax(180px, 1.5fr);
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  border: 1px solid #dce8e8;
+  border-radius: 11px;
+  background: #fff;
+}
+.governance-audit-time { color: #71858a; font-size: 11px; }
+.governance-audit-main { display: grid; gap: 3px; min-width: 0; }
+.governance-audit-main strong { color: #244e56; font: 800 12px 'Manrope', sans-serif; }
+.governance-audit-main span { overflow: hidden; color: #71858a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.governance-audit-row code { overflow: hidden; color: #5f7b82; font: 10px/1.4 monospace; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .governance-audit-search { align-items: stretch; flex-wrap: wrap; }
+  .governance-audit-search input { flex-basis: calc(100% - 32px); }
+  .governance-audit-row { grid-template-columns: 1fr; gap: 6px; }
+  .governance-audit-row code { white-space: normal; word-break: break-word; }
 }

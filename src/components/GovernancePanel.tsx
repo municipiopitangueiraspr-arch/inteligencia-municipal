@@ -6,12 +6,14 @@ import {
   Check,
   CircleAlert,
   FilePlus2,
+  History,
   LayoutGrid,
   ListTree,
   LogOut,
   MailPlus,
   Pencil,
   ShieldCheck,
+  Search,
   Users,
   X,
 } from 'lucide-react'
@@ -63,6 +65,27 @@ type GovernanceAssignment = {
 }
 
 type GovernanceRole = { id: string; label: string; description: string; is_active: boolean }
+
+type AssignmentForm = {
+  id: string | null
+  org_unit_id: string
+  role_id: string
+  module_ids: string[]
+  active: boolean
+  valid_until: string
+}
+
+type GovernanceAudit = {
+  id: number
+  action: string
+  created_at: string
+  actor_name: string | null
+  actor_email: string | null
+  target_name: string | null
+  target_email: string | null
+  assignment_id: string | null
+  details: Record<string, unknown> | null
+}
 
 type SecretariatDraft = {
   id: string | null
@@ -120,7 +143,7 @@ type OrgUnitDraft = {
   is_active: boolean
 }
 
-type PanelTab = 'organization' | 'secretariats' | 'users' | 'modules'
+type PanelTab = 'organization' | 'secretariats' | 'users' | 'modules' | 'audit'
 
 type OrderedOrgUnit = OrgUnit & { level: number }
 
@@ -177,11 +200,15 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [users, setUsers] = useState<GovernanceUser[]>([])
   const [roles, setRoles] = useState<GovernanceRole[]>([])
+  const [audit, setAudit] = useState<GovernanceAudit[]>([])
+  const [auditSearch, setAuditSearch] = useState('')
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([])
   const [secretariatDraft, setSecretariatDraft] = useState<SecretariatDraft | null>(null)
   const [moduleDraft, setModuleDraft] = useState<ModuleDraft | null>(null)
   const [orgUnitDraft, setOrgUnitDraft] = useState<OrgUnitDraft | null>(null)
   const [userDraft, setUserDraft] = useState<UserDraft | null>(null)
+  const [assignmentUser, setAssignmentUser] = useState<GovernanceUser | null>(null)
+  const [assignmentDraft, setAssignmentDraft] = useState<AssignmentForm | null>(null)
   const [saving, setSaving] = useState(false)
 
   const loadPanel = useCallback(async (showLoading: boolean) => {
@@ -202,14 +229,15 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     }
     setAuthorized(true)
 
-    const [secretariatResult, moduleResult, userResult, orgResult, roleResult] = await Promise.all([
+    const [secretariatResult, moduleResult, userResult, orgResult, roleResult, auditResult] = await Promise.all([
       supabase.from('municipal_secretariats').select('id,name,description,icon_name,sort_order,is_active').order('sort_order', { ascending: true }),
       supabase.from('municipal_modules').select('id,label,description,icon_name,is_ready,status_label,sort_order').order('sort_order', { ascending: true }),
       supabase.rpc('municipal_governance_list_users_v2'),
       supabase.rpc('municipal_governance_list_org_units'),
       supabase.rpc('municipal_governance_list_roles'),
+      supabase.rpc('municipal_governance_list_audit', { p_search: auditSearch || null }),
     ])
-    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error
+    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error || auditResult.error
     if (failed) {
       setLoadError('Não foi possível carregar os cadastros de Governança. Verifique se a estrutura do Supabase está atualizada.')
       setLoading(false)
@@ -221,8 +249,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
     setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
     setRoles((roleResult.data || []) as unknown as GovernanceRole[])
+    setAudit((auditResult.data || []) as unknown as GovernanceAudit[])
     setLoading(false)
-  }, [])
+  }, [auditSearch])
 
   useEffect(() => { void loadPanel(false) }, [loadPanel])
 
@@ -423,6 +452,34 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     await loadPanel(false)
   }
 
+  const saveAssignment = async (draft: AssignmentForm) => {
+    if (!supabase || !assignmentUser) return
+    setSaving(true)
+    const { error } = await supabase.rpc('municipal_governance_save_assignment', { p_assignment_id: draft.id, p_user_id: assignmentUser.user_id, p_org_unit_id: draft.org_unit_id, p_role_id: draft.role_id, p_module_ids: draft.module_ids, p_active: draft.active, p_valid_until: draft.valid_until || null })
+    setSaving(false)
+    if (error) { setMessage({ type: 'error', text: errorText(error) }); return }
+    setAssignmentDraft(null)
+    setAssignmentUser(null)
+    setMessage({ type: 'success', text: 'Atribuição salva e registrada no histórico.' })
+    await loadPanel(false)
+  }
+
+  const deleteAssignment = async (assignment: GovernanceAssignment) => {
+    if (!supabase || !window.confirm(`Remover a atribuição ${assignment.role_label} · ${assignment.org_unit_name}?`)) return
+    setSaving(true)
+    const { error } = await supabase.rpc('municipal_governance_delete_assignment', { p_assignment_id: assignment.id })
+    setSaving(false)
+    if (error) { setMessage({ type: 'error', text: errorText(error) }); return }
+    setMessage({ type: 'success', text: 'Atribuição removida.' })
+    await loadPanel(false)
+  }
+
+  const openAssignmentManager = (user: GovernanceUser) => {
+    setMessage(null)
+    setAssignmentUser(user)
+    setAssignmentDraft(null)
+  }
+
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
   const orderedOrgUnits = orderOrgUnits(orgUnits)
 
@@ -475,6 +532,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                 <button className={activeTab === 'secretariats' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'secretariats'} onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span>{activeSecretariatCount}</span></button>
                 <button className={activeTab === 'users' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'users'} onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span>{users.length}</span></button>
                 <button className={activeTab === 'modules' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'modules'} onClick={() => setActiveTab('modules')}><LayoutGrid size={17} />Catálogo de módulos<span>{modules.length}</span></button>
+                <button className={activeTab === 'audit' ? 'is-active' : ''} type="button" aria-pressed={activeTab === 'audit'} onClick={() => setActiveTab('audit')}><History size={17} />Histórico<span>{audit.length}</span></button>
               </nav>
 
               {activeTab === 'organization' && (
@@ -546,6 +604,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                           <span className="governance-profile-badge">{user.assignments[0]?.role_label || profileLabel(user.perfil_legacy || user.perfil_municipal)}</span>
                           <span className="governance-user-summary">{user.assignments.length} atribuição(ões) · {user.assignments.reduce((total, assignment) => total + assignment.module_ids.length, 0)} módulo(s) · {user.ativo ? 'Ativo' : 'Inativo'}</span>
                           <button className="governance-text-button" type="button" onClick={() => void setUserActive(user)} disabled={saving}>{user.ativo ? 'Inativar' : 'Reativar'}</button>
+                          <button className="governance-text-button" type="button" onClick={() => openAssignmentManager(user)}>Atribuições</button>
                           <button className="governance-edit-button" type="button" aria-label={`Editar perfil e vínculos de ${user.name || user.email}`} onClick={() => openEditUser(user)}><Pencil size={16} /><span>Editar</span></button>
                         </article>
                       ))}
@@ -571,6 +630,20 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                         </article>
                       )
                     })}
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'audit' && (
+                <section className="governance-section" aria-labelledby="auditHeading">
+                  <div className="governance-section-heading">
+                    <div><h2 id="auditHeading">Histórico de acessos</h2><p>Registro das alterações de usuários, atribuições, módulos e unidades organizacionais.</p></div>
+                  </div>
+                  <form className="governance-audit-search" onSubmit={(event) => { event.preventDefault(); void loadPanel(false) }}>
+                    <Search size={17} aria-hidden="true" /><input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} placeholder="Buscar por ação, administrador ou usuário" /><button className="governance-secondary-button" type="submit">Pesquisar</button>
+                  </form>
+                  <div className="governance-audit-list">
+                    {audit.length === 0 ? <div className="governance-empty">Nenhuma alteração encontrada.</div> : audit.map((entry) => <article className="governance-audit-row" key={entry.id}><div className="governance-audit-time">{new Date(entry.created_at).toLocaleString('pt-BR')}</div><div className="governance-audit-main"><strong>{entry.action}</strong><span>{entry.target_name || entry.target_email || 'Registro geral'} · por {entry.actor_name || entry.actor_email || 'sistema'}</span></div><code>{entry.details ? JSON.stringify(entry.details) : '{}'}</code></article>)}
                   </div>
                 </section>
               )}
@@ -605,10 +678,15 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
           onSubmit={(draft) => void saveUser(draft)}
         />
       )}
+      {assignmentUser && <AssignmentManagerDialog user={assignmentUser} orgUnits={orgUnits} roles={roles} modules={modules} draft={assignmentDraft} saving={saving} onNew={() => setAssignmentDraft({ id: null, org_unit_id: '', role_id: '', module_ids: [], active: true, valid_until: '' })} onEdit={(assignment) => setAssignmentDraft({ id: assignment.id, org_unit_id: assignment.org_unit_id, role_id: assignment.role_id, module_ids: assignment.module_ids, active: assignment.active, valid_until: assignment.valid_until || '' })} onDelete={(assignment) => void deleteAssignment(assignment)} onChange={setAssignmentDraft} onSave={(draft) => void saveAssignment(draft)} onCancel={() => { setAssignmentUser(null); setAssignmentDraft(null) }} />}
     </div>
   )
 }
 
+function AssignmentManagerDialog({ user, orgUnits, roles, modules, draft, saving, onNew, onEdit, onDelete, onChange, onSave, onCancel }: { user: GovernanceUser; orgUnits: OrgUnit[]; roles: GovernanceRole[]; modules: MunicipalModule[]; draft: AssignmentForm | null; saving: boolean; onNew: () => void; onEdit: (assignment: GovernanceAssignment) => void; onDelete: (assignment: GovernanceAssignment) => void; onChange: (draft: AssignmentForm | null) => void; onSave: (draft: AssignmentForm) => void; onCancel: () => void }) {
+  const toggle = (moduleId: string) => { if (!draft) return; onChange({ ...draft, module_ids: draft.module_ids.includes(moduleId) ? draft.module_ids.filter((id) => id !== moduleId) : [...draft.module_ids, moduleId] }) }
+  return <div className="governance-overlay"><section className="governance-dialog governance-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="assignmentDialogTitle"><div className="governance-dialog-heading"><div><span className="governance-eyebrow">GOVERNANÇA DE ACESSOS</span><h2 id="assignmentDialogTitle">Atribuições de {user.name || user.email}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div><div className="governance-assignment-list">{user.assignments.map((assignment) => <div className="governance-assignment-item" key={assignment.id}><div><strong>{assignment.role_label}</strong><span>{assignment.org_unit_name} · {assignment.module_ids.length} módulo(s) · {assignment.active ? 'Ativa' : 'Inativa'}</span></div><div><button className="governance-text-button" type="button" onClick={() => onEdit(assignment)}>Editar</button><button className="governance-text-button governance-text-button--danger" type="button" onClick={() => onDelete(assignment)}>Remover</button></div></div>)}</div>{draft ? <div className="governance-assignment-editor"><div className="governance-form-grid governance-form-grid--two"><label className="governance-field">Unidade<select value={draft.org_unit_id} onChange={(event) => onChange({ ...draft, org_unit_id: event.target.value })} required><option value="">Selecione</option>{orgUnits.filter((unit) => unit.is_active).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label><label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => onChange({ ...draft, role_id: event.target.value })} required><option value="">Selecione</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label></div><label className="governance-field">Válida até<input type="date" value={draft.valid_until} onChange={(event) => onChange({ ...draft, valid_until: event.target.value })} /></label><div className="governance-checkbox-list">{modules.map((module) => <label className="governance-check" key={module.id}><input type="checkbox" checked={draft.module_ids.includes(module.id)} onChange={() => toggle(module.id)} /><span><strong>{module.label}</strong><small>{module.status_label}</small></span></label>)}</div><div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={() => onChange(null)}>Cancelar</button><button className="governance-primary-button" type="button" disabled={saving || !draft.org_unit_id || !draft.role_id} onClick={() => onSave(draft)}>Salvar atribuição</button></div></div> : <button className="governance-primary-button" type="button" onClick={onNew}>Adicionar outra atribuição</button>}</section></div>
+}
 function ModuleDialog({
   draft,
   saving,
