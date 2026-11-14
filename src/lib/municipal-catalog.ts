@@ -23,10 +23,10 @@ import {
 import type { LucideIcon } from 'lucide-react'
 
 export const MUNICIPAL_PROFILES = [
-  { value: 'ADMIN', label: 'Administrador' },
+  { value: 'ADMIN', label: 'Admin do Sistema' },
   { value: 'PREFEITO', label: 'Prefeito' },
   { value: 'SECRETARIO', label: 'Secretário' },
-  { value: 'ADMINISTRATIVO', label: 'Administrativo' },
+  { value: 'ADMINISTRATIVO', label: 'Operador' },
 ] as const
 
 export const MUNICIPAL_ICON_OPTIONS: { value: string; label: string; icon: LucideIcon }[] = [
