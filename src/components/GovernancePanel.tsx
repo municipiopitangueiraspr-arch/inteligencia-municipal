@@ -27,6 +27,7 @@ import { supabase } from '../lib/supabase'
 import './GovernancePanel.css'
 
 const assetBase = import.meta.env.BASE_URL
+const BUSINESS_ROLE_IDS = new Set(['GOVERNANCE_ADMIN', 'EXECUTIVE_VIEW', 'UNIT_MANAGER', 'OPERATOR', 'READ_ONLY'])
 
 type GovernancePanelProps = {
   userEmail?: string
@@ -248,7 +249,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setModules((moduleResult.data || []) as unknown as MunicipalModule[])
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
     setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
-    setRoles((roleResult.data || []) as unknown as GovernanceRole[])
+    setRoles(((roleResult.data || []) as unknown as GovernanceRole[]).filter((role) => BUSINESS_ROLE_IDS.has(role.id)))
     setAudit((auditResult.data || []) as unknown as GovernanceAudit[])
     setLoading(false)
   }, [auditSearch])

@@ -302,7 +302,7 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
       const households = householdByLot.get(lot.id) || []
       if (!households.length) { result.set(lot.id, 'no_activity'); continue }
       const states = households.map((household) => {
-        const householdVisits = visitsByHousehold.get(household.id) || []
+        const householdVisits = [...(visitsByHousehold.get(household.id) || [])].sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
         const formResponses = householdVisits.flatMap((visit) => responsesByVisit.get(visit.id) || []).filter((response) => response.questionnaire_id === coverageFormId)
         if (formResponses.some((response) => response.status === 'SUBMITTED')) return 'answered' as const
         if (formResponses.some((response) => response.status === 'DRAFT')) return 'draft' as const
