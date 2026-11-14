@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
@@ -62,11 +62,9 @@ type CensusNoticeTone = 'success' | 'error' | 'info'
 const TERRITORY_PAGE_SIZE = 1000
 
 const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'territory', label: 'Domicílios', icon: MapPinned },
+  { id: 'territory', label: 'Monitorar território', icon: MapPinned },
   { id: 'forms', label: 'Questionários', icon: FileText },
-  { id: 'families', label: 'Visitas', icon: UsersRound },
-  { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
-  { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
+  { id: 'overview', label: 'Visão gerencial', icon: LayoutDashboard },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
@@ -156,7 +154,7 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
     <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
       {view === 'overview' && <CensusOverview role={access.role} onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
-      {view === 'territory' && <CensusTerritory onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
+      {view === 'territory' && <CensusTerritory readOnly={access.role === 'manager'} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
       {view === 'zones' && access.role === 'manager' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'dwg' && access.role === 'manager' && <MapPreparationWorkspace />}
       {view === 'forms' && access.role === 'manager' && <QuestionnairesManagement />}
