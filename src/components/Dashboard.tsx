@@ -130,7 +130,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
             </span>
             <span className="dashboard-brand-copy">
               <strong>Matrix<span>IA</span></strong>
-              <small>Intranet integrada</small>
+              <small>Gestão integrada</small>
             </span>
           </div>
           <div className="dashboard-account">

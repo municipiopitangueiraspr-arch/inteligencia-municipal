@@ -167,17 +167,17 @@ function App() {
       <div className="panel-glow panel-glow-top" /><div className="panel-glow panel-glow-bottom" />
       <div className="institutional-content">
         <div className="brand-mark"><img src={`${assetBase}assets/matrixia-mark.png`} alt="Símbolo MatrixIA" /></div>
-        <p className="eyebrow">{supplierMode ? 'PORTAL DO FORNECEDOR' : 'PLATAFORMA DE INTELIGÊNCIA'}</p>
+        <p className="eyebrow">PLATAFORMA DE INTELIGÊNCIA</p>
         <h1>Matrix<span>IA</span></h1><div className="brand-divider" />
-        <p className="platform-name">{supplierMode ? <>Acesso<br /><strong>do Posto</strong></> : <>Integração,<br /><strong>Inteligência e Eficiência</strong></>}</p>
-        <p className="platform-description">{supplierMode ? 'Operação segura para estabelecimentos credenciados.' : 'Um ambiente integrado para transformar dados públicos em decisões melhores.'}</p>
+        <p className="platform-name">Integração,<br /><strong>Inteligência e Eficiência</strong></p>
+        <p className="platform-description">Um ambiente único para transformar dados e operações em decisões melhores.</p>
         <div className="institutional-footer"><ShieldCheck size={16} /> Ambiente institucional protegido</div>
       </div>
     </section>
     <section className="access-panel" aria-label="Formulário de acesso">
       <div className="access-inner">
         <div className="mobile-brand"><img src={`${assetBase}assets/matrixia-mark.png`} alt="Símbolo MatrixIA" /><span>Matrix<span>IA</span></span></div>
-        <div className="welcome-copy"><span className="section-kicker">{supplierMode ? 'PORTAL DO FORNECEDOR' : 'PORTAL DE GESTÃO'}</span><h2>{supplierMode ? 'Acesse o seu posto' : 'Bem-vindo de volta'}</h2><p>{supplierMode ? 'Entre com sua conta confirmada para acessar seu posto ou acompanhar o primeiro acesso.' : 'Entre com suas credenciais para acessar os módulos da Prefeitura.'}</p></div>
+        <div className="welcome-copy"><span className="section-kicker">PLATAFORMA MATRIXIA</span><h2>Bem-vindo de volta</h2><p>Entre com suas credenciais para acessar seu ambiente e os módulos autorizados.</p></div>
         <form onSubmit={handleSubmit} className="login-form">
           <label htmlFor="email">E-mail de acesso</label><div className="input-wrap"><Mail size={18} /><input id="email" type="email" autoComplete="email" placeholder={supplierMode ? 'contato@empresa.com.br' : 'seu.nome@pitangueiras.pr.gov.br'} value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
           <div className="password-heading"><label htmlFor="password">Senha</label><button type="button" className="text-button" onClick={() => void handleForgotPassword()}>Esqueci minha senha</button></div>
@@ -186,7 +186,6 @@ function App() {
           <button className="submit-button" type="submit" disabled={loading}>{loading ? 'Validando acesso…' : 'Entrar no sistema'} {!loading && <ArrowRight size={18} />}</button>
         </form>
         {supplierMode ? <p className="help-copy">Ainda não possui acesso? <button className="text-button" onClick={() => setShowFirstAccess(true)}>Solicitar primeiro acesso</button></p> : <p className="help-copy">Precisa de acesso? <span>Procure o administrador da sua unidade.</span></p>}
-        <div className="portal-switch"><button onClick={() => { setSupplierMode(!supplierMode); setMessage(null) }}>{supplierMode ? 'Acesso institucional da Prefeitura' : 'Acesso administrativo do posto'}</button></div>
         <div className="legal-line"><span>© 2026 MatrixIA</span><span>Ambiente protegido</span></div>
       </div>
     </section>
