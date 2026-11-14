@@ -265,21 +265,21 @@
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 10px;
-  border: 1px solid #12528e;
+  border: 1px solid #123f48;
   border-radius: 9px;
   color: #fff;
-  background: #12528e;
+  background: #123f48;
   font: 700 12px 'DM Sans', sans-serif;
   cursor: pointer;
-  box-shadow: 0 5px 12px rgba(18, 82, 142, .22);
+  box-shadow: 0 5px 12px rgba(18, 63, 72, .22);
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .secretariat-back-button:hover {
-  border-color: #0d416f;
+  border-color: #174f59;
   color: #fff;
-  background: #0d416f;
-  box-shadow: 0 8px 16px rgba(18, 82, 142, .3);
+  background: #174f59;
+  box-shadow: 0 8px 16px rgba(18, 63, 72, .3);
   transform: translateY(-2px);
 }
 
@@ -300,8 +300,8 @@
   border: 0;
   border-radius: 23px;
   color: #fff;
-  background: #1557a6;
-  box-shadow: 0 9px 15px rgba(21,87,166,.2), inset 0 2px 0 rgba(255,255,255,.2);
+  background: linear-gradient(180deg, #123f48 0%, #174f59 100%);
+  box-shadow: 0 9px 15px rgba(18,63,72,.24), inset 0 2px 0 rgba(255,255,255,.2);
   transform: rotate(-3deg);
 }
 
@@ -360,8 +360,8 @@
 }
 
 .module-card--fleet { --module-accent: #24789b; --module-soft: #e7f3f7; --module-ink: #1c6684; }
-.module-card--census { --module-accent: #1557a6; --module-soft: #eef4fc; --module-ink: #124f91; }
-.module-card--health { --module-accent: #1557a6; --module-soft: #eef4fc; --module-ink: #124f91; }
+.module-card--census { --module-accent: #123f48; --module-soft: #edf4f5; --module-ink: #123f48; }
+.module-card--health { --module-accent: #123f48; --module-soft: #edf4f5; --module-ink: #123f48; }
 .module-card--records { --module-accent: #7b68a8; --module-soft: #f0edfa; --module-ink: #695b91; }
 .module-card--procurement { --module-accent: #b47e1e; --module-soft: #fff5df; --module-ink: #926515; }
 .module-card--official { --module-accent: #b75f55; --module-soft: #fff0ed; --module-ink: #985147; }
@@ -405,8 +405,8 @@
 }
 
 .module-status--active {
-  border-color: #c7dce8;
-  color: #155d74;
+  border-color: #c8dade;
+  color: #123f48;
   background: #edf5f8;
 }
 
@@ -419,8 +419,8 @@
 }
 
 .module-status--active .status-dot {
-  background: #176b84;
-  box-shadow: 0 0 0 3px rgba(23, 107, 132, 0.12);
+  background: #123f48;
+  box-shadow: 0 0 0 3px rgba(18, 63, 72, 0.12);
 }
 
 .module-card-title {
@@ -463,11 +463,11 @@
 .health-access-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 420px)); justify-content: start; gap: 16px; }
 .health-access-grid .module-card { min-height: 242px; }
 .health-access-grid .module-card--census .module-icon,
-.health-access-grid .module-card--health .module-icon { color: #fff; background: #1557a6; box-shadow: 0 9px 15px rgba(21,87,166,.24), inset 0 2px 0 rgba(255,255,255,.2); }
+.health-access-grid .module-card--health .module-icon { color: #fff; background: linear-gradient(180deg, #123f48 0%, #174f59 100%); box-shadow: 0 9px 15px rgba(18,63,72,.24), inset 0 2px 0 rgba(255,255,255,.2); }
 
 .health-command-panel { display: grid; gap: 22px; }
 .health-panel-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 26px; border: 1px solid #dbe8eb; border-radius: 20px; background: linear-gradient(135deg,#f8fcfd,#eef6f8); box-shadow: 0 7px 18px rgba(27,73,86,.05); }
-.health-panel-kicker { display: block; color: #1557a6; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; }
+.health-panel-kicker { display: block; color: #174f59; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; }
 .health-panel-intro h2, .health-section-heading h2 { margin: 5px 0 0; color: #173f52; font: 800 22px/1.2 'Manrope', sans-serif; letter-spacing: -.35px; }
 .health-panel-intro p { margin: 7px 0 0; color: #668087; font-size: 13px; line-height: 1.5; }
 .health-panel-status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid #c8dfe5; border-radius: 999px; color: #246477; background: #fff; font-size: 10px; font-weight: 800; white-space: nowrap; }
