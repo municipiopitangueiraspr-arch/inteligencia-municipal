@@ -14,12 +14,14 @@ type MatrixHeaderProps = {
   userAvatarUrl?: string
   searchItems?: MatrixHeaderSearchItem[]
   onSearchSelect?: (id: string) => void
+  searchPlaceholder?: string
+  onSearchQueryChange?: (query: string) => void
   onLogout: () => void
 }
 
 const initialsFrom = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
 
-export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems = [], onSearchSelect, onLogout }: MatrixHeaderProps) {
+export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems = [], onSearchSelect, searchPlaceholder = 'Secretarias', onSearchQueryChange, onLogout }: MatrixHeaderProps) {
   const [query, setQuery] = useState('')
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
@@ -57,10 +59,10 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
           <input
             type="search"
             aria-label="Buscar secretarias"
-            placeholder="Secretarias"
+            placeholder={searchPlaceholder}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Escape') setQuery('') }}
+            onChange={(event) => { setQuery(event.target.value); onSearchQueryChange?.(event.target.value) }}
+            onKeyDown={(event) => { if (event.key === 'Escape') { setQuery(''); onSearchQueryChange?.('') } }}
           />
           {shouldShowSuggestions && filteredItems.length > 0 && (
             <div className="matrix-search-results" role="listbox" aria-label="Secretarias encontradas">

@@ -265,21 +265,21 @@
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 10px;
-  border: 1px solid #126779;
+  border: 1px solid #1877f2;
   border-radius: 9px;
   color: #fff;
-  background: linear-gradient(135deg, #116779, #218fa0);
+  background: #1877f2;
   font: 700 12px 'DM Sans', sans-serif;
   cursor: pointer;
-  box-shadow: 0 5px 12px rgba(17, 103, 121, .22);
+  box-shadow: 0 5px 12px rgba(24, 119, 242, .2);
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .secretariat-back-button:hover {
-  border-color: #0c5364;
+  border-color: #166fe5;
   color: #fff;
-  background: linear-gradient(135deg, #0d586b, #167b8e);
-  box-shadow: 0 8px 16px rgba(17, 103, 121, .3);
+  background: #166fe5;
+  box-shadow: 0 8px 16px rgba(24, 119, 242, .28);
   transform: translateY(-2px);
 }
 
@@ -319,7 +319,7 @@
 }
 
 .module-grid--health {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
 }
 
 .module-card {

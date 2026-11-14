@@ -41,6 +41,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   const [canManageGovernance, setCanManageGovernance] = useState(false)
   const [userName, setUserName] = useState('')
   const [userAvatarUrl, setUserAvatarUrl] = useState('')
+  const [moduleSearchQuery, setModuleSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [selectedSecretariatId, setSelectedSecretariatId] = useState<string | null>(() => {
@@ -100,6 +101,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
 
   const selectSecretariat = (id: string) => {
     setSelectedSecretariatId(id)
+    setModuleSearchQuery('')
     try { window.sessionStorage.setItem(selectedSecretariatStorageKey, id) }
     catch { /* If storage is unavailable, navigation still works for this view. */ }
   }
@@ -111,13 +113,23 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   }
 
   const selectedSecretariat = secretariats.find((secretariat) => secretariat.id === selectedSecretariatId)
-  const searchItems = secretariats.map((secretariat) => ({ id: secretariat.id, name: secretariat.name, description: secretariat.description }))
-  const visibleModules = selectedSecretariat
+  const availableModules = selectedSecretariat
     ? secretariatModules
       .filter((mapping) => mapping.secretariat_id === selectedSecretariat.id)
       .map((mapping) => modules.find((module) => module.id === mapping.module_id))
       .filter((module): module is MunicipalModule => Boolean(module) && (module?.id !== 'medical-visits' || canManageGovernance))
     : []
+  const normalizedModuleQuery = moduleSearchQuery.trim().toLocaleLowerCase('pt-BR')
+  const visibleModules = availableModules.filter((module) => {
+    if (!normalizedModuleQuery) return true
+    return `${module.label} ${module.description || ''} ${module.status_label || ''}`.toLocaleLowerCase('pt-BR').includes(normalizedModuleQuery)
+  })
+  const searchItems = selectedSecretariat
+    ? availableModules.map((module) => ({ id: module.id, name: module.label, description: module.description }))
+    : secretariats.map((secretariat) => ({ id: secretariat.id, name: secretariat.name, description: secretariat.description }))
+  const handleHeaderSearchSelect = selectedSecretariat
+    ? (id: string) => setModuleSearchQuery(availableModules.find((module) => module.id === id)?.label || '')
+    : selectSecretariat
 
   const openModule = (id: string) => {
     if (id === 'fleet') onOpenFleet()
@@ -128,11 +140,14 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   return (
     <div className="dashboard-shell">
       <MatrixHeader
+        key={selectedSecretariatId || 'hall'}
         userEmail={userEmail}
         userName={userName}
         userAvatarUrl={userAvatarUrl}
         searchItems={searchItems}
-        onSearchSelect={selectSecretariat}
+        onSearchSelect={handleHeaderSearchSelect}
+        searchPlaceholder={selectedSecretariat ? 'Buscar módulos...' : 'Secretarias'}
+        onSearchQueryChange={selectedSecretariat ? setModuleSearchQuery : undefined}
         onLogout={onLogout}
       />
 
@@ -194,8 +209,8 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
               ) : (
                 <div className="secretariat-empty" role="status">
                   <span className="secretariat-empty-icon"><Building2 size={24} aria-hidden="true" /></span>
-                  <h2>Nenhum módulo disponível ainda</h2>
-                  <p>Os módulos desta secretaria serão adicionados conforme os fluxos forem definidos.</p>
+                  <h2>{normalizedModuleQuery ? 'Nenhum módulo encontrado' : 'Nenhum módulo disponível ainda'}</h2>
+                  <p>{normalizedModuleQuery ? `Não encontramos módulos para “${moduleSearchQuery}”.` : 'Os módulos desta secretaria serão adicionados conforme os fluxos forem definidos.'}</p>
                 </div>
               )}
             </section>
