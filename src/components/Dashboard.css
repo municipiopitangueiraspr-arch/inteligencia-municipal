@@ -222,18 +222,7 @@
   transform: rotate(-3deg);
 }
 
-.secretariat-card-icon::after {
-  content: '';
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #ff7658;
-  box-shadow: 0 2px 0 rgba(255,255,255,.75);
-}
-
+.secretariat-card-icon img { position: relative; z-index: 1; width: 62px; height: 62px; object-fit: contain; transform: rotate(3deg); }
 .secretariat-card-icon svg { position: relative; z-index: 1; transform: rotate(3deg) scale(1.18); stroke-width: 2.35; }
 
 .secretariat-card-title {

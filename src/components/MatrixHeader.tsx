@@ -58,16 +58,16 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
             <input
               autoFocus
               type="search"
-              aria-label="Buscar secretaria"
-              placeholder="Buscar secretaria..."
+              aria-label="Buscar secretarias"
+              placeholder="Secretarias"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Escape') { setQuery(''); setSearchOpen(false) } }}
             />
           )}
-          <button className="matrix-search-button" type="button" aria-label={searchOpen ? 'Fechar busca' : 'Buscar secretaria'} onClick={() => { setSearchOpen((current) => !current); setQuery('') }}>
+          <button className="matrix-search-button" type="button" aria-label={searchOpen ? 'Fechar busca' : 'Buscar secretarias'} onClick={() => { setSearchOpen((current) => !current); setQuery('') }}>
             {searchOpen ? <X size={19} aria-hidden="true" /> : <Search size={19} aria-hidden="true" />}
-            <span>{searchOpen ? 'Fechar' : 'Buscar'}</span>
+            <span>{searchOpen ? 'Fechar' : 'Secretarias'}</span>
           </button>
           {searchOpen && filteredItems.length > 0 && (
             <div className="matrix-search-results" role="listbox" aria-label="Secretarias encontradas">

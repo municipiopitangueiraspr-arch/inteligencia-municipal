@@ -14,7 +14,6 @@ import { getMunicipalIcon } from '../lib/municipal-catalog'
 import { supabase } from '../lib/supabase'
 import { MatrixHeader } from './MatrixHeader'
 import './Dashboard.css'
-
 const selectedSecretariatStorageKey = 'inteligencia-municipal.selected-secretariat'
 
 type DashboardProps = {
@@ -150,10 +149,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
 
               <div className="department-heading">
                 <span className="department-heading-icon" aria-hidden="true">
-                  {(() => {
-                    const Icon = getMunicipalIcon(selectedSecretariat.icon_name)
-                    return <Icon size={30} strokeWidth={1.8} />
-                  })()}
+                  {(() => { const Icon = getMunicipalIcon(selectedSecretariat.icon_name); return <Icon size={30} strokeWidth={2.3} /> })()}
                 </span>
                 <div>
                   <h1 id="departmentTitle">{selectedSecretariat.name}</h1>
@@ -233,7 +229,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
                         aria-label={`Acessar secretaria: ${secretariat.name}`}
                         onClick={() => selectSecretariat(secretariat.id)}
                       >
-                        <span className="secretariat-card-icon"><Icon size={25} strokeWidth={1.9} aria-hidden="true" /></span>
+                        <span className="secretariat-card-icon"><Icon size={29} strokeWidth={2.3} aria-hidden="true" /></span>
                         <span className="secretariat-card-title">{secretariat.name}</span>
                         <span className="secretariat-card-description">{secretariat.description}</span>
                         <span className="secretariat-card-action">Acessar secretaria <ArrowRight size={16} aria-hidden="true" /></span>
