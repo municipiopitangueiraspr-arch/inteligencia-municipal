@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, Search, X } from 'lucide-react'
+import { ChevronDown, LogOut, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import './MatrixHeader.css'
 
@@ -20,7 +20,6 @@ type MatrixHeaderProps = {
 const initialsFrom = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
 
 export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems = [], onSearchSelect, onLogout }: MatrixHeaderProps) {
-  const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
@@ -30,6 +29,7 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
     if (!normalizedQuery) return true
     return `${item.name} ${item.description || ''}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
   }).slice(0, 8)
+  const shouldShowSuggestions = query.trim().length >= 3
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -42,7 +42,6 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
   const chooseSearchItem = (id: string) => {
     onSearchSelect?.(id)
     setQuery('')
-    setSearchOpen(false)
   }
 
   return (
@@ -53,23 +52,17 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
           <span className="matrix-header-wordmark">Matrix<span>IA</span></span>
         </div>
 
-        <div className={`matrix-header-search${searchOpen ? ' matrix-header-search--open' : ''}`}>
-          {searchOpen && (
-            <input
-              autoFocus
-              type="search"
-              aria-label="Buscar secretarias"
-              placeholder="Secretarias"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Escape') { setQuery(''); setSearchOpen(false) } }}
-            />
-          )}
-          <button className="matrix-search-button" type="button" aria-label={searchOpen ? 'Fechar busca' : 'Buscar secretarias'} onClick={() => { setSearchOpen((current) => !current); setQuery('') }}>
-            {searchOpen ? <X size={19} aria-hidden="true" /> : <Search size={19} aria-hidden="true" />}
-            <span>{searchOpen ? 'Fechar' : 'Secretarias'}</span>
-          </button>
-          {searchOpen && filteredItems.length > 0 && (
+        <div className="matrix-header-search">
+          <Search className="matrix-search-leading-icon" size={18} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Buscar secretarias"
+            placeholder="Secretarias"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Escape') setQuery('') }}
+          />
+          {shouldShowSuggestions && filteredItems.length > 0 && (
             <div className="matrix-search-results" role="listbox" aria-label="Secretarias encontradas">
               {filteredItems.map((item) => (
                 <button key={item.id} type="button" role="option" className="matrix-search-result" onClick={() => chooseSearchItem(item.id)}>
@@ -79,7 +72,7 @@ export function MatrixHeader({ userEmail, userName, userAvatarUrl, searchItems =
               ))}
             </div>
           )}
-          {searchOpen && query.trim() && filteredItems.length === 0 && <div className="matrix-search-empty">Nenhuma secretaria encontrada.</div>}
+          {shouldShowSuggestions && filteredItems.length === 0 && <div className="matrix-search-empty">Nenhuma secretaria encontrada.</div>}
         </div>
 
         <div className="matrix-account" ref={accountRef}>
