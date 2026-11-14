@@ -87,6 +87,34 @@ type OrgUnitDraft = {
 
 type PanelTab = 'organization' | 'secretariats' | 'users' | 'modules'
 
+type OrderedOrgUnit = OrgUnit & { level: number }
+
+function orderOrgUnits(units: OrgUnit[]): OrderedOrgUnit[] {
+  const children = new Map<string | null, OrgUnit[]>()
+  for (const unit of units) {
+    const siblings = children.get(unit.parent_id) || []
+    siblings.push(unit)
+    children.set(unit.parent_id, siblings)
+  }
+  for (const siblings of children.values()) {
+    siblings.sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name, 'pt-BR'))
+  }
+
+  const ordered: OrderedOrgUnit[] = []
+  const visited = new Set<string>()
+  const visit = (unit: OrgUnit, level: number) => {
+    if (visited.has(unit.id)) return
+    visited.add(unit.id)
+    ordered.push({ ...unit, level })
+    for (const child of children.get(unit.id) || []) visit(child, level + 1)
+  }
+
+  for (const root of children.get(null) || []) visit(root, 0)
+  // Registros órfãos não desaparecem da administração se uma unidade superior tiver sido removida.
+  for (const unit of units) if (!visited.has(unit.id)) visit(unit, 0)
+  return ordered
+}
+
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.'
 }
@@ -309,6 +337,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   }
 
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
+  const orderedOrgUnits = orderOrgUnits(orgUnits)
 
   return (
     <div className="governance-shell">
@@ -368,11 +397,11 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                     <button className="governance-primary-button" type="button" onClick={openNewOrgUnit}><FilePlus2 size={17} />Nova unidade</button>
                   </div>
                   <div className="governance-org-list">
-                    {orgUnits.map((unit) => {
+                    {orderedOrgUnits.map((unit) => {
                       const parent = unit.parent_id ? orgUnits.find((item) => item.id === unit.parent_id) : null
                       return <article className={`governance-org-row${unit.is_active ? '' : ' is-inactive'}`} key={unit.id}>
-                        <span className="governance-org-code">{unit.code}</span>
-                        <div className="governance-org-copy"><strong>{unit.name}</strong><span>{parent ? `${parent.name} · ` : ''}{unit.unit_type}{unit.description ? ` · ${unit.description}` : ''}</span></div>
+                        <span className="governance-org-code" style={{ marginLeft: `${unit.level * 24}px` }}>{unit.code}</span>
+                        <div className="governance-org-copy" style={{ paddingLeft: `${unit.level * 24}px` }}><strong>{unit.name}</strong><span>{parent ? `${parent.name} · ` : ''}{unit.unit_type}{unit.description ? ` · ${unit.description}` : ''}</span></div>
                         <span className={`governance-status${unit.is_active ? ' is-active' : ''}`}>{unit.is_active ? 'Ativa' : 'Inativa'}</span>
                         <button className="governance-edit-button" type="button" onClick={() => setOrgUnitDraft({ id: unit.id, parent_id: unit.parent_id || '', code: unit.code, name: unit.name, unit_type: unit.unit_type, description: unit.description, sort_order: String(unit.sort_order), is_active: unit.is_active })}><Pencil size={16} /><span>Editar</span></button>
                       </article>
