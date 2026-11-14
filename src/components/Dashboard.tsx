@@ -126,10 +126,11 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
         <div className="dashboard-header-inner">
           <div className="dashboard-brand">
             <span className="dashboard-brand-mark">
-              <img src={`${assetBase}assets/brasao-pref.png`} alt="" />
+              <img src={`${assetBase}assets/matrixia-mark.png`} alt="" />
             </span>
             <span className="dashboard-brand-copy">
-              <strong>Inteligência Municipal</strong>
+              <strong>Matrix<span>IA</span></strong>
+              <small>Intranet integrada</small>
             </span>
           </div>
           <div className="dashboard-account">
@@ -214,8 +215,9 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
           ) : (
             <section className="secretariat-section" aria-labelledby="secretariatTitle">
               <div className="hall-heading">
-                <h1 id="secretariatTitle">Secretarias</h1>
-                <p>Escolha uma secretaria para acessar seus módulos.</p>
+                <span className="hall-kicker">MATRIXIA · INTRANET</span>
+                <h1 id="secretariatTitle">Hall da Intranet</h1>
+                <p>Escolha uma área para acessar os módulos integrados.</p>
               </div>
 
               {loading ? (

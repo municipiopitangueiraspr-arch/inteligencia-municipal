@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Store } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { Dashboard } from './components/Dashboard'
@@ -166,17 +166,17 @@ function App() {
     <section className="institutional-panel" aria-label="Identidade institucional">
       <div className="panel-glow panel-glow-top" /><div className="panel-glow panel-glow-bottom" />
       <div className="institutional-content">
-        <div className="brand-mark">{supplierMode ? <Store size={27} /> : <img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão da Prefeitura Municipal de Pitangueiras" />}</div>
-        <p className="eyebrow">{supplierMode ? 'PORTAL DO FORNECEDOR' : 'PREFEITURA MUNICIPAL'}</p>
-        <h1>Pitangueiras<span>–PR</span></h1><div className="brand-divider" />
-        <p className="platform-name">{supplierMode ? <>Acesso<br /><strong>do Posto</strong></> : <>Inteligência<br /><strong>Municipal</strong></>}</p>
-        <p className="platform-description">{supplierMode ? 'Operação segura para estabelecimentos credenciados.' : 'Gestão integrada para transformar dados públicos em decisões melhores.'}</p>
+        <div className="brand-mark"><img src={`${assetBase}assets/matrixia-mark.png`} alt="Símbolo MatrixIA" /></div>
+        <p className="eyebrow">{supplierMode ? 'PORTAL DO FORNECEDOR' : 'PLATAFORMA DE INTELIGÊNCIA'}</p>
+        <h1>Matrix<span>IA</span></h1><div className="brand-divider" />
+        <p className="platform-name">{supplierMode ? <>Acesso<br /><strong>do Posto</strong></> : <>Integração,<br /><strong>Inteligência e Eficiência</strong></>}</p>
+        <p className="platform-description">{supplierMode ? 'Operação segura para estabelecimentos credenciados.' : 'Um ambiente integrado para transformar dados públicos em decisões melhores.'}</p>
         <div className="institutional-footer"><ShieldCheck size={16} /> Ambiente institucional protegido</div>
       </div>
     </section>
     <section className="access-panel" aria-label="Formulário de acesso">
       <div className="access-inner">
-        <div className="mobile-brand"><img src={`${assetBase}assets/brasao-pref.png`} alt="Brasão municipal" /><span>{supplierMode ? 'Portal do Posto' : 'Inteligência Municipal'}</span></div>
+        <div className="mobile-brand"><img src={`${assetBase}assets/matrixia-mark.png`} alt="Símbolo MatrixIA" /><span>Matrix<span>IA</span></span></div>
         <div className="welcome-copy"><span className="section-kicker">{supplierMode ? 'PORTAL DO FORNECEDOR' : 'PORTAL DE GESTÃO'}</span><h2>{supplierMode ? 'Acesse o seu posto' : 'Bem-vindo de volta'}</h2><p>{supplierMode ? 'Entre com sua conta confirmada para acessar seu posto ou acompanhar o primeiro acesso.' : 'Entre com suas credenciais para acessar os módulos da Prefeitura.'}</p></div>
         <form onSubmit={handleSubmit} className="login-form">
           <label htmlFor="email">E-mail de acesso</label><div className="input-wrap"><Mail size={18} /><input id="email" type="email" autoComplete="email" placeholder={supplierMode ? 'contato@empresa.com.br' : 'seu.nome@pitangueiras.pr.gov.br'} value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
@@ -187,7 +187,7 @@ function App() {
         </form>
         {supplierMode ? <p className="help-copy">Ainda não possui acesso? <button className="text-button" onClick={() => setShowFirstAccess(true)}>Solicitar primeiro acesso</button></p> : <p className="help-copy">Precisa de acesso? <span>Procure o administrador da sua unidade.</span></p>}
         <div className="portal-switch"><button onClick={() => { setSupplierMode(!supplierMode); setMessage(null) }}>{supplierMode ? 'Acesso institucional da Prefeitura' : 'Acesso administrativo do posto'}</button></div>
-        <div className="legal-line"><span>© 2026 Prefeitura Municipal de Pitangueiras–PR</span><span>Uso institucional</span></div>
+        <div className="legal-line"><span>© 2026 MatrixIA</span><span>Ambiente protegido</span></div>
       </div>
     </section>
   </main>
@@ -215,7 +215,7 @@ function FirstAccessPasswordSetup({ isSupplier, onComplete, onLogout }: { isSupp
     setSaving(false)
     onComplete()
   }
-  return <main className="login-shell supplier-access-shell"><section className="institutional-panel" aria-label="Identidade institucional"><div className="panel-glow panel-glow-top" /><div className="panel-glow panel-glow-bottom" /><div className="institutional-content"><div className="brand-mark"><Store size={27} /></div><p className="eyebrow">ACESSO SEGURO</p><h1>Pitangueiras<span>–PR</span></h1><div className="brand-divider" /><p className="platform-name">Primeiro<br /><strong>acesso</strong></p><p className="platform-description">Defina uma senha individual para sua conta. A senha é gerenciada pelo Supabase Auth e não é armazenada no perfil.</p><div className="institutional-footer"><ShieldCheck size={16} /> Conta individual</div></div></section><section className="access-panel" aria-label="Definir senha"><div className="access-inner supplier-access-inner"><span className="section-kicker">CONFIGURAÇÃO DE CREDENCIAIS</span><h2>Defina sua senha</h2><p>Use uma senha própria, com no mínimo 10 caracteres. Não compartilhe suas credenciais com outras pessoas.</p><form className="supplier-access-form" onSubmit={(event) => void submit(event)}><label>Nova senha<input type="password" autoComplete="new-password" minLength={10} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label><label>Confirmar senha<input type="password" autoComplete="new-password" minLength={10} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label>{error && <div className="form-message error" role="alert">{error}</div>}<button className="submit-button" disabled={saving}>{saving ? 'Salvando…' : 'Salvar senha e continuar'}</button></form><button className="access-back" onClick={onLogout}>Sair</button></div></section></main>
+  return <main className="login-shell supplier-access-shell"><section className="institutional-panel" aria-label="Identidade MatrixIA"><div className="panel-glow panel-glow-top" /><div className="panel-glow panel-glow-bottom" /><div className="institutional-content"><div className="brand-mark"><img src={`${assetBase}assets/matrixia-mark.png`} alt="Símbolo MatrixIA" /></div><p className="eyebrow">ACESSO SEGURO</p><h1>Matrix<span>IA</span></h1><div className="brand-divider" /><p className="platform-name">Primeiro<br /><strong>acesso</strong></p><p className="platform-description">Defina uma senha individual para sua conta. A senha é gerenciada pelo Supabase Auth e não é armazenada no perfil.</p><div className="institutional-footer"><ShieldCheck size={16} /> Conta individual protegida</div></div></section><section className="access-panel" aria-label="Definir senha"><div className="access-inner supplier-access-inner"><span className="section-kicker">CONFIGURAÇÃO DE CREDENCIAIS</span><h2>Defina sua senha</h2><p>Use uma senha própria, com no mínimo 10 caracteres. Não compartilhe suas credenciais com outras pessoas.</p><form className="supplier-access-form" onSubmit={(event) => void submit(event)}><label>Nova senha<input type="password" autoComplete="new-password" minLength={10} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label><label>Confirmar senha<input type="password" autoComplete="new-password" minLength={10} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></label>{error && <div className="form-message error" role="alert">{error}</div>}<button className="submit-button" disabled={saving}>{saving ? 'Salvando…' : 'Salvar senha e continuar'}</button></form><button className="access-back" onClick={onLogout}>Sair</button></div></section></main>
 }
 
 export default App

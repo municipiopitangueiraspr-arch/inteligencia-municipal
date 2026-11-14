@@ -1,15 +1,15 @@
 {
   "id": "./",
-  "name": "Inteligência Municipal — Pitangueiras–PR",
-  "short_name": "Inteligência Municipal",
-  "description": "Sistema institucional da Prefeitura Municipal de Pitangueiras–PR.",
+  "name": "MatrixIA — Intranet Integrada",
+  "short_name": "MatrixIA",
+  "description": "Integração, Inteligência e Eficiência para gestão municipal.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f6f8fb",
-  "theme_color": "#0b2940",
+  "theme_color": "#0d3552",
   "icons": [
     {
       "src": "./pwa-icon-192.png",
@@ -24,9 +24,9 @@
       "purpose": "any maskable"
     },
     {
-      "src": "./pwa-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "./assets/matrixia-mark.png",
+      "sizes": "1920x1920",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
