@@ -265,19 +265,22 @@
   align-items: center;
   gap: 8px;
   padding: 0 12px 0 10px;
-  border: 1px solid #d9e5e5;
+  border: 1px solid #126779;
   border-radius: 9px;
-  color: #376c74;
-  background: #fff;
+  color: #fff;
+  background: linear-gradient(135deg, #116779, #218fa0);
   font: 700 12px 'DM Sans', sans-serif;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+  box-shadow: 0 5px 12px rgba(17, 103, 121, .22);
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .secretariat-back-button:hover {
-  border-color: #8db8bb;
-  color: #175c69;
-  background: #eff8f7;
+  border-color: #0c5364;
+  color: #fff;
+  background: linear-gradient(135deg, #0d586b, #167b8e);
+  box-shadow: 0 8px 16px rgba(17, 103, 121, .3);
+  transform: translateY(-2px);
 }
 
 .department-heading {
