@@ -300,8 +300,8 @@
   border: 0;
   border-radius: 23px;
   color: #fff;
-  background: linear-gradient(145deg,#1d9b88,#116779);
-  box-shadow: 0 9px 15px rgba(24,132,119,.22), inset 0 2px 0 rgba(255,255,255,.28);
+  background: #155f78;
+  box-shadow: 0 9px 15px rgba(21,95,120,.2), inset 0 2px 0 rgba(255,255,255,.2);
   transform: rotate(-3deg);
 }
 
@@ -319,7 +319,8 @@
 }
 
 .module-grid--health {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 420px));
+  justify-content: start;
 }
 
 .module-card {
@@ -334,8 +335,8 @@
   border: 1px solid color-mix(in srgb, var(--module-accent, #2d7d8a) 19%, #dce8e8);
   border-radius: 22px;
   color: inherit;
-  background: linear-gradient(180deg, #fff 0%, var(--module-soft, #f2f8f8) 100%);
-  box-shadow: 0 8px 20px rgba(29, 78, 84, 0.07);
+  background: linear-gradient(180deg, #fff 0%, #f6fafb 100%);
+  box-shadow: 0 8px 20px rgba(23, 64, 78, 0.08);
   font: inherit;
   text-align: left;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
@@ -359,8 +360,8 @@
 }
 
 .module-card--fleet { --module-accent: #24789b; --module-soft: #e7f3f7; --module-ink: #1c6684; }
-.module-card--census { --module-accent: #21856d; --module-soft: #e8f5ef; --module-ink: #1d755f; }
-.module-card--health { --module-accent: #21856d; --module-soft: #e8f5ef; --module-ink: #1d755f; }
+.module-card--census { --module-accent: #176b84; --module-soft: #eaf4f7; --module-ink: #155d74; }
+.module-card--health { --module-accent: #176b84; --module-soft: #eaf4f7; --module-ink: #155d74; }
 .module-card--records { --module-accent: #7b68a8; --module-soft: #f0edfa; --module-ink: #695b91; }
 .module-card--procurement { --module-accent: #b47e1e; --module-soft: #fff5df; --module-ink: #926515; }
 .module-card--official { --module-accent: #b75f55; --module-soft: #fff0ed; --module-ink: #985147; }
