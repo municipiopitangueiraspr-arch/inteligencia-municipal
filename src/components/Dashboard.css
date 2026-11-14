@@ -456,6 +456,32 @@
   font-weight: 700;
 }
 
+.health-command-panel { display: grid; gap: 22px; }
+.health-panel-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 26px; border: 1px solid #dbe8eb; border-radius: 20px; background: linear-gradient(135deg,#f8fcfd,#eef6f8); box-shadow: 0 7px 18px rgba(27,73,86,.05); }
+.health-panel-kicker { display: block; color: #247b8d; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; }
+.health-panel-intro h2, .health-section-heading h2 { margin: 5px 0 0; color: #173f52; font: 800 22px/1.2 'Manrope', sans-serif; letter-spacing: -.35px; }
+.health-panel-intro p { margin: 7px 0 0; color: #668087; font-size: 13px; line-height: 1.5; }
+.health-panel-status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid #c8dfe5; border-radius: 999px; color: #246477; background: #fff; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.health-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #2985a0; box-shadow: 0 0 0 3px rgba(41,133,160,.13); }
+.health-metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 11px; }
+.health-metrics > div { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid #e0ebed; border-radius: 14px; background: #fff; }
+.health-metrics strong { color: #174e63; font: 800 19px 'Manrope', sans-serif; }
+.health-metrics span { color: #789096; font-size: 10px; font-weight: 700; }
+.health-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.health-section-heading > span { color: #789096; font-size: 11px; font-weight: 800; }
+.health-section-heading--compact { align-items: center; margin-bottom: 12px; }
+.health-section-heading--compact h2 { font-size: 17px; }
+.health-feature-layout { display: grid; grid-template-columns: minmax(310px, .9fr) minmax(0, 1.5fr); gap: 16px; align-items: stretch; }
+.module-card--featured { min-height: 250px; }
+.health-planned-panel { min-width: 0; padding: 21px; border: 1px solid #e0ebed; border-radius: 20px; background: #fff; box-shadow: 0 7px 18px rgba(27,73,86,.05); }
+.health-planned-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+.health-planned-card { min-width: 0; display: grid; grid-template-columns: 34px minmax(0,1fr); align-items: center; gap: 9px; padding: 11px; border: 1px solid #e3edef; border-radius: 13px; background: #f9fbfc; }
+.health-planned-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #216c81; background: #e8f2f5; }
+.health-planned-card strong, .health-planned-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-planned-card strong { color: #295762; font-size: 11px; }
+.health-planned-card small { margin-top: 3px; color: #839398; font-size: 9px; }
+.health-planned-card em { grid-column: 2; color: #789096; font-size: 9px; font-style: normal; font-weight: 800; }
+
 .secretariat-empty {
   min-height: 220px;
   display: flex;
@@ -534,6 +560,12 @@
   .department-view { gap: 19px; }
   .department-heading { gap: 12px; padding-bottom: 17px; }
   .department-heading-icon { width: 58px; height: 58px; flex-basis: 58px; border-radius: 18px; }
+  .health-panel-intro { padding: 19px; }
+  .health-panel-intro h2 { font-size: 19px; }
+  .health-panel-status { padding: 7px 9px; }
+  .health-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .health-feature-layout { grid-template-columns: minmax(0,1fr); }
+  .health-planned-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .module-grid { grid-template-columns: minmax(0, 1fr); gap: 11px; }
   .module-grid--health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .module-card { min-height: 205px; padding: 18px; }
@@ -547,6 +579,9 @@
 
 @media (max-width: 480px) {
   .module-grid--health { grid-template-columns: minmax(0, 1fr); }
+  .health-panel-intro { display: block; }
+  .health-panel-status { width: fit-content; margin-top: 14px; }
+  .health-planned-grid { grid-template-columns: minmax(0,1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
