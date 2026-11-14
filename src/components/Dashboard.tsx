@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
-  LogOut,
   Settings,
 } from 'lucide-react'
 import type {
@@ -13,9 +12,9 @@ import type {
 } from '../lib/municipal-catalog'
 import { getMunicipalIcon } from '../lib/municipal-catalog'
 import { supabase } from '../lib/supabase'
+import { MatrixHeader } from './MatrixHeader'
 import './Dashboard.css'
 
-const assetBase = import.meta.env.BASE_URL
 const selectedSecretariatStorageKey = 'inteligencia-municipal.selected-secretariat'
 
 type DashboardProps = {
@@ -41,6 +40,8 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [secretariatModules, setSecretariatModules] = useState<MunicipalSecretariatModule[]>([])
   const [canManageGovernance, setCanManageGovernance] = useState(false)
+  const [userName, setUserName] = useState('')
+  const [userAvatarUrl, setUserAvatarUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [selectedSecretariatId, setSelectedSecretariatId] = useState<string | null>(() => {
@@ -60,7 +61,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
       }
 
       // Associação de catálogo para organizar os cards por secretaria, igualmente visível a todos; não é uma permissão individual.
-      const [secretariatResult, moduleResult, mappingResult, adminResult] = await Promise.all([
+      const [secretariatResult, moduleResult, mappingResult, adminResult, userResult] = await Promise.all([
         supabase
           .from('municipal_secretariats')
           .select('id,name,description,icon_name,sort_order,is_active')
@@ -75,6 +76,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
           .select('secretariat_id,module_id,sort_order')
           .order('sort_order', { ascending: true }),
         supabase.rpc('municipal_governance_is_admin'),
+        supabase.auth.getUser(),
       ])
 
       if (!mounted) return
@@ -87,6 +89,9 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
         setSecretariatModules((mappingResult.data || []) as unknown as MunicipalSecretariatModule[])
       }
       setCanManageGovernance(!adminResult.error && adminResult.data === true)
+      const metadata = (userResult.data.user?.user_metadata || {}) as Record<string, unknown>
+      setUserName(String(metadata.full_name || metadata.name || metadata.nome_completo || ''))
+      setUserAvatarUrl(String(metadata.avatar_url || metadata.photo_url || ''))
       setLoading(false)
     }
 
@@ -107,6 +112,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
   }
 
   const selectedSecretariat = secretariats.find((secretariat) => secretariat.id === selectedSecretariatId)
+  const searchItems = secretariats.map((secretariat) => ({ id: secretariat.id, name: secretariat.name, description: secretariat.description }))
   const visibleModules = selectedSecretariat
     ? secretariatModules
       .filter((mapping) => mapping.secretariat_id === selectedSecretariat.id)
@@ -122,29 +128,14 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
 
   return (
     <div className="dashboard-shell">
-      <header className="dashboard-header">
-        <div className="dashboard-header-inner">
-          <div className="dashboard-brand">
-            <span className="dashboard-brand-mark">
-              <img src={`${assetBase}assets/matrixia-mark.png`} alt="" />
-            </span>
-            <span className="dashboard-brand-copy">
-              <strong>Matrix<span>IA</span></strong>
-              <small>Gestão integrada</small>
-            </span>
-          </div>
-          <div className="dashboard-account">
-            <span className="user-avatar" aria-hidden="true">{(userEmail?.[0] || 'U').toUpperCase()}</span>
-            <span className="user-details">
-              <strong>{userEmail || 'Usuário institucional'}</strong>
-            </span>
-            <button className="logout-button" type="button" aria-label="Sair do sistema" onClick={onLogout}>
-              <LogOut size={17} aria-hidden="true" />
-              <span>Sair</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <MatrixHeader
+        userEmail={userEmail}
+        userName={userName}
+        userAvatarUrl={userAvatarUrl}
+        searchItems={searchItems}
+        onSearchSelect={selectSecretariat}
+        onLogout={onLogout}
+      />
 
       <main className="dashboard-main">
         <div className="dashboard-content">
