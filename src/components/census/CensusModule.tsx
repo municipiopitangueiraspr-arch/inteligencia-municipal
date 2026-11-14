@@ -128,11 +128,14 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
       const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || authUser.email || 'Usuário autenticado'
       const photo = String(metadata.avatar_url || metadata.picture || metadata.photo_url || '').trim() || null
       if (mounted) setProfile({ name, photo })
-      const { data: acsRows } = await supabase.from('census_acs').select('id,full_name').eq('user_id', authUser.id).eq('active', true).limit(1)
+      const [{ data: acsRows }, { data: governanceAdmin }] = await Promise.all([
+        supabase.from('census_acs').select('id,full_name').eq('user_id', authUser.id).eq('active', true).limit(1),
+        supabase.rpc('municipal_governance_is_admin'),
+      ])
       const acs = acsRows?.[0] as { id?: string; full_name?: string } | undefined
       const profileText = [metadata.perfil, metadata.perfil_municipal, metadata.role, metadata.cargo].map((value) => String(value || '').toUpperCase()).join(' ')
       const isAcs = Boolean(acs?.id) || /\bACS\b|AGENTE\s+COMUNIT/.test(profileText)
-      const isAdmin = /\bADMIN(?:ISTRADOR)?\b|SUPERINTENDENTE|CONTROLADOR(?:A)?/.test(profileText)
+      const isAdmin = governanceAdmin === true || /\bADMIN(?:ISTRADOR)?\b|SUPERINTENDENTE|CONTROLADOR(?:A)?/.test(profileText)
       if (mounted) {
         setIsAdministrator(isAdmin)
         setAccess(isAcs
