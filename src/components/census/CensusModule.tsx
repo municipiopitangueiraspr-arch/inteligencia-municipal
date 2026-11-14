@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
@@ -67,6 +67,10 @@ const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDa
   { id: 'overview', label: 'Visão gerencial', icon: LayoutDashboard },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
 ]
+const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
+  ...managerNavItems,
+  { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
+]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
   { id: 'territory', label: 'Meus domicílios', icon: MapPinned },
@@ -103,9 +107,10 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
   const [menuOpen, setMenuOpen] = useState(false)
   const [profile, setProfile] = useState<{ name: string; photo: string | null }>({ name: userEmail || 'Usuário autenticado', photo: null })
   const [access, setAccess] = useState<CensusAccess>({ role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+  const [isAdministrator, setIsAdministrator] = useState(false)
   const [accessLoading, setAccessLoading] = useState(true)
   const [zones, setZones] = useState<CensusZone[]>([])
-  const navItems = access.role === 'acs' ? acsNavItems : managerNavItems
+  const navItems = access.role === 'acs' ? acsNavItems : isAdministrator ? adminNavItems : managerNavItems
   const loadZones = async () => {
     if (!supabase) return
     const { data } = await supabase.from('census_zones').select('id,name,color,active').order('created_at').limit(500)
@@ -127,7 +132,9 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
       const acs = acsRows?.[0] as { id?: string; full_name?: string } | undefined
       const profileText = [metadata.perfil, metadata.perfil_municipal, metadata.role, metadata.cargo].map((value) => String(value || '').toUpperCase()).join(' ')
       const isAcs = Boolean(acs?.id) || /\bACS\b|AGENTE\s+COMUNIT/.test(profileText)
+      const isAdmin = /\bADMIN(?:ISTRADOR)?\b|SUPERINTENDENTE|CONTROLADOR(?:A)?/.test(profileText)
       if (mounted) {
+        setIsAdministrator(isAdmin)
         setAccess(isAcs
           ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: acs?.id || null }
           : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
@@ -154,9 +161,9 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
     <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
       {view === 'overview' && <CensusOverview role={access.role} onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
-      {view === 'territory' && <CensusTerritory readOnly={access.role === 'manager'} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
+      {view === 'territory' && <CensusTerritory readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
       {view === 'zones' && access.role === 'manager' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
-      {view === 'dwg' && access.role === 'manager' && <MapPreparationWorkspace />}
+      {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
       {view === 'forms' && access.role === 'manager' && <QuestionnairesManagement />}
 
     </div></main>
