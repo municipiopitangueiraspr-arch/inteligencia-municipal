@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import {
   ArrowLeft,
   Building2,
@@ -398,10 +398,10 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                   </div>
                   <div className="governance-org-list">
                     {orderedOrgUnits.map((unit) => {
-                      const parent = unit.parent_id ? orgUnits.find((item) => item.id === unit.parent_id) : null
-                      return <article className={`governance-org-row${unit.is_active ? '' : ' is-inactive'}`} key={unit.id}>
+                      const levelStyle = { '--org-level': unit.level } as CSSProperties
+                      return <article className={`governance-org-row governance-org-row--${unit.unit_type.toLowerCase()}${unit.level > 0 ? ' has-parent' : ''}${unit.is_active ? '' : ' is-inactive'}`} style={levelStyle} key={unit.id}>
                         <span className="governance-org-code" style={{ marginLeft: `${unit.level * 24}px` }}>{unit.code}</span>
-                        <div className="governance-org-copy" style={{ paddingLeft: `${unit.level * 24}px` }}><strong>{unit.name}</strong><span>{parent ? `${parent.name} · ` : ''}{unit.unit_type}{unit.description ? ` · ${unit.description}` : ''}</span></div>
+                        <div className="governance-org-copy" style={{ paddingLeft: `${unit.level * 24}px` }}><strong>{unit.name}</strong><span>{unit.unit_type}{unit.description ? ` · ${unit.description}` : ''}</span></div>
                         <span className={`governance-status${unit.is_active ? ' is-active' : ''}`}>{unit.is_active ? 'Ativa' : 'Inativa'}</span>
                         <button className="governance-edit-button" type="button" onClick={() => setOrgUnitDraft({ id: unit.id, parent_id: unit.parent_id || '', code: unit.code, name: unit.name, unit_type: unit.unit_type, description: unit.description, sort_order: String(unit.sort_order), is_active: unit.is_active })}><Pencil size={16} /><span>Editar</span></button>
                       </article>

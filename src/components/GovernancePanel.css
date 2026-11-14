@@ -884,9 +884,15 @@
 .governance-org-list {
   display: grid;
   gap: 8px;
+  position: relative;
+  padding: 14px 12px 14px 14px;
+  border: 1px solid #d8e5e5;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbfb 0%, #f2f7f7 100%);
 }
 
 .governance-org-row {
+  position: relative;
   min-width: 0;
   display: grid;
   grid-template-columns: 126px minmax(0, 1fr) auto auto;
@@ -897,6 +903,51 @@
   border-radius: 11px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(29, 78, 84, 0.025);
+  z-index: 1;
+}
+
+.governance-org-row.has-parent::before {
+  content: '';
+  position: absolute;
+  left: calc(14px + (var(--org-level) - 1) * 24px);
+  top: -9px;
+  bottom: -9px;
+  border-left: 1px solid #9dbabd;
+  opacity: .8;
+  pointer-events: none;
+}
+
+.governance-org-row.has-parent::after {
+  content: '';
+  position: absolute;
+  left: calc(14px + (var(--org-level) - 1) * 24px);
+  top: 50%;
+  width: 24px;
+  border-top: 1px solid #9dbabd;
+  opacity: .8;
+  pointer-events: none;
+}
+
+.governance-org-row--municipio {
+  border-color: #b7d8d4;
+  background: linear-gradient(100deg, #f0faf8, #fff 42%);
+  box-shadow: 0 4px 12px rgba(35, 105, 106, .08);
+}
+
+.governance-org-row--orgao {
+  border-left: 4px solid #2d7d8a;
+}
+
+.governance-org-row--secretaria {
+  border-left: 3px solid #4e9b91;
+}
+
+.governance-org-row--departamento,
+.governance-org-row--divisao,
+.governance-org-row--assessoria,
+.governance-org-row--comissao,
+.governance-org-row--unidade {
+  border-left-color: #d5e2e2;
 }
 
 .governance-org-row.is-inactive {
@@ -912,6 +963,7 @@
   background: #eaf5f2;
   font: 800 10px 'Manrope', sans-serif;
   letter-spacing: .45px;
+  white-space: nowrap;
 }
 
 .governance-org-copy {
@@ -928,6 +980,11 @@
   white-space: nowrap;
 }
 
+.governance-org-row--municipio .governance-org-copy strong,
+.governance-org-row--orgao .governance-org-copy strong {
+  font-size: 14px;
+}
+
 .governance-org-copy span {
   overflow: hidden;
   color: #71858a;
@@ -937,6 +994,7 @@
 }
 
 @media (max-width: 760px) {
+  .governance-org-list { padding: 10px 8px; }
   .governance-org-row {
     grid-template-columns: 1fr auto;
     gap: 8px 10px;
