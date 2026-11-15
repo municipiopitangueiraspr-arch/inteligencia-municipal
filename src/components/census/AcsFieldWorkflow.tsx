@@ -84,6 +84,8 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
       if (citizenResult.error || !citizenResult.data) throw new Error(citizenResult.error?.message || 'Não foi possível cadastrar o cidadão.')
       const memberResult = await supabase.from('census_family_members').insert({ family_id: familyResult.data.id, citizen_id: citizenResult.data.id, relationship_code: 'MEMBER', is_responsible: true })
       if (memberResult.error) throw new Error(memberResult.error.message)
+      const linkResult = await supabase.rpc('census_attach_task_subject', { p_task_id: selectedTask.id, p_family_id: familyResult.data.id, p_citizen_id: citizenResult.data.id })
+      if (linkResult.error) throw new Error(linkResult.error.message)
       setNotice('Família e cidadão cadastrados. O histórico será mantido como identificação provisória até validação posterior.')
       await load()
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível salvar a família e o cidadão.') }
