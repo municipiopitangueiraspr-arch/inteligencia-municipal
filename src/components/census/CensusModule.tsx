@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, SlidersHorizontal, Upload, UserPlus, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { MunicipalAccessContextValue } from '../../auth/MunicipalAccessContext'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
@@ -74,7 +74,7 @@ const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDash
   ...managerNavItems,
   { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
-  { id: 'registry', label: 'Cadastros ACS', icon: UsersRound },
+  { id: 'registry', label: 'Administração da Saúde', icon: SlidersHorizontal },
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
