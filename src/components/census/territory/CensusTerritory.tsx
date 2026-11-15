@@ -19,6 +19,7 @@ type MapImport = { id: string; file_name: string; status: 'DRAFT' | 'PUBLISHED' 
 type Household = { id: string; lot_id: string; label: string; active: boolean; created_at: string }
 type LotAcs = { acs_id: string; full_name: string; scope: 'LOTE' | 'ZONA' }
 type AcsOption = { id: string; full_name: string; email: string | null; active: boolean }
+type ManagerAcs = { id: string; name: string }
 type Visit = { id: string; household_id: string; visit_date: string; status: 'IN_PROGRESS' | 'COMPLETED' | 'NO_CONTACT' | 'CANCELLED'; notes: string; created_at: string; completed_at: string | null; acs_id: string | null }
 type FormSnapshot = Pick<QuestionnaireRecord, 'id' | 'slug' | 'title' | 'subtitle' | 'description' | 'version' | 'form_schema'>
 type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; status: 'DRAFT' | 'SUBMITTED'; submitted_at: string | null; created_at: string; questionnaire_version: number; questionnaire_snapshot: FormSnapshot }
@@ -100,6 +101,9 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
   const [coverageVisits, setCoverageVisits] = useState<Visit[]>([])
   const [coverageResponses, setCoverageResponses] = useState<ResponseMeta[]>([])
   const [acsNames, setAcsNames] = useState<Record<string, string>>({})
+  const [managerAcs, setManagerAcs] = useState<ManagerAcs[]>([])
+  const [managerAssignments, setManagerAssignments] = useState<Record<string, string>>({})
+  const [managerAcsFilter, setManagerAcsFilter] = useState('')
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -144,18 +148,23 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
     setLoading(true)
     setMapError('')
     try {
-      const [importsResult, zonesResult, formsResult] = await Promise.all([
+      const [importsResult, zonesResult, formsResult, assignmentsResult] = await Promise.all([
         db.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1),
         db.from('census_zones').select('id,name,color,active').order('created_at').limit(500),
         db.from('census_questionnaires').select(formSelect).eq('status', 'ACTIVE').order('updated_at', { ascending: false }).limit(100),
+        db.rpc('census_manager_lot_assignments'),
       ])
       if (importsResult.error) throw new Error(`Não foi possível localizar o mapa salvo: ${importsResult.error.message}`)
       if (zonesResult.error) throw new Error(`Não foi possível carregar as zonas: ${zonesResult.error.message}`)
       if (formsResult.error) throw new Error(`Não foi possível carregar os questionários ativos: ${formsResult.error.message}`)
+      if (assignmentsResult.error) throw new Error(`Não foi possível carregar as atribuições gerenciais: ${assignmentsResult.error.message}`)
       const current = (importsResult.data?.[0] || null) as MapImport | null
       setMapImport(current)
       setZones((zonesResult.data || []) as CensusZone[])
       setActiveForms((formsResult.data || []) as QuestionnaireRecord[])
+      const assignments = (assignmentsResult.data || []) as { lot_id: string; acs_id: string; acs_name: string }[]
+      setManagerAcs([...new Map(assignments.map((item) => [item.acs_id, { id: item.acs_id, name: item.acs_name }])).values()].sort((a, b) => a.name.localeCompare(b.name)))
+      setManagerAssignments(Object.fromEntries(assignments.map((item) => [item.lot_id, item.acs_id])))
       if (!current) { setLots([]); return }
       const lotRows = await fetchAllPages<TerritoryLot>((from, to) => db.from('census_territory_map_lots').select(mapSelect).eq('import_id', current.id).order('source_handle').order('id').range(from, to))
       setLots(lotRows)
@@ -178,7 +187,7 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
       setMapError(error instanceof Error ? error.message : 'Não foi possível carregar o mapa territorial.')
       setMapImport(null)
       setLots([])
-      setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([])
+      setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([]); setManagerAcs([]); setManagerAssignments({})
     } finally { setLoading(false) }
   }, [])
 
@@ -240,7 +249,7 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
       else fitLotsInViewport(lots.filter((lot) => Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id))))
     })
     return () => cancelAnimationFrame(frame)
-  }, [fitLotsInViewport, lots, mapMode, zoneFilterIds])
+  }, [fitLotsInViewport, lots, mapMode, zoneFilterIds, managerAcsFilter])
 
   const loadDossier = useCallback(async (lot: TerritoryLot) => {
     const db = supabase
@@ -396,10 +405,11 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
       if (![lotDisplayName(lot), code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
     }
     if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
+    if (readOnly && managerAcsFilter && managerAssignments[lot.id] !== managerAcsFilter) return false
     if (mapMode === 'questionnaire' && coverageFormId && questionnaireStatusFilter !== 'all' && (lot.indicator_exclusion_reason || mapStatus(lot) !== questionnaireStatusFilter)) return false
     return true
   })
-  const preserveContextLots = (mapMode === 'zones' || mapMode === 'questionnaire') && (zoneFilterIds.length > 0 || (mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all'))
+  const preserveContextLots = !managerAcsFilter && (mapMode === 'zones' || mapMode === 'questionnaire') && (zoneFilterIds.length > 0 || (mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all'))
   const mapLotsToRender = preserveContextLots ? lots : visibleLots
   const mapMetrics = (() => {
     const eligibleLots = visibleLots.filter((lot) => !lot.indicator_exclusion_reason)
@@ -672,7 +682,8 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
     {writing && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>Gravando dados de Saúde da Família/ACS… Aguarde.</span></div>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
-      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">ESCOLHA A VISUALIZAÇÃO</span><strong>O que você precisa fazer?</strong></div></div>
+      <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">MONITORAMENTO TERRITORIAL</span><strong>{readOnly ? 'Onde a equipe precisa de atenção?' : 'O que você precisa fazer?'}</strong></div></div>
+      {readOnly && <div className="census-map-filter-row census-manager-filter-row"><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><UsersRound size={14} />ACS responsável</span><select value={managerAcsFilter} onChange={(event) => { setManagerAcsFilter(event.target.value); setMapTooltip(null) }}><option value="">Todos os ACS</option>{managerAcs.map((acs) => <option key={acs.id} value={acs.id}>{acs.name}</option>)}</select></label><span className="census-manager-filter-help">O mapa mantém todas as cores de situação; o filtro apenas recorta o território do ACS selecionado.</span></div>}
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
         <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><MapPinned size={15} />Situação dos lotes</button>
         <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><Home size={15} />Visualizar zonas</button>

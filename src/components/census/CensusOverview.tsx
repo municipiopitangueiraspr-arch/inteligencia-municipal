@@ -76,7 +76,7 @@ function estimatedDate(days: number) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'America/Sao_Paulo' }).format(target)
 }
 
-export function CensusOverview({ role = 'acs', onOpen }: { role?: 'acs' | 'manager'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
+export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -231,7 +231,7 @@ export function CensusOverview({ role = 'acs', onOpen }: { role?: 'acs' | 'manag
       {loading ? (
         <div className="fleet-loading"><LoaderCircle className="spin" size={20} />Carregando painel…</div>
       ) : metrics && data ? role === 'manager' ? (
-        <ManagerOverview data={data} metrics={metrics} zoneStats={zoneStats} recent={recent} onOpen={onOpen} />
+        <ManagerOverview data={data} metrics={metrics} zoneStats={zoneStats} recent={recent} focus={focus} onOpen={onOpen} />
       ) : (
         <>
           <section className="census-day-hero" aria-labelledby="censusDayTitle">
@@ -352,7 +352,7 @@ export function CensusOverview({ role = 'acs', onOpen }: { role?: 'acs' | 'manag
   )
 }
 
-function ManagerOverview({ data, metrics, zoneStats, recent, onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
+function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview', onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
   const coverage = metrics.lots ? Math.round((metrics.visited / metrics.lots) * 100) : 0
   const attention = [
     metrics.pending > 0 ? { id: 'pending', title: `${metrics.pending.toLocaleString('pt-BR')} visitas pendentes`, detail: 'Existem lotes elegíveis sem visita concluída.', action: 'Ver visitas', onClick: () => onOpen('territory'), tone: 'urgent' } : null,
@@ -366,6 +366,12 @@ function ManagerOverview({ data, metrics, zoneStats, recent, onOpen }: { data: O
     const latest = visits.sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
     return { ...acs, completed, latest: latest ? fmtDate(latest.created_at) : 'Sem atividade registrada', active: Boolean(latest && Date.now() - new Date(latest.created_at).getTime() < 7 * DAY_MS) }
   }).sort((a, b) => b.completed - a.completed)
+
+  if (focus === 'attention') return <section className="manager-overview-page" aria-label="Atenção necessária no território">
+    <section className="manager-hero"><div><span>MONITORAMENTO GERENCIAL</span><h2>Atenção necessária</h2><p>Esta lista explica onde o trabalho precisa de acompanhamento. Cada ação abre o território para conferência, sem permitir alterações operacionais.</p></div><AlertCircle size={40} aria-hidden="true" /></section>
+    <section className="manager-panel manager-attention manager-attention-focus"><header><div><span className="manager-kicker">PRIORIZAÇÃO DO DIA</span><h3>O que precisa de acompanhamento agora</h3></div><span className={`manager-health-badge${attention.length ? ' attention' : ''}`}>{attention.length ? `${attention.length} ponto${attention.length === 1 ? '' : 's'}` : 'Tudo em ordem'}</span></header>{attention.length ? <div className="manager-attention-list">{attention.map((item) => <button type="button" className={`manager-attention-row ${item.tone}`} key={item.id} onClick={item.onClick}><span><strong>{item.title}</strong><small>{item.detail}</small></span><b>{item.action}<ArrowRight size={14} /></b></button>)}</div> : <div className="manager-clear-state"><CheckCircle2 size={22} /><strong>Nenhuma prioridade crítica identificada</strong><span>Os registros carregados não apresentam pendências prioritárias.</span></div>}</section>
+    <div className="manager-secondary-grid"><section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">COMO LER</span><h3>Significado das cores</h3></div></header><div className="manager-attention-legend"><p><i className="gray" />Cinza: lote ainda não iniciado.</p><p><i className="orange" />Laranja: existe pendência ou etapa incompleta.</p><p><i className="green" />Verde: domicílio e questionário principal concluídos.</p><p><i className="red" />Vermelho: houve tentativa, mas não houve contato.</p></div></section><section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">PRÓXIMA AÇÃO</span><h3>Conferir no mapa</h3></div></header><p className="manager-attention-explanation">Use o mapa para filtrar por zona, ACS e situação. Ao selecionar um lote, o dossiê mostra a etapa alcançada, a última visita e o questionário relacionado.</p><button type="button" className="manager-text-button" onClick={() => onOpen('territory')}>Abrir monitoramento territorial <ArrowRight size={14} /></button></section></div>
+  </section>
 
   return <section className="manager-overview-page" aria-label="Monitoramento gerencial da Saúde da Família">
     <section className="manager-hero"><div><span>MONITORAMENTO DA EQUIPE</span><h2>Visão gerencial</h2><p>Veja onde a equipe precisa de atenção e acompanhe o avanço do território sem entrar em cada registro.</p></div><Gauge size={40} aria-hidden="true" /></section>

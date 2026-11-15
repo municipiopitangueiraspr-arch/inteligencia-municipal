@@ -53,7 +53,7 @@ type MapImport = {
   division_saved_at: string | null
   is_current?: boolean
 }
-type CensusSection = 'overview' | 'territory' | 'dwg' | 'families' | 'forms' | 'zones'
+type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type CensusAccess = { role: CensusRole; label: string; description: string; acsId: string | null }
@@ -63,6 +63,7 @@ const TERRITORY_PAGE_SIZE = 1000
 
 const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'territory', label: 'Monitorar território', icon: MapPinned },
+  { id: 'attention', label: 'Atenção necessária', icon: AlertCircle },
   { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'overview', label: 'Visão gerencial', icon: LayoutDashboard },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
@@ -141,6 +142,7 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
         setAccess(isAcs
           ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: acs?.id || null }
           : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+        if (!isAcs) setView('territory')
         setAccessLoading(false)
       }
     }
@@ -163,6 +165,7 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Saúde da Família/ACS</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">{access.role === 'acs' ? 'ROTINA DE CAMPO' : 'GESTÃO TERRITORIAL'}</div><nav className="fleet-nav" aria-label="Navegação de Saúde da Família/ACS">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong><small>{access.label}</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
     <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
       {view === 'overview' && <CensusOverview role={access.role} onOpen={openOverview} />}
+      {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
       {view === 'territory' && <CensusTerritory readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
       {view === 'zones' && access.role === 'manager' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
