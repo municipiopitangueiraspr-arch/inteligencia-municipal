@@ -285,3 +285,13 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [ ] Exibir unidades organizacionais, usuários, papéis, módulos e atribuições.
 - [ ] Manter o convite municipal existente e indicar claramente o primeiro acesso.
 - [ ] Aplicar autorização no Supabase/RLS/RPCs, não apenas na interface.
+
+
+## Visão gerencial territorial orientada à execução
+- [x] Gestor e Prefeito entram em uma visão somente leitura, sem ações para cadastrar domicílio, responder questionário, registrar visita, editar zonas/ACS ou preparar mapa.
+- [x] O mapa territorial é a tela principal e usa quatro estados explicáveis: cinza para não iniciado, laranja para pendente, verde para concluído e vermelho para sem contato.
+- [x] O monitoramento permite filtrar por zona, ACS responsável, situação do lote, período da última visita, tipo de questionário e situação da visita; os filtros recortam mapa e lista e informam que não executam operações.
+- [x] O dossiê somente leitura apresenta endereço amigável, zona, ACS responsável, situação, domicílios ativos, última movimentação, motivo da pendência, etapas concluídas e histórico de visitas/respostas sem expor conteúdo sensível.
+- [x] A lista de atenção mantém o encaminhamento para o mapa e a visão explica o significado dos estados antes dos números.
+- [x] O backend possui a função `census_manager_monitoring_context()` com etapa principal, situação da visita, responsável, última movimentação e motivo da pendência, sem conteúdo de respostas, com execução apenas para usuários autenticados com módulo `census`.
+- [x] Build, testes territoriais e lint concluídos; publicar frontend e backend atualizados para teste remoto.

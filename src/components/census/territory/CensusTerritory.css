@@ -424,3 +424,30 @@
 /* Situação consolidada para gestores: consulta, não execução de campo. */
 .census-manager-lot-state{display:grid;gap:12px;margin-bottom:14px;padding:14px;border:1px solid #d8e5e6;border-radius:12px;background:#f8fbfc}.census-manager-lot-state>div{display:flex;align-items:center;justify-content:space-between;gap:10px}.census-manager-lot-state strong{color:#315d65;font-size:12px}.census-manager-status{padding:5px 9px;border-radius:999px;color:#fff;font-size:10px;font-weight:900}.census-manager-status--answered{background:#198754}.census-manager-status--no_contact{background:#c62828}.census-manager-status--no_activity,.census-manager-status--no_visit{background:#9aa3ad}.census-manager-status--draft,.census-manager-status--partial,.census-manager-status--questionnaire_pending,.census-manager-status--in_progress,.census-manager-status--cancelled{background:#e07b16}.census-manager-lot-state dl{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0}.census-manager-lot-state dl div{display:grid;gap:3px;padding-top:8px;border-top:1px solid #e5eeee}.census-manager-lot-state dt{color:#819397;font-size:9px;font-weight:800}.census-manager-lot-state dd{margin:0;color:#315d65;font-size:11px;font-weight:700;line-height:1.35}.census-dossier-readonly-note{align-self:center;color:#71878b;font-size:10px;font-weight:700}@media(max-width:600px){.census-manager-lot-state dl{grid-template-columns:1fr}.census-manager-lot-state>div{align-items:flex-start;flex-direction:column}}
 .census-manager-filter-row{align-items:center;margin:10px 0 2px;padding:10px 12px;border:1px solid #d7e7e8;border-radius:11px;background:#f6fbfb}.census-manager-filter-row .census-map-filter-control{min-width:min(100%,320px)}.census-manager-filter-help{color:#6a8186;font-size:10px;line-height:1.45;max-width:520px}@media(max-width:700px){.census-manager-filter-row{align-items:stretch;flex-direction:column}.census-manager-filter-row .census-map-filter-control{width:100%}}
+
+
+/* Visão gerencial: mapa como centro, contexto antes dos números e dossiê documental. */
+.census-manager-map-intro{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:16px 18px;border:1px solid #cfe0e1;border-radius:14px;background:linear-gradient(120deg,#f7fbfb,#fff);box-shadow:0 4px 16px #204d550b}
+.census-manager-map-intro>div:first-child{display:grid;gap:5px;min-width:0}
+.census-manager-map-intro strong{color:#214d56;font-size:18px;line-height:1.25}
+.census-manager-map-intro p{max-width:760px;margin:0;color:#60797e;font-size:12px;line-height:1.5}
+.census-manager-status-key{display:grid;grid-template-columns:repeat(2,max-content);gap:8px 14px;flex:none;color:#506a70;font-size:11px;font-weight:800}
+.census-manager-status-key span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.census-manager-status-key i{width:11px;height:11px;border-radius:3px;border:1px solid #789096}
+.census-manager-status-key i.gray{background:#9aa3ad}.census-manager-status-key i.orange{background:#e07b16}.census-manager-status-key i.green{background:#198754}.census-manager-status-key i.red{background:#c62828}
+.census-manager-filter-row{align-items:stretch!important}
+.census-manager-filter-row .acs-filter-select{display:grid!important;align-items:stretch!important;gap:5px!important}
+.census-manager-filter-row .acs-filter-select select{min-width:170px}
+.census-manager-filter-help{align-self:end;max-width:430px;color:#6e858a;font-size:11px;line-height:1.4}
+.census-manager-history{display:grid;gap:11px;padding:12px;border:1px solid #d8e6e7;border-radius:11px;background:#fbfdfd}
+.census-manager-history>header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;color:#315c64}
+.census-manager-history>header>div{display:grid;gap:3px}.census-manager-history>header>span{padding:4px 8px;border-radius:999px;background:#edf5f4;color:#46757b;font-size:10px;font-weight:800}
+.census-manager-history ol{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.census-manager-history li{position:relative;display:grid;grid-template-columns:18px 1fr;gap:2px 7px;padding:7px 0 7px 2px;color:#617a7f;font-size:11px}
+.census-manager-history li:not(:last-child)::after{position:absolute;top:25px;left:8px;width:1px;height:calc(100% - 8px);background:#d8e5e5;content:""}
+.census-manager-history li i{z-index:1;width:12px;height:12px;margin-top:1px;border:2px solid #b8cacc;border-radius:50%;background:#fff}
+.census-manager-history li.done{color:#2c6570;font-weight:800}.census-manager-history li.done i{border-color:#198754;background:#198754}
+.census-manager-history li small{grid-column:2;color:#7b8f93;font-size:10px;font-weight:500;line-height:1.35}
+.census-manager-history-reason{margin:0;padding:9px 10px;border-left:3px solid #e07b16;background:#fff8ed;color:#765d35;font-size:11px;line-height:1.45}
+@media(max-width:850px){.census-manager-map-intro{align-items:flex-start;flex-direction:column}.census-manager-status-key{grid-template-columns:repeat(4,max-content);width:100%;overflow:auto}.census-manager-filter-help{align-self:auto;max-width:none}.census-manager-filter-row .acs-filter-select select{min-width:0;width:100%}}
+@media(max-width:560px){.census-manager-map-intro strong{font-size:16px}.census-manager-status-key{grid-template-columns:repeat(2,max-content)}}

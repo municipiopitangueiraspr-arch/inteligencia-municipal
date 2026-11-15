@@ -65,12 +65,12 @@ const TERRITORY_PAGE_SIZE = 1000
 const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'territory', label: 'Monitorar território', icon: MapPinned },
   { id: 'attention', label: 'Atenção necessária', icon: AlertCircle },
-  { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'overview', label: 'Visão gerencial', icon: LayoutDashboard },
-  { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
 ]
 const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   ...managerNavItems,
+  { id: 'forms', label: 'Questionários', icon: FileText },
+  { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
@@ -147,7 +147,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
   const profileInitials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
   const openOverview = (nextView: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter: OperationalFilter = 'ALL') => {
     if (nextView === 'families') setFamilyInitialFilter(filter)
-    selectView(access.role === 'acs' && nextView === 'forms' ? 'territory' : nextView)
+    selectView(access.role !== 'acs' && !isAdministrator && ['forms', 'zones', 'dwg'].includes(nextView) ? 'territory' : access.role === 'acs' && nextView === 'forms' ? 'territory' : nextView)
   }
 
   return <div className="fleet-shell census-shell">
@@ -157,9 +157,9 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
       {view === 'territory' && <CensusTerritory readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
-      {view === 'zones' && access.role === 'manager' && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
+      {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
-      {view === 'forms' && access.role === 'manager' && <QuestionnairesManagement />}
+      {view === 'forms' && access.role === 'manager' && isAdministrator && <QuestionnairesManagement />}
 
     </div></main>
   </div>
