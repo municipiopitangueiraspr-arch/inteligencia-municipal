@@ -228,6 +228,18 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [ ] Confirmar os códigos, obrigatoriedades e regras condicionais no leiaute oficial vigente do e-SUS APS/PEC/LEDI/SISAB; `official_code` e `official_version` permanecem nulos.
 - [ ] Desenvolver e homologar a exportação oficial somente após a confirmação do leiaute; esta etapa não envia dados ao PEC/SISAB/SIAPS.
 
+## Telas de cadastro da Saúde da Família/ACS
+
+- [x] Manter a Governança como origem de convite, conta de usuário, papel municipal, departamento/unidade organizacional e módulo atribuído.
+- [x] Criar dentro de Saúde da Família/ACS a tela `Cadastros ACS` para municípios, incluindo código IBGE, UF, fuso horário e situação.
+- [x] Criar cadastro de unidades de saúde, com município, CNES, nome, tipo, endereço e situação.
+- [x] Criar cadastro de equipes, com município, unidade, INE, nome, tipo e situação.
+- [x] Criar cadastro de microáreas, com município, equipe, código, nome, população de referência e situação.
+- [x] Criar cadastro de profissionais/ACS vinculado a um usuário já criado na Governança, com categoria, CNS, CPF, CBO e situação.
+- [x] Criar cadastro de vínculos territoriais do profissional com unidade, equipe, microárea, papel operacional e vigência.
+- [x] Sincronizar automaticamente um profissional categorizado como ACS com o cadastro operacional usado pelo fluxo de visitas e pelos vínculos Zona × ACS.
+- [ ] Criar telas administrativas para edição dos catálogos versionados de motivos, desfechos, moradia e dados sociodemográficos, preservando versões anteriores.
+
 
 ## Carga sintética para demonstração da Saúde da Família/ACS
 - [x] Alimentar com registros claramente identificados como DEMO as telas Visão Geral, Mapa Territorial e Famílias/visitas, usando o mapa existente (1.582 lotes), as cinco zonas, ACS e o questionário ativo; preservar os registros sintéticos atuais e não apagar linhas. Resultado: 255 domicílios DEMO (50 domicílios principais e um complementar por zona), 185 visitas e 70 respostas.
