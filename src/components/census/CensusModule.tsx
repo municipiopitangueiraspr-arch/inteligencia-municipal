@@ -121,8 +121,8 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
     let mounted = true
     const loadProfile = async () => {
       if (!supabase) return
-      const { data } = await supabase.auth.getUser()
-      const authUser = data.user
+      const { data } = await supabase.auth.getSession()
+      const authUser = data.session?.user
       if (!authUser || !mounted) return
       const metadata = authUser.user_metadata || {}
       const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || authUser.email || 'Usuário autenticado'

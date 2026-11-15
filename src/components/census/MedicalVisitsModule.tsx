@@ -107,8 +107,8 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
     let mounted = true
     const loadProfile = async () => {
       if (!supabase) return
-      const { data } = await supabase.auth.getUser()
-      const user = data.user
+      const { data } = await supabase.auth.getSession()
+      const user = data.session?.user
       if (!user || !mounted) return
       const metadata = user.user_metadata || {}
       const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || user.email || 'Usuário autenticado'

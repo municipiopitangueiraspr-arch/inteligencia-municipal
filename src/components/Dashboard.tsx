@@ -76,7 +76,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
           .select('secretariat_id,module_id,sort_order')
           .order('sort_order', { ascending: true }),
         supabase.rpc('municipal_governance_is_admin'),
-        supabase.auth.getUser(),
+        supabase.auth.getSession(),
       ])
 
       if (!mounted) return
@@ -89,7 +89,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
         setSecretariatModules((mappingResult.data || []) as unknown as MunicipalSecretariatModule[])
       }
       setCanManageGovernance(!adminResult.error && adminResult.data === true)
-      const metadata = (userResult.data.user?.user_metadata || {}) as Record<string, unknown>
+      const metadata = (userResult.data.session?.user?.user_metadata || {}) as Record<string, unknown>
       setUserName(String(metadata.full_name || metadata.name || metadata.nome_completo || ''))
       setUserAvatarUrl(String(metadata.avatar_url || metadata.photo_url || ''))
       setLoading(false)
