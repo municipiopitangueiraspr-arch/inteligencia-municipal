@@ -31,7 +31,7 @@ type LotActivity = { householdCount: number; visitCount: number; latestVisit: Vi
 type ResponseEditorState = { responseId: string | null; visitId: string; householdLabel: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type QuestionnaireApplyRequest = { household: Household; form: FormSnapshot; previousResponse: ResponseMeta | null; previousAnswers: QuestionnaireAnswers }
 type PendingWrite =
-  | { kind: 'household'; lot: TerritoryLot; lotCode: string; label: string }
+  | { kind: 'household'; lot: TerritoryLot; lotCode: string; label: string; addressLine: string; addressNumber: string; addressComplement: string; neighborhood: string; postalCode: string; locality: string }
   | { kind: 'lot-acs'; lot: TerritoryLot; lotCode: string; acsId: string; acsName: string }
   | { kind: 'exclude-lot'; lot: TerritoryLot; reason: LotIndicatorExclusionReason }
   | { kind: 'restore-lot'; lot: TerritoryLot }
@@ -126,6 +126,12 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const [indicatorExclusionReason, setIndicatorExclusionReason] = useState<LotIndicatorExclusionReason | ''>('')
   const [showHouseholdForm, setShowHouseholdForm] = useState(false)
   const [householdLabel, setHouseholdLabel] = useState('')
+  const [addressLine, setAddressLine] = useState('')
+  const [addressNumber, setAddressNumber] = useState('')
+  const [addressComplement, setAddressComplement] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [locality, setLocality] = useState('')
   const [responseEditor, setResponseEditor] = useState<ResponseEditorState | null>(null)
   const [questionnaireApplyRequest, setQuestionnaireApplyRequest] = useState<QuestionnaireApplyRequest | null>(null)
   const [pendingWrite, setPendingWrite] = useState<PendingWrite | null>(null)
@@ -527,7 +533,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
 
   function requestHouseholdSave() {
     if (!selectedLot || !householdLabel.trim()) return
-    setPendingWrite({ kind: 'household', lot: selectedLot, lotCode: getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex), label: householdLabel.trim() })
+    setPendingWrite({ kind: 'household', lot: selectedLot, lotCode: getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex), label: householdLabel.trim(), addressLine: addressLine.trim(), addressNumber: addressNumber.trim(), addressComplement: addressComplement.trim(), neighborhood: neighborhood.trim(), postalCode: postalCode.trim(), locality: locality.trim() })
   }
 
   function openAcsForm() {
@@ -626,9 +632,9 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setWriting(true); setNotice(''); setPanelError('')
     try {
       if (action.kind === 'household') {
-        const { error } = await supabase.from('census_households').insert({ lot_id: action.lot.id, label: action.label })
+        const { error } = await supabase.from('census_households').insert({ lot_id: action.lot.id, label: action.label, address_line: action.addressLine || null, address_number: action.addressNumber || null, address_complement: action.addressComplement || null, neighborhood: action.neighborhood || null, postal_code: action.postalCode || null, locality: action.locality || null, source: 'FIELD_COLLECTION' })
         if (error) throw new Error(error.message)
-        setHouseholdLabel(''); setShowHouseholdForm(false)
+        setHouseholdLabel(''); setAddressLine(''); setAddressNumber(''); setAddressComplement(''); setNeighborhood(''); setPostalCode(''); setLocality(''); setShowHouseholdForm(false)
         await loadDossier(action.lot)
         setNoticeTone('success'); setNotice('Domicílio cadastrado com sucesso.')
       }
@@ -795,7 +801,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
           {readOnly && <section className="census-manager-history" aria-label="Histórico das etapas do lote"><header><div><span className="fleet-kicker">HISTÓRICO DO TRABALHO</span><strong>O que já foi realizado</strong></div><span>{selectedLotHistory.length} visita(s)</span></header><ol><li className={households.length ? 'done' : ''}><i />Domicílio cadastrado<small>{households.length ? `${households.length} registro(s) ativo(s)` : 'Ainda pendente'}</small></li><li className={selectedLotHistory.length ? 'done' : ''}><i />Atendimento iniciado<small>{selectedLotHistory.length ? `Última movimentação em ${formatDate(selectedLotHistory[0].created_at, true)}` : 'Nenhuma visita registrada'}</small></li><li className={selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'done' : ''}><i />Visita concluída<small>{selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'Há visita concluída no histórico' : 'Ainda pendente'}</small></li><li className={selectedLotResponseCount > 0 ? 'done' : ''}><i />Questionário registrado<small>{selectedLotResponseCount ? `${selectedLotResponseCount} resposta(s) no histórico` : 'Ainda não há resposta registrada'}</small></li></ol>{selectedLotHistory[0]?.status === 'NO_CONTACT' && <p className="census-manager-history-reason"><strong>Motivo da pendência:</strong> {selectedLotHistory[0].notes?.trim() || 'Sem contato informado pelo ACS.'}</p>}</section>}
           <section className="census-dossier-households"><div className="census-dossier-section-heading"><strong>Domicílios</strong><span>{households.length.toLocaleString('pt-BR')}</span></div>
             {households.map((household, index) => <article className="census-dossier-household" key={household.id}><div><Home size={16} /><strong>{household.label || `Domicílio ${index + 1}`}</strong></div>{readOnly ? <span className="census-dossier-readonly-note">Consulta gerencial · {activeMapForm?.title || 'questionário não selecionado'}</span> : activeForms.length ? <label><span>Aplicar questionário</span><select aria-label={`Aplicar questionário ao ${household.label || `Domicílio ${index + 1}`}`} defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) void requestQuestionnaireApply(household, form); event.currentTarget.value = '' }} disabled={writing || Boolean(selectedLot.indicator_exclusion_reason)}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label> : <span className="census-dossier-no-forms">Nenhum questionário ativo</span>}</article>)}
-            {!readOnly && showHouseholdForm && !selectedLot.indicator_exclusion_reason && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
+            {!readOnly && showHouseholdForm && !selectedLot.indicator_exclusion_reason && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div className="census-household-address-grid"><label>Logradouro<input value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Rua, avenida ou estrada" disabled={writing} /></label><label>Número<input value={addressNumber} onChange={(event) => setAddressNumber(event.target.value)} disabled={writing} /></label><label>Complemento<input value={addressComplement} onChange={(event) => setAddressComplement(event.target.value)} disabled={writing} /></label><label>Bairro/localidade<input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} disabled={writing} /></label><label>CEP<input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="00000-000" disabled={writing} /></label><label>Município/localidade<input value={locality} onChange={(event) => setLocality(event.target.value)} placeholder="Pitangueiras" disabled={writing} /></label></div><small>Endereço informado em campo. Coordenadas e identificadores oficiais podem ser complementados depois.</small><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
             {!readOnly && !selectedLot.indicator_exclusion_reason && <button type="button" className="census-add-household-button" onClick={() => { setHouseholdLabel(`Domicílio ${households.length + 1}`); setShowHouseholdForm((current) => !current) }} disabled={writing}><Home size={15} />Cadastrar domicílio</button>}
           </section>
           {!readOnly && !activeForms.length && <div className="census-no-active-form"><FileText size={17} /><span>Não há questionários ativos para aplicar.</span><button type="button" onClick={onOpenQuestionnaires}>Abrir Questionários</button></div>}

@@ -9,6 +9,7 @@ import { assignLotToZone, assignLotsToZone, filterUnassignedLots, getLotFillColo
 import type { DxfEntity } from './mapLogic'
 import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagement'
 import { CensusTerritory } from './territory/CensusTerritory'
+import { AcsFieldWorkflow } from './AcsFieldWorkflow'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -54,7 +55,7 @@ type MapImport = {
   division_saved_at: string | null
   is_current?: boolean
 }
-type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones'
+type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones' | 'agenda'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type ManagerStatusFilter = 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered'
@@ -76,6 +77,7 @@ const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDash
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
+  { id: 'agenda', label: 'Agenda e FVD', icon: ClipboardList },
   { id: 'territory', label: 'Meus domicílios', icon: MapPinned },
   { id: 'families', label: 'Minhas visitas', icon: UsersRound },
 ]
@@ -127,7 +129,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
     const loadProfile = async () => {
       const name = accessContext.user?.name || userEmail || accessContext.user?.email || 'Usuário autenticado'
       const photo = accessContext.user?.avatarUrl || null
-      const isAcs = accessContext.acs !== null && accessContext.hasRole('ACS')
+      const isAcs = accessContext.hasRole('ACS') && (accessContext.acs !== null || accessContext.foundation?.professional?.professionalCategory === 'ACS')
       const isAdmin = accessContext.isAdministrator
       if (mounted) {
         setProfile({ name, photo })
@@ -158,6 +160,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Saúde da Família/ACS</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">{access.role === 'acs' ? 'ROTINA DE CAMPO' : 'GESTÃO TERRITORIAL'}</div><nav className="fleet-nav" aria-label="Navegação de Saúde da Família/ACS">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong><small>{access.label}</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
     <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
       {view === 'overview' && <CensusOverview role={access.role} onOpen={openOverview} />}
+      {view === 'agenda' && access.role === 'acs' && <AcsFieldWorkflow accessContext={accessContext} onOpenTerritory={() => selectView('territory')} />}
       {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
       {isAdministrator && ['zones', 'dwg', 'forms'].includes(view) && <div className="census-admin-context-banner"><strong>Modo administrador · configuração</strong><span>As alterações nesta tela afetam o mapa, os questionários e os vínculos usados pela equipe de campo e pela gestão. Revise antes de salvar.</span></div>}

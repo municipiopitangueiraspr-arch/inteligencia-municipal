@@ -451,3 +451,5 @@
 .census-manager-history-reason{margin:0;padding:9px 10px;border-left:3px solid #e07b16;background:#fff8ed;color:#765d35;font-size:11px;line-height:1.45}
 @media(max-width:850px){.census-manager-map-intro{align-items:flex-start;flex-direction:column}.census-manager-status-key{grid-template-columns:repeat(4,max-content);width:100%;overflow:auto}.census-manager-filter-help{align-self:auto;max-width:none}.census-manager-filter-row .acs-filter-select select{min-width:0;width:100%}}
 @media(max-width:560px){.census-manager-map-intro strong{font-size:16px}.census-manager-status-key{grid-template-columns:repeat(2,max-content)}}
+
+.census-household-address-grid{display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:10px;margin-top:10px}.census-household-address-grid label{display:flex;flex-direction:column;gap:4px}.census-territory-inline-form>small{display:block;margin:8px 0;color:#667085;font-size:11px}@media(max-width:700px){.census-household-address-grid{grid-template-columns:1fr}}
