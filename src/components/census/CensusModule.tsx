@@ -80,9 +80,9 @@ const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDash
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'territory', label: 'Mapa territorial', icon: MapPinned },
   { id: 'overview', label: 'Meu dia', icon: LayoutDashboard },
   { id: 'agenda', label: 'Agenda e FVD', icon: ClipboardList },
-  { id: 'territory', label: 'Meus domicílios', icon: MapPinned },
   { id: 'families', label: 'Minhas visitas', icon: UsersRound },
   { id: 'population', label: 'Cadastro populacional', icon: UsersRound },
 ]
@@ -142,7 +142,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
         setAccess(isAcs
           ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: accessContext.acs?.id || null }
           : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
-        if (!isAcs) setView('territory')
+        setView('territory')
         setAccessLoading(false)
       }
     }
