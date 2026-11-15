@@ -14,7 +14,8 @@ type Point = [number, number]
 type Bbox = { minX: number; minY: number; maxX: number; maxY: number }
 type LotIndicatorExclusionReason = 'VACANT' | 'PUBLIC'
 type TerritoryLot = { id: string; source_handle: string; label: string | null; cadastral_label: string | null; street_name: string | null; neighborhood_name: string | null; block_reference: string | null; layer_name: string; geometry: Point[]; area: number | null; is_valid: boolean; zone_number: number | null; zone_id: string | null; indicator_exclusion_reason: LotIndicatorExclusionReason | null; indicator_excluded_at: string | null }
-type CensusZone = { id: string; name: string; color: string; active: boolean }
+type CensusZone = { id: string; name: string; color: string; microarea_id: string | null; active: boolean }
+type CensusMicroarea = { id: string; code: string; name: string }
 type MapImport = { id: string; file_name: string; status: 'DRAFT' | 'PUBLISHED' | 'ERROR'; bbox: Bbox | null; updated_at: string; division_saved_at: string }
 type Household = { id: string; lot_id: string; label: string; active: boolean; created_at: string }
 type LotAcs = { acs_id: string; full_name: string; scope: 'LOTE' | 'ZONA' }
@@ -90,6 +91,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const [mapImport, setMapImport] = useState<MapImport | null>(null)
   const [lots, setLots] = useState<TerritoryLot[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
+  const [microareas, setMicroareas] = useState<CensusMicroarea[]>([])
   const [activeForms, setActiveForms] = useState<QuestionnaireRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [mapError, setMapError] = useState('')
@@ -176,21 +178,24 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setLoading(true)
     setMapError('')
     try {
-      const [importsResult, zonesResult, formsResult, attributeResult, assignmentsResult] = await Promise.all([
+      const [importsResult, zonesResult, formsResult, attributeResult, assignmentsResult, microareaResult] = await Promise.all([
         db.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1),
-        db.from('census_zones').select('id,name,color,active').order('created_at').limit(500),
+        db.from('census_zones').select('id,name,color,microarea_id,active').order('created_at').limit(500),
         db.from('census_questionnaires').select(formSelect).eq('status', 'ACTIVE').order('updated_at', { ascending: false }).limit(100),
         db.from('census_attribute_catalog').select('domain,code,label,version').eq('active', true).order('domain').order('label').limit(500),
         db.rpc('census_manager_lot_assignments'),
+        db.from('health_microareas').select('id,code,name').eq('active', true).order('code').limit(2000),
       ])
       if (importsResult.error) throw new Error(`Não foi possível localizar o mapa salvo: ${importsResult.error.message}`)
       if (zonesResult.error) throw new Error(`Não foi possível carregar as zonas: ${zonesResult.error.message}`)
       if (formsResult.error) throw new Error(`Não foi possível carregar os questionários ativos: ${formsResult.error.message}`)
       if (attributeResult.error) throw new Error(`Não foi possível carregar os catálogos domiciliares: ${attributeResult.error.message}`)
       if (assignmentsResult.error) throw new Error(`Não foi possível carregar as atribuições gerenciais: ${assignmentsResult.error.message}`)
+      if (microareaResult.error) throw new Error(`Não foi possível carregar as microáreas: ${microareaResult.error.message}`)
       const current = (importsResult.data?.[0] || null) as MapImport | null
       setMapImport(current)
       setZones((zonesResult.data || []) as CensusZone[])
+      setMicroareas((microareaResult.data || []) as CensusMicroarea[])
       setActiveForms((formsResult.data || []) as QuestionnaireRecord[])
       setAttributeCatalog((attributeResult.data || []) as AttributeOption[])
       const assignments = (assignmentsResult.data || []) as { lot_id: string; acs_id: string; acs_name: string }[]
@@ -428,14 +433,16 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const visitStatusColors: Record<VisitMapStatus, string> = { completed: 'var(--acs-chart-completed)', in_progress: 'var(--acs-chart-progress)', no_contact: 'var(--acs-chart-no-contact)', no_visit: 'var(--acs-chart-no-visit)', no_activity: 'var(--acs-chart-no-activity)', cancelled: 'var(--acs-chart-cancelled)' }
   const activeMapForm = activeForms.find((form) => form.id === coverageFormId)
   const visibleZoneOptions = zones.filter((zone) => zone.active && lots.some((lot) => lot.zone_id === zone.id))
+  const zoneLabel = (zone: CensusZone) => { const microarea = microareas.find((item) => item.id === zone.microarea_id); return microarea ? `${zone.name} · ${microarea.code}` : `${zone.name} · microárea pendente` }
   const zoneScopedLots = lots.filter((lot) => !(mapMode === 'zones' || mapMode === 'questionnaire') || !zoneFilterIds.length || Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id)))
   const visibleLots = lots.filter((lot) => {
     const normalizedSearch = lotSearch.trim().toLowerCase()
     if (normalizedSearch) {
       const index = lots.findIndex((item) => item.id === lot.id) + 1
       const code = getMapLotCode(lot.label, lot.source_handle, index)
-      const zoneName = zones.find((zone) => zone.id === lot.zone_id)?.name || ''
-      if (![lotDisplayName(lot), code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneName].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
+      const zone = zones.find((item) => item.id === lot.zone_id)
+      const zoneText = zone ? zoneLabel(zone) : ''
+      if (![lotDisplayName(lot), code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneText].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
     }
     if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
     if (readOnly && managerAcsFilter && managerAssignments[lot.id] !== managerAcsFilter) return false
@@ -760,7 +767,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
         <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('visits') }}><ClipboardCheck size={15} />Visitas de rotina</button>
       </div>
       {(mapMode === 'zones' || mapMode === 'questionnaire') && <div className="census-map-step-group census-map-step-filters"><div className="census-map-stage-heading compact"><span className="census-map-stage-number">2</span><div><span className="fleet-kicker">REFINE O RECORTE</span><strong>{mapMode === 'questionnaire' ? 'Escolha a zona em foco' : 'Quais zonas deseja ver?'}</strong></div></div><div className="census-map-zone-filters" role="group" aria-label="Filtrar lotes por zona">
-        <div className="census-map-zone-filter-options"><span className="census-map-filter-caption"><Filter size={14} />Zonas exibidas</span><button type="button" className={`census-map-zone-chip all${zoneFilterIds.length === 0 ? ' active' : ''}`} aria-pressed={zoneFilterIds.length === 0} onClick={resetZoneFilter}>Todas as zonas</button>{visibleZoneOptions.map((zone) => <button type="button" key={zone.id} className={`census-map-zone-chip${zoneFilterIds.includes(zone.id) ? ' active' : ''}`} aria-pressed={zoneFilterIds.includes(zone.id)} onClick={() => toggleZoneFilter(zone.id)}><i style={{ background: zone.color }} />{zone.name}</button>)}</div>
+        <div className="census-map-zone-filter-options"><span className="census-map-filter-caption"><Filter size={14} />Zonas exibidas</span><button type="button" className={`census-map-zone-chip all${zoneFilterIds.length === 0 ? ' active' : ''}`} aria-pressed={zoneFilterIds.length === 0} onClick={resetZoneFilter}>Todas as zonas</button>{visibleZoneOptions.map((zone) => <button type="button" key={zone.id} className={`census-map-zone-chip${zoneFilterIds.includes(zone.id) ? ' active' : ''}`} aria-pressed={zoneFilterIds.includes(zone.id)} onClick={() => toggleZoneFilter(zone.id)}><i style={{ background: zone.color }} />{zoneLabel(zone)}</button>)}</div>
         <small className="census-map-filter-count">Exibindo {visibleLots.length.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes</small>
       </div></div>}
       {mapMode === 'questionnaire' && <div className="census-map-step-group census-map-step-filters"><div className="census-map-filter-subheading"><FileText size={14} /><strong>Critérios da cobertura</strong></div><div className="census-map-filter-row">
@@ -816,7 +823,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
                 {tooltipActivity?.latestVisit && <span>{tooltipActivity.latestVisit.status === 'NO_CONTACT' ? 'Última tentativa' : tooltipActivity.latestVisit.status === 'CANCELLED' ? 'Último registro' : 'Última visita'}: {formatDate(tooltipActivity.latestVisit.visit_date)}</span>}
               </>}
             </div>}
-            <div className="census-territory-legend">{mapMode === 'zones' ? <>{visibleZoneOptions.filter((zone) => !zoneFilterIds.length || zoneFilterIds.includes(zone.id)).map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zone.name}</span>)}{zoneFilterIds.length > 0 && <span><i className="filtered-out" />Fora do filtro</span>}</> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : <><span><i style={{ background: '#9aa3ad' }} />Não iniciado</span><span><i style={{ background: '#198754' }} />Concluído</span><span><i style={{ background: '#e07b16' }} />Pendente</span><span><i style={{ background: '#c62828' }} />Sem contato</span></>}</div>
+            <div className="census-territory-legend">{mapMode === 'zones' ? <>{visibleZoneOptions.filter((zone) => !zoneFilterIds.length || zoneFilterIds.includes(zone.id)).map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zoneLabel(zone)}</span>)}{zoneFilterIds.length > 0 && <span><i className="filtered-out" />Fora do filtro</span>}</> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : <><span><i style={{ background: '#9aa3ad' }} />Não iniciado</span><span><i style={{ background: '#198754' }} />Concluído</span><span><i style={{ background: '#e07b16' }} />Pendente</span><span><i style={{ background: '#c62828' }} />Sem contato</span></>}</div>
           </>}
         </div>
       </div>

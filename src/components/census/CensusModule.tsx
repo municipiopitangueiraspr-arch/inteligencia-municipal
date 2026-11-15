@@ -36,7 +36,8 @@ type Lot = {
   matched_lot_id?: string | null
   merge_status?: 'NEW' | 'MATCHED' | 'PUBLISHED'
 }
-type CensusZone = { id: string; name: string; color: string; active: boolean }
+type CensusZone = { id: string; name: string; color: string; microarea_id: string | null; active: boolean }
+type CensusMicroarea = { id: string; code: string; name: string; team_id: string; active: boolean }
 type CensusAcs = { id: string; full_name: string; email: string | null; phone: string | null; active: boolean; user_id?: string | null }
 type AreaSelectionGesture = { start: Point; current: Point; startClientX: number; startClientY: number; targetLotKey: string | null; additive: boolean }
 
@@ -125,7 +126,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
   const navItems = access.role === 'acs' ? acsNavItems : isAdministrator ? adminNavItems : managerNavItems
   const loadZones = async () => {
     if (!supabase) return
-    const { data } = await supabase.from('census_zones').select('id,name,color,active').order('created_at').limit(500)
+    const { data } = await supabase.from('census_zones').select('id,name,color,microarea_id,active').order('created_at').limit(500)
     setZones((data || []) as CensusZone[])
   }
   useEffect(() => { void loadZones() }, [])
@@ -185,9 +186,11 @@ type ZoneAssignment = { id: string; acs_id: string; zone_id: string; active: boo
 
 function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: () => void }) {
   const [acs, setAcs] = useState<CensusAcs[]>([])
+  const [microareas, setMicroareas] = useState<CensusMicroarea[]>([])
   const [assignments, setAssignments] = useState<ZoneAssignment[]>([])
   const [zoneName, setZoneName] = useState('')
   const [zoneColor, setZoneColor] = useState('#2c7892')
+  const [zoneMicroareaId, setZoneMicroareaId] = useState('')
   const [editingZoneId, setEditingZoneId] = useState('')
   const [showZoneForm, setShowZoneForm] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -210,14 +213,17 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
     if (!supabase) return
     setLoadingLists(true)
     try {
-      const [{ data: people, error: peopleError }, { data: links, error: linksError }] = await Promise.all([
+      const [{ data: people, error: peopleError }, { data: links, error: linksError }, { data: microareaRows, error: microareaError }] = await Promise.all([
         supabase.from('census_acs').select('id,full_name,email,phone,active,user_id').eq('active', true).order('full_name').limit(500),
         supabase.from('census_acs_zone_assignments').select('id,acs_id,zone_id,active,created_at,ended_at').order('created_at', { ascending: false }).limit(2000),
+        supabase.from('health_microareas').select('id,code,name,team_id,active').eq('active', true).order('code').limit(2000),
       ])
       if (peopleError) throw new Error(peopleError.message)
       if (linksError) throw new Error(linksError.message)
+      if (microareaError) throw new Error(microareaError.message)
       setAcs((people || []) as CensusAcs[])
       setAssignments((links || []) as ZoneAssignment[])
+      setMicroareas((microareaRows || []) as CensusMicroarea[])
     } catch (error) {
       setNoticeTone('error'); setNotice(`Não foi possível atualizar as listas: ${error instanceof Error ? error.message : 'tente novamente.'}`)
     } finally { setLoadingLists(false) }
@@ -243,13 +249,14 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
     if (!supabase || !zoneName.trim()) return
     setSaving(true); setSavingAction('zone'); setNotice('')
     try {
+      if (!zoneMicroareaId) throw new Error('Selecione a microárea oficial correspondente a esta zona.')
       const query = editingZoneId
-        ? supabase.from('census_zones').update({ name: zoneName.trim(), color: zoneColor, updated_at: new Date().toISOString() }).eq('id', editingZoneId)
-        : supabase.from('census_zones').insert({ name: zoneName.trim(), color: zoneColor })
+        ? supabase.from('census_zones').update({ name: zoneName.trim(), color: zoneColor, microarea_id: zoneMicroareaId, updated_at: new Date().toISOString() }).eq('id', editingZoneId)
+        : supabase.from('census_zones').insert({ name: zoneName.trim(), color: zoneColor, microarea_id: zoneMicroareaId })
       const { error } = await query
       if (error) throw new Error(error.message)
       const wasEditing = Boolean(editingZoneId)
-      setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892')
+      setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId('')
       setNoticeTone('success'); setNotice(wasEditing ? 'Zona atualizada.' : 'Zona criada com sucesso.'); onChanged()
     } catch (error) {
       setNoticeTone('error'); setNotice(`Não foi possível salvar a zona: ${error instanceof Error ? error.message : 'tente novamente.'}`)
@@ -262,7 +269,7 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
     try {
       const { error } = await supabase.from('census_zones').update({ active: !zone.active, updated_at: new Date().toISOString() }).eq('id', zone.id)
       if (error) throw new Error(error.message)
-      setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892')
+      setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId('')
       setNoticeTone('success'); setNotice(zone.active ? 'Zona inativada. O histórico e os vínculos foram preservados.' : 'Zona reativada.'); onChanged(); await loadLists()
     } catch (error) {
       setNoticeTone('error'); setNotice(`Não foi possível alterar o estado da zona: ${error instanceof Error ? error.message : 'tente novamente.'}`)
@@ -302,9 +309,9 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
       setNoticeTone('error'); setNotice(`Não foi possível encerrar o vínculo: ${error instanceof Error ? error.message : 'tente novamente.'}`)
     } finally { setSaving(false); setSavingAction(null) }
   }
-  function startEditZone(zone: CensusZone) { setEditingZoneId(zone.id); setZoneName(zone.name); setZoneColor(zone.color); setShowZoneForm(true) }
+  function startEditZone(zone: CensusZone) { setEditingZoneId(zone.id); setZoneName(zone.name); setZoneColor(zone.color); setZoneMicroareaId(zone.microarea_id || ''); setShowZoneForm(true) }
   function startEditAssignment(link: ZoneAssignment) { setEditingAssignmentId(link.id); setSelectedAcs(link.acs_id); setSelectedZone(link.zone_id); setShowAssignmentForm(true) }
-  function startNewZone() { setEditingZoneId(''); setZoneName(''); setZoneColor('#2c7892'); setShowZoneForm(true) }
+  function startNewZone() { setEditingZoneId(''); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId(microareas[0]?.id || ''); setShowZoneForm(true) }
   function startNewAssignment() { setEditingAssignmentId(''); setSelectedAcs(''); setSelectedZone(activeZones[0]?.id || ''); setShowAssignmentForm(true) }
   function confirmPendingWrite() {
     const action = pendingWrite; setPendingWrite(null)
@@ -329,7 +336,8 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
   const activeLinks = assignments.filter((link) => link.active)
   const zoneAcsNames = (zoneId: string) => activeLinks.filter((link) => link.zone_id === zoneId).map((link) => acs.find((person) => person.id === link.acs_id)?.full_name).filter(Boolean)
   const acsZoneNames = (acsId: string) => activeLinks.filter((link) => link.acs_id === acsId).map((link) => zones.find((zone) => zone.id === link.zone_id)?.name).filter(Boolean)
-  const cancelZoneEdit = () => { setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892') }
+  const microareaName = (id: string | null) => { const item = microareas.find((microarea) => microarea.id === id); return item ? `${item.code} · ${item.name}` : 'Microárea não vinculada' }
+  const cancelZoneEdit = () => { setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId('') }
   const cancelAssignmentEdit = () => { setEditingAssignmentId(''); setShowAssignmentForm(false); setSelectedAcs(''); setSelectedZone(activeZones[0]?.id || '') }
   const refreshLists = () => { void loadLists(); onChanged() }
 
@@ -345,9 +353,9 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
     <div className="census-zones-flow">
       <section className="fleet-panel census-management-card census-workflow-step" aria-labelledby="zoneStepTitle">
         <div className="census-step-heading"><span className="census-step-number">1</span><div><span className="fleet-kicker">PRIMEIRO PASSO</span><h3 id="zoneStepTitle">Organize as zonas</h3></div><button type="button" className="fleet-primary-button" onClick={startNewZone} disabled={saving}><Plus size={15} />Nova zona</button></div>
-        <p>As zonas dividem o território. Se precisar retirar uma do uso, inative-a; lotes e histórico não serão apagados.</p>
-        <div className="census-zone-directory">{zones.map((zone) => { const names = zoneAcsNames(zone.id); return <article className={`census-zone-directory-row${zone.active ? '' : ' inactive'}`} key={zone.id}><i className="census-zone-swatch" style={{ background: zone.color }} /><div className="census-zone-directory-copy"><strong>{zone.name}</strong><small>{names.length ? `Responsável${names.length > 1 ? 'is' : ''}: ${names.join(', ')}` : 'Nenhum ACS responsável vinculado'}</small></div><span className={`census-state-pill${zone.active ? ' active' : ''}`}>{zone.active ? 'Ativa' : 'Inativa'}</span><button type="button" className="fleet-secondary-button" onClick={() => startEditZone(zone)} disabled={saving}>Editar</button></article> })}{!zones.length && <div className="census-flow-empty"><MapPinned size={20} /><span><strong>Nenhuma zona cadastrada</strong><small>Comece criando a primeira zona do território.</small></span></div>}</div>
-        {showZoneForm && <div className="census-flow-form census-zone-edit-form"><div className="census-flow-form-title"><strong>{editingZoneId ? 'Editar dados da zona' : 'Nova zona'}</strong><small>Informe o nome e a cor que serão identificados no mapa.</small></div><div className="census-zone-edit-fields"><label>Nome da zona<input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ex.: Zona Norte" disabled={saving} /></label><label>Cor no mapa<div className="census-color-input"><input type="color" value={zoneColor} onChange={(event) => setZoneColor(event.target.value)} disabled={saving} /><span>{zoneColor}</span></div></label></div><div className="census-zone-form-actions"><button type="button" className="fleet-primary-button" disabled={saving || !zoneName.trim()} onClick={() => setPendingWrite('zone')}>{editingZoneId ? <Save size={15} /> : <Check size={15} />}{editingZoneId ? 'Salvar zona' : 'Criar zona'}</button>{editingZoneId && <button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => setPendingWrite('zone-status')}>{zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar zona' : 'Reativar zona'}</button>}<button type="button" className="fleet-secondary-button" disabled={saving} onClick={cancelZoneEdit}>Cancelar</button></div></div>}
+        <p>As zonas dividem o território visualmente. Cada cor deve apontar para uma microárea oficial já cadastrada; lotes, ACS e histórico continuam vinculados à zona.</p>
+        <div className="census-zone-directory">{zones.map((zone) => { const names = zoneAcsNames(zone.id); return <article className={`census-zone-directory-row${zone.active ? '' : ' inactive'}`} key={zone.id}><i className="census-zone-swatch" style={{ background: zone.color }} /><div className="census-zone-directory-copy"><strong>{zone.name}</strong><small>{microareaName(zone.microarea_id)} · {names.length ? `Responsável${names.length > 1 ? 'is' : ''}: ${names.join(', ')}` : 'Nenhum ACS responsável vinculado'}</small></div><span className={`census-state-pill${zone.active ? ' active' : ''}`}>{zone.active ? 'Ativa' : 'Inativa'}</span><button type="button" className="fleet-secondary-button" onClick={() => startEditZone(zone)} disabled={saving}>Editar</button></article> })}{!zones.length && <div className="census-flow-empty"><MapPinned size={20} /><span><strong>Nenhuma zona cadastrada</strong><small>Comece criando a primeira zona do território.</small></span></div>}</div>
+        {showZoneForm && <div className="census-flow-form census-zone-edit-form"><div className="census-flow-form-title"><strong>{editingZoneId ? 'Editar dados da zona' : 'Nova zona'}</strong><small>Informe o nome visual, a cor e a microárea oficial que ela representa.</small></div><div className="census-zone-edit-fields"><label>Nome da zona<input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ex.: Zona Azul" disabled={saving} /></label><label>Microárea oficial<select value={zoneMicroareaId} onChange={(event) => setZoneMicroareaId(event.target.value)} disabled={saving} required><option value="">Selecione a microárea</option>{microareas.map((microarea) => <option key={microarea.id} value={microarea.id}>{microarea.code} · {microarea.name}</option>)}</select></label><label>Cor no mapa<div className="census-color-input"><input type="color" value={zoneColor} onChange={(event) => setZoneColor(event.target.value)} disabled={saving} /><span>{zoneColor}</span></div></label></div><div className="census-zone-form-actions"><button type="button" className="fleet-primary-button" disabled={saving || !zoneName.trim() || !zoneMicroareaId} onClick={() => setPendingWrite('zone')}>{editingZoneId ? <Save size={15} /> : <Check size={15} />}{editingZoneId ? 'Salvar zona' : 'Criar zona'}</button>{editingZoneId && <button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => setPendingWrite('zone-status')}>{zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar zona' : 'Reativar zona'}</button>}<button type="button" className="fleet-secondary-button" disabled={saving} onClick={cancelZoneEdit}>Cancelar</button></div></div>}
       </section>
 
       <section className="fleet-panel census-management-card census-workflow-step" aria-labelledby="acsStepTitle">
@@ -418,7 +426,7 @@ function MapPreparationWorkspace() {
       const [{ data: territoryImports, error: territoryError }, { data: drafts, error: draftError }, { data: zoneRows }] = await Promise.all([
         supabase.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at,published_at,is_current').order('published_at', { ascending: false }).limit(1),
         supabase.from('census_map_imports').select('id,file_name,mime_type,file_size,storage_path,source_layer,status,total_features,valid_features,problematic_features,bbox,updated_at,published_at,division_saved_at,is_current').eq('status', 'DRAFT').order('updated_at', { ascending: false }).limit(1),
-      supabase.from('census_zones').select('id,name,color,active').eq('active', true).order('created_at').limit(100),
+      supabase.from('census_zones').select('id,name,color,microarea_id,active').eq('active', true).order('created_at').limit(100),
       ])
       if (territoryError) throw new Error(territoryError.message)
       if (draftError) throw new Error(draftError.message)
