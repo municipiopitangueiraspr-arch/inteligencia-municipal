@@ -6,6 +6,7 @@ import './AcsFieldWorkflow.css'
 
 type Task = { id: string; due_date: string; priority: number; status: 'PLANNED' | 'IN_PROGRESS'; task_type: string; instructions: string; household_id: string | null; family_id: string | null; citizen_id: string | null; family_reference: string | null; citizen_name: string | null; reason_code: string | null; reason_label: string | null; address_line: string | null; address_number: string | null; address_complement: string | null; neighborhood: string | null; locality: string | null; postal_code: string | null }
 type Catalog = { id: string; code: string; label: string; version: number }
+type AttributeCatalog = Catalog & { domain: string }
 type Scope = { municipality: string; establishment: string; team: string; microarea: string }
 
 function formatDate(value: string) {
@@ -35,6 +36,7 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
   const [scope, setScope] = useState<Scope>({ municipality: 'Município', establishment: 'Não atribuído', team: 'Não atribuído', microarea: 'Não atribuído' })
   const [reasons, setReasons] = useState<Catalog[]>([])
   const [outcomes, setOutcomes] = useState<Catalog[]>([])
+  const [attributes, setAttributes] = useState<AttributeCatalog[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState('')
   const [selectedReasons, setSelectedReasons] = useState<string[]>([])
   const [outcome, setOutcome] = useState('REALIZADA')
@@ -49,6 +51,12 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
   const [citizenSex, setCitizenSex] = useState('NI')
   const [citizenCns, setCitizenCns] = useState('')
   const [citizenCpf, setCitizenCpf] = useState('')
+  const [citizenRaceColor, setCitizenRaceColor] = useState('')
+  const [citizenNationality, setCitizenNationality] = useState('')
+  const [citizenEducationLevel, setCitizenEducationLevel] = useState('')
+  const [citizenOccupation, setCitizenOccupation] = useState('')
+  const [citizenMotherName, setCitizenMotherName] = useState('')
+  const [citizenFatherName, setCitizenFatherName] = useState('')
   const [savingPerson, setSavingPerson] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -59,14 +67,16 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
   const selectedTask = useMemo(() => orderedTasks.find((task) => task.id === selectedTaskId) || null, [selectedTaskId, orderedTasks])
   const professional = accessContext.foundation?.professional
   const selectedOutcome = outcomes.find((item) => item.code === outcome)
+  const attributeOptions = (domain: string) => attributes.filter((item) => item.domain === domain)
 
   async function load() {
     if (!supabase) return
     setLoading(true); setError('')
-    const [contextResult, reasonsResult, outcomesResult] = await Promise.all([
+    const [contextResult, reasonsResult, outcomesResult, attributesResult] = await Promise.all([
       supabase.rpc('census_foundation_my_context'),
       supabase.from('census_visit_reason_catalog').select('id,code,label,version').eq('active', true).order('label').limit(100),
       supabase.from('census_visit_outcome_catalog').select('id,code,label,version').eq('active', true).order('label').limit(50),
+      supabase.from('census_attribute_catalog').select('id,domain,code,label,version').eq('active', true).order('domain').order('label').limit(200),
     ])
     if (contextResult.error) setError(contextResult.error.message)
     else {
@@ -87,6 +97,7 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
     }
     if (reasonsResult.error) setError(reasonsResult.error.message); else setReasons((reasonsResult.data || []) as Catalog[])
     if (outcomesResult.error) setError(outcomesResult.error.message); else setOutcomes((outcomesResult.data || []) as Catalog[])
+    if (attributesResult.error) setError(attributesResult.error.message); else setAttributes((attributesResult.data || []) as AttributeCatalog[])
     setLoading(false)
   }
   useEffect(() => { void load() }, [])
@@ -103,13 +114,13 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
         ? { data: { id: selectedTask.family_id }, error: null }
         : await supabase.from('census_families').insert({ household_id: selectedTask.household_id, family_reference: familyReference.trim() }).select('id').single()
       if (familyResult.error || !familyResult.data) throw new Error(familyResult.error?.message || 'Não foi possível criar a família.')
-      const citizenResult = await supabase.from('census_citizens').insert({ family_id: familyResult.data.id, full_name: citizenName.trim(), birth_date: citizenBirthDate || null, sex: citizenSex, cns: cns || null, cpf: cpf || null, identification_status: cns || cpf ? 'DECLARED' : 'PROVISIONAL', data_source: 'CITIZEN_REPORTED' }).select('id').single()
+      const citizenResult = await supabase.from('census_citizens').insert({ family_id: familyResult.data.id, full_name: citizenName.trim(), birth_date: citizenBirthDate || null, sex: citizenSex, cns: cns || null, cpf: cpf || null, race_color: citizenRaceColor || null, nationality: citizenNationality || null, education_level: citizenEducationLevel || null, occupation: citizenOccupation.trim() || null, mother_name: citizenMotherName.trim() || null, father_name: citizenFatherName.trim() || null, identification_status: cns || cpf ? 'DECLARED' : 'PROVISIONAL', data_source: 'CITIZEN_REPORTED' }).select('id').single()
       if (citizenResult.error || !citizenResult.data) throw new Error(citizenResult.error?.message || 'Não foi possível cadastrar o cidadão.')
       const memberResult = await supabase.from('census_family_members').insert({ family_id: familyResult.data.id, citizen_id: citizenResult.data.id, relationship_code: 'MEMBER', is_responsible: true })
       if (memberResult.error) throw new Error(memberResult.error.message)
       const linkResult = await supabase.rpc('census_attach_task_subject', { p_task_id: selectedTask.id, p_family_id: familyResult.data.id, p_citizen_id: citizenResult.data.id })
       if (linkResult.error) throw new Error(linkResult.error.message)
-      setCitizenCns(''); setCitizenCpf('')
+      setCitizenCns(''); setCitizenCpf(''); setCitizenRaceColor(''); setCitizenNationality(''); setCitizenEducationLevel(''); setCitizenOccupation(''); setCitizenMotherName(''); setCitizenFatherName('')
       setNotice(`Família e cidadão cadastrados. ${cns || cpf ? 'Os identificadores foram validados localmente e permanecem declarados até a confirmação oficial.' : 'O histórico será mantido como identificação provisória até validação posterior.'}`)
       await load()
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Não foi possível salvar a família e o cidadão.') }
@@ -134,7 +145,7 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
     {loading ? <div className="acs-field-empty"><LoaderCircle className="spin" size={22} />Carregando sua agenda…</div> : <div className="acs-field-grid">
       <section className="acs-task-list"><header><div><span className="acs-field-eyebrow"><CalendarClock size={14} /> PRÓXIMAS ATIVIDADES</span><h3>{orderedTasks.length ? `${orderedTasks.length} tarefa(s) em aberto` : 'Nenhuma tarefa planejada'}</h3></div></header>{orderedTasks.length === 0 ? <div className="acs-field-empty"><ClipboardList size={24} /><strong>Sua agenda está livre</strong><span>Quando uma tarefa for atribuída à sua equipe ou microárea, ela aparecerá aqui.</span></div> : <div className="acs-task-items">{orderedTasks.map((task) => <button type="button" key={task.id} className={`acs-task-item${selectedTaskId === task.id ? ' active' : ''}`} onClick={() => setSelectedTaskId(task.id)}><span className="acs-task-priority">{task.priority}</span><span><strong>{task.citizen_name || task.family_reference || 'Domicílio da microárea'}</strong><small>{formatDate(task.due_date)} · {task.reason_label || 'Atividade de campo'}{task.address_line ? ` · ${task.address_line}${task.address_number ? `, ${task.address_number}` : ''}` : ''}{task.neighborhood || task.locality ? ` · ${task.neighborhood || task.locality}` : ''}{task.instructions ? ` · ${task.instructions}` : ''}</small></span></button>)}</div>}</section>
       {selectedTask && <section className="acs-fvd-card"><header><div><span className="acs-field-eyebrow"><ClipboardList size={14} /> FICHA DE VISITA DOMICILIAR</span><h3>{selectedTask.citizen_name || selectedTask.family_reference || 'Domicílio selecionado'}</h3><p>{selectedTask.address_line ? `Endereço: ${selectedTask.address_line}${selectedTask.address_number ? `, ${selectedTask.address_number}` : ''}${selectedTask.neighborhood || selectedTask.locality ? ` · ${selectedTask.neighborhood || selectedTask.locality}` : ''}. ` : ''}Tarefa prevista para {formatDate(selectedTask.due_date)}. O desfecho será salvo com a versão vigente do catálogo.</p></div></header>
-        {!selectedTask.family_id && <div className="acs-person-block"><h4><UsersRound size={15} />Cadastrar família e cidadão</h4><div className="acs-form-grid"><label>Referência da família<input value={familyReference} onChange={(event) => setFamilyReference(event.target.value)} placeholder="Ex.: Família 01" /></label><label>Nome do cidadão<input value={citizenName} onChange={(event) => setCitizenName(event.target.value)} placeholder="Nome informado pelo cidadão" /></label><label>Data de nascimento<input type="date" value={citizenBirthDate} onChange={(event) => setCitizenBirthDate(event.target.value)} /></label><label>Sexo<select value={citizenSex} onChange={(event) => setCitizenSex(event.target.value)}><option value="NI">Não informado</option><option value="F">Feminino</option><option value="M">Masculino</option><option value="O">Outro</option></select></label><label>CNS (opcional)<input value={citizenCns} onChange={(event) => setCitizenCns(event.target.value)} inputMode="numeric" maxLength={18} placeholder="15 dígitos" /></label><label>CPF (opcional)<input value={citizenCpf} onChange={(event) => setCitizenCpf(event.target.value)} inputMode="numeric" maxLength={14} placeholder="000.000.000-00" /></label></div><button type="button" className="fleet-secondary-button" onClick={() => void createFamilyAndCitizen()} disabled={savingPerson || !familyReference.trim() || !citizenName.trim()}>{savingPerson ? 'Salvando…' : 'Salvar família e cidadão'}</button><small>CNS e CPF são normalizados e validados localmente. Não invente identificadores; a confirmação oficial permanece pendente.</small></div>}
+        {!selectedTask.family_id && <div className="acs-person-block"><h4><UsersRound size={15} />Cadastrar família e cidadão</h4><div className="acs-form-grid"><label>Referência da família<input value={familyReference} onChange={(event) => setFamilyReference(event.target.value)} placeholder="Ex.: Família 01" /></label><label>Nome do cidadão<input value={citizenName} onChange={(event) => setCitizenName(event.target.value)} placeholder="Nome informado pelo cidadão" /></label><label>Data de nascimento<input type="date" value={citizenBirthDate} onChange={(event) => setCitizenBirthDate(event.target.value)} /></label><label>Sexo<select value={citizenSex} onChange={(event) => setCitizenSex(event.target.value)}><option value="NI">Não informado</option><option value="F">Feminino</option><option value="M">Masculino</option><option value="O">Outro</option></select></label><label>CNS (opcional)<input value={citizenCns} onChange={(event) => setCitizenCns(event.target.value)} inputMode="numeric" maxLength={18} placeholder="15 dígitos" /></label><label>CPF (opcional)<input value={citizenCpf} onChange={(event) => setCitizenCpf(event.target.value)} inputMode="numeric" maxLength={14} placeholder="000.000.000-00" /></label><label>Raça/cor<select value={citizenRaceColor} onChange={(event) => setCitizenRaceColor(event.target.value)}><option value="">Não informado</option>{attributeOptions('RACE_COLOR').map((item) => <option key={item.id} value={item.code}>{item.label}</option>)}</select></label><label>Nacionalidade<select value={citizenNationality} onChange={(event) => setCitizenNationality(event.target.value)}><option value="">Não informado</option>{attributeOptions('NATIONALITY').map((item) => <option key={item.id} value={item.code}>{item.label}</option>)}</select></label><label>Escolaridade<select value={citizenEducationLevel} onChange={(event) => setCitizenEducationLevel(event.target.value)}><option value="">Não informado</option>{attributeOptions('EDUCATION_LEVEL').map((item) => <option key={item.id} value={item.code}>{item.label}</option>)}</select></label><label>Ocupação<input value={citizenOccupation} onChange={(event) => setCitizenOccupation(event.target.value)} placeholder="Informada pelo cidadão" /></label><label>Nome da mãe<input value={citizenMotherName} onChange={(event) => setCitizenMotherName(event.target.value)} /></label><label>Nome do pai<input value={citizenFatherName} onChange={(event) => setCitizenFatherName(event.target.value)} /></label></div><button type="button" className="fleet-secondary-button" onClick={() => void createFamilyAndCitizen()} disabled={savingPerson || !familyReference.trim() || !citizenName.trim()}>{savingPerson ? 'Salvando…' : 'Salvar família e cidadão'}</button><small>CNS e CPF são normalizados e validados localmente. Não invente identificadores; a confirmação oficial permanece pendente.</small></div>}
         <div className="acs-person-context"><UserRound size={16} /><span>{selectedTask.citizen_name ? `Cidadão: ${selectedTask.citizen_name}` : 'A visita pode ser registrada para o domicílio/família enquanto a identificação individual não estiver disponível.'}</span></div>
         <fieldset><legend>Motivos da visita</legend><div className="acs-reason-grid">{reasons.map((reason) => <label key={reason.id}><input type="checkbox" checked={selectedReasons.includes(reason.code)} onChange={(event) => setSelectedReasons((current) => event.target.checked ? [...current, reason.code] : current.filter((code) => code !== reason.code))} />{reason.label}</label>)}</div></fieldset>
         <div className="acs-form-grid"><label>Data da visita<input type="date" value={visitDate} onChange={(event) => setVisitDate(event.target.value)} /></label><label>Desfecho<select value={outcome} onChange={(event) => setOutcome(event.target.value)}>{outcomes.map((item) => <option key={item.id} value={item.code}>{item.label}</option>)}</select></label><label>Data de retorno (opcional)<input type="date" min={visitDate} value={returnDate} onChange={(event) => setReturnDate(event.target.value)} /></label></div>

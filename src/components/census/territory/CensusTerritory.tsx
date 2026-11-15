@@ -23,6 +23,7 @@ type ManagerAcs = { id: string; name: string }
 type Visit = { id: string; household_id: string; visit_date: string; status: 'IN_PROGRESS' | 'COMPLETED' | 'NO_CONTACT' | 'CANCELLED'; notes: string; created_at: string; completed_at: string | null; acs_id: string | null }
 type FormSnapshot = Pick<QuestionnaireRecord, 'id' | 'slug' | 'title' | 'subtitle' | 'description' | 'version' | 'form_schema'>
 type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; status: 'DRAFT' | 'SUBMITTED'; submitted_at: string | null; created_at: string; questionnaire_version: number; questionnaire_snapshot: FormSnapshot }
+type AttributeOption = { domain: string; code: string; label: string; version: number }
 type MapMode = 'zones' | 'questionnaire' | 'visits'
 type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
@@ -31,7 +32,7 @@ type LotActivity = { householdCount: number; visitCount: number; latestVisit: Vi
 type ResponseEditorState = { responseId: string | null; visitId: string; householdLabel: string; form: FormSnapshot; answers: QuestionnaireAnswers; status: 'DRAFT' | 'SUBMITTED'; readOnly: boolean }
 type QuestionnaireApplyRequest = { household: Household; form: FormSnapshot; previousResponse: ResponseMeta | null; previousAnswers: QuestionnaireAnswers }
 type PendingWrite =
-  | { kind: 'household'; lot: TerritoryLot; lotCode: string; label: string; addressLine: string; addressNumber: string; addressComplement: string; neighborhood: string; postalCode: string; locality: string; latitude: string; longitude: string }
+  | { kind: 'household'; lot: TerritoryLot; lotCode: string; label: string; addressLine: string; addressNumber: string; addressComplement: string; neighborhood: string; postalCode: string; locality: string; latitude: string; longitude: string; propertyType: string; occupancyStatus: string; constructionMaterial: string; roomsCount: string; bedroomsCount: string; waterSupply: string; waterTreatment: string; sewageDisposal: string; toiletAvailable: string; electricityAccess: string; garbageDisposal: string; cookingFuel: string; housingCondition: string }
   | { kind: 'lot-acs'; lot: TerritoryLot; lotCode: string; acsId: string; acsName: string }
   | { kind: 'exclude-lot'; lot: TerritoryLot; reason: LotIndicatorExclusionReason }
   | { kind: 'restore-lot'; lot: TerritoryLot }
@@ -134,6 +135,20 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const [locality, setLocality] = useState('')
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
+  const [propertyType, setPropertyType] = useState('')
+  const [occupancyStatus, setOccupancyStatus] = useState('')
+  const [constructionMaterial, setConstructionMaterial] = useState('')
+  const [roomsCount, setRoomsCount] = useState('')
+  const [bedroomsCount, setBedroomsCount] = useState('')
+  const [waterSupply, setWaterSupply] = useState('')
+  const [waterTreatment, setWaterTreatment] = useState('')
+  const [sewageDisposal, setSewageDisposal] = useState('')
+  const [toiletAvailable, setToiletAvailable] = useState('')
+  const [electricityAccess, setElectricityAccess] = useState('')
+  const [garbageDisposal, setGarbageDisposal] = useState('')
+  const [cookingFuel, setCookingFuel] = useState('')
+  const [housingCondition, setHousingCondition] = useState('')
+  const [attributeCatalog, setAttributeCatalog] = useState<AttributeOption[]>([])
   const [responseEditor, setResponseEditor] = useState<ResponseEditorState | null>(null)
   const [questionnaireApplyRequest, setQuestionnaireApplyRequest] = useState<QuestionnaireApplyRequest | null>(null)
   const [pendingWrite, setPendingWrite] = useState<PendingWrite | null>(null)
@@ -160,20 +175,23 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setLoading(true)
     setMapError('')
     try {
-      const [importsResult, zonesResult, formsResult, assignmentsResult] = await Promise.all([
+      const [importsResult, zonesResult, formsResult, attributeResult, assignmentsResult] = await Promise.all([
         db.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1),
         db.from('census_zones').select('id,name,color,active').order('created_at').limit(500),
         db.from('census_questionnaires').select(formSelect).eq('status', 'ACTIVE').order('updated_at', { ascending: false }).limit(100),
+        db.from('census_attribute_catalog').select('domain,code,label,version').eq('active', true).order('domain').order('label').limit(500),
         db.rpc('census_manager_lot_assignments'),
       ])
       if (importsResult.error) throw new Error(`Não foi possível localizar o mapa salvo: ${importsResult.error.message}`)
       if (zonesResult.error) throw new Error(`Não foi possível carregar as zonas: ${zonesResult.error.message}`)
       if (formsResult.error) throw new Error(`Não foi possível carregar os questionários ativos: ${formsResult.error.message}`)
+      if (attributeResult.error) throw new Error(`Não foi possível carregar os catálogos domiciliares: ${attributeResult.error.message}`)
       if (assignmentsResult.error) throw new Error(`Não foi possível carregar as atribuições gerenciais: ${assignmentsResult.error.message}`)
       const current = (importsResult.data?.[0] || null) as MapImport | null
       setMapImport(current)
       setZones((zonesResult.data || []) as CensusZone[])
       setActiveForms((formsResult.data || []) as QuestionnaireRecord[])
+      setAttributeCatalog((attributeResult.data || []) as AttributeOption[])
       const assignments = (assignmentsResult.data || []) as { lot_id: string; acs_id: string; acs_name: string }[]
       setManagerAcs([...new Map(assignments.map((item) => [item.acs_id, { id: item.acs_id, name: item.acs_name }])).values()].sort((a, b) => a.name.localeCompare(b.name)))
       setManagerAssignments(Object.fromEntries(assignments.map((item) => [item.lot_id, item.acs_id])))
@@ -546,8 +564,18 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       setPanelError('Informe latitude entre -90 e 90 e longitude entre -180 e 180.')
       return
     }
+    const parsedRooms = roomsCount.trim() ? Number(roomsCount) : null
+    const parsedBedrooms = bedroomsCount.trim() ? Number(bedroomsCount) : null
+    if ((parsedRooms !== null && (!Number.isInteger(parsedRooms) || parsedRooms < 0 || parsedRooms > 100)) || (parsedBedrooms !== null && (!Number.isInteger(parsedBedrooms) || parsedBedrooms < 0 || parsedBedrooms > 100))) {
+      setPanelError('Informe cômodos e quartos como números inteiros entre 0 e 100.')
+      return
+    }
+    if (parsedRooms !== null && parsedBedrooms !== null && parsedBedrooms > parsedRooms) {
+      setPanelError('A quantidade de quartos não pode superar a quantidade de cômodos.')
+      return
+    }
     setPanelError('')
-    setPendingWrite({ kind: 'household', lot: selectedLot, lotCode: getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex), label: householdLabel.trim(), addressLine: addressLine.trim(), addressNumber: addressNumber.trim(), addressComplement: addressComplement.trim(), neighborhood: neighborhood.trim(), postalCode: normalizedPostalCode, locality: locality.trim(), latitude: latitude.trim().replace(',', '.'), longitude: longitude.trim().replace(',', '.') })
+    setPendingWrite({ kind: 'household', lot: selectedLot, lotCode: getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex), label: householdLabel.trim(), addressLine: addressLine.trim(), addressNumber: addressNumber.trim(), addressComplement: addressComplement.trim(), neighborhood: neighborhood.trim(), postalCode: normalizedPostalCode, locality: locality.trim(), latitude: latitude.trim().replace(',', '.'), longitude: longitude.trim().replace(',', '.'), propertyType, occupancyStatus, constructionMaterial, roomsCount, bedroomsCount, waterSupply, waterTreatment, sewageDisposal, toiletAvailable, electricityAccess, garbageDisposal, cookingFuel, housingCondition })
   }
 
   function openAcsForm() {
@@ -646,9 +674,9 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setWriting(true); setNotice(''); setPanelError('')
     try {
       if (action.kind === 'household') {
-        const { error } = await supabase.from('census_households').insert({ lot_id: action.lot.id, label: action.label, address_line: action.addressLine || null, address_number: action.addressNumber || null, address_complement: action.addressComplement || null, neighborhood: action.neighborhood || null, postal_code: action.postalCode || null, locality: action.locality || null, latitude: action.latitude ? Number(action.latitude) : null, longitude: action.longitude ? Number(action.longitude) : null, source: 'FIELD_COLLECTION' })
+        const { error } = await supabase.from('census_households').insert({ lot_id: action.lot.id, label: action.label, address_line: action.addressLine || null, address_number: action.addressNumber || null, address_complement: action.addressComplement || null, neighborhood: action.neighborhood || null, postal_code: action.postalCode || null, locality: action.locality || null, latitude: action.latitude ? Number(action.latitude) : null, longitude: action.longitude ? Number(action.longitude) : null, property_type: action.propertyType || null, occupancy_status: action.occupancyStatus || null, construction_material: action.constructionMaterial || null, rooms_count: action.roomsCount ? Number(action.roomsCount) : null, bedrooms_count: action.bedroomsCount ? Number(action.bedroomsCount) : null, water_supply: action.waterSupply || null, water_treatment: action.waterTreatment || null, sewage_disposal: action.sewageDisposal || null, toilet_available: action.toiletAvailable || null, electricity_access: action.electricityAccess || null, garbage_disposal: action.garbageDisposal || null, cooking_fuel: action.cookingFuel || null, housing_condition: action.housingCondition || null, source: 'FIELD_COLLECTION' })
         if (error) throw new Error(error.message)
-        setHouseholdLabel(''); setAddressLine(''); setAddressNumber(''); setAddressComplement(''); setNeighborhood(''); setPostalCode(''); setLocality(''); setLatitude(''); setLongitude(''); setShowHouseholdForm(false)
+        setHouseholdLabel(''); setAddressLine(''); setAddressNumber(''); setAddressComplement(''); setNeighborhood(''); setPostalCode(''); setLocality(''); setLatitude(''); setLongitude(''); setPropertyType(''); setOccupancyStatus(''); setConstructionMaterial(''); setRoomsCount(''); setBedroomsCount(''); setWaterSupply(''); setWaterTreatment(''); setSewageDisposal(''); setToiletAvailable(''); setElectricityAccess(''); setGarbageDisposal(''); setCookingFuel(''); setHousingCondition(''); setShowHouseholdForm(false)
         await loadDossier(action.lot)
         setNoticeTone('success'); setNotice('Domicílio cadastrado com sucesso.')
       }
@@ -701,6 +729,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   }
 
   const selectedZone = selectedLot ? zones.find((zone) => zone.id === selectedLot.zone_id) : null
+  const optionsFor = (domain: string) => attributeCatalog.filter((item) => item.domain === domain)
   const selectedIndex = selectedLot ? lots.findIndex((lot) => lot.id === selectedLot.id) + 1 : 0
   const lotLabel = selectedLot ? lotDisplayName(selectedLot) : ''
   const tooltipLot = mapTooltip ? lots.find((lot) => lot.id === mapTooltip.lotId) || null : null
@@ -815,7 +844,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
           {readOnly && <section className="census-manager-history" aria-label="Histórico das etapas do lote"><header><div><span className="fleet-kicker">HISTÓRICO DO TRABALHO</span><strong>O que já foi realizado</strong></div><span>{selectedLotHistory.length} visita(s)</span></header><ol><li className={households.length ? 'done' : ''}><i />Domicílio cadastrado<small>{households.length ? `${households.length} registro(s) ativo(s)` : 'Ainda pendente'}</small></li><li className={selectedLotHistory.length ? 'done' : ''}><i />Atendimento iniciado<small>{selectedLotHistory.length ? `Última movimentação em ${formatDate(selectedLotHistory[0].created_at, true)}` : 'Nenhuma visita registrada'}</small></li><li className={selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'done' : ''}><i />Visita concluída<small>{selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'Há visita concluída no histórico' : 'Ainda pendente'}</small></li><li className={selectedLotResponseCount > 0 ? 'done' : ''}><i />Questionário registrado<small>{selectedLotResponseCount ? `${selectedLotResponseCount} resposta(s) no histórico` : 'Ainda não há resposta registrada'}</small></li></ol>{selectedLotHistory[0]?.status === 'NO_CONTACT' && <p className="census-manager-history-reason"><strong>Motivo da pendência:</strong> {selectedLotHistory[0].notes?.trim() || 'Sem contato informado pelo ACS.'}</p>}</section>}
           <section className="census-dossier-households"><div className="census-dossier-section-heading"><strong>Domicílios</strong><span>{households.length.toLocaleString('pt-BR')}</span></div>
             {households.map((household, index) => <article className="census-dossier-household" key={household.id}><div><Home size={16} /><strong>{household.label || `Domicílio ${index + 1}`}</strong></div>{readOnly ? <span className="census-dossier-readonly-note">Consulta gerencial · {activeMapForm?.title || 'questionário não selecionado'}</span> : activeForms.length ? <label><span>Aplicar questionário</span><select aria-label={`Aplicar questionário ao ${household.label || `Domicílio ${index + 1}`}`} defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) void requestQuestionnaireApply(household, form); event.currentTarget.value = '' }} disabled={writing || Boolean(selectedLot.indicator_exclusion_reason)}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label> : <span className="census-dossier-no-forms">Nenhum questionário ativo</span>}</article>)}
-            {!readOnly && showHouseholdForm && !selectedLot.indicator_exclusion_reason && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div className="census-household-address-grid"><label>Logradouro<input value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Rua, avenida ou estrada" disabled={writing} /></label><label>Número<input value={addressNumber} onChange={(event) => setAddressNumber(event.target.value)} disabled={writing} /></label><label>Complemento<input value={addressComplement} onChange={(event) => setAddressComplement(event.target.value)} disabled={writing} /></label><label>Bairro/localidade<input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} disabled={writing} /></label><label>CEP<input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="00000-000" disabled={writing} /></label><label>Município/localidade<input value={locality} onChange={(event) => setLocality(event.target.value)} placeholder="Pitangueiras" disabled={writing} /></label><label>Latitude<input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -23.230000" disabled={writing} /></label><label>Longitude<input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -50.050000" disabled={writing} /></label></div><small>O endereço é normalizado e a latitude/longitude são aceitas somente dentro de faixas geográficas válidas. O código oficial do endereço continua pendente de confirmação.</small><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
+            {!readOnly && showHouseholdForm && !selectedLot.indicator_exclusion_reason && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div className="census-household-address-grid"><label>Logradouro<input value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Rua, avenida ou estrada" disabled={writing} /></label><label>Número<input value={addressNumber} onChange={(event) => setAddressNumber(event.target.value)} disabled={writing} /></label><label>Complemento<input value={addressComplement} onChange={(event) => setAddressComplement(event.target.value)} disabled={writing} /></label><label>Bairro/localidade<input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} disabled={writing} /></label><label>CEP<input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="00000-000" disabled={writing} /></label><label>Município/localidade<input value={locality} onChange={(event) => setLocality(event.target.value)} placeholder="Pitangueiras" disabled={writing} /></label><label>Latitude<input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -23.230000" disabled={writing} /></label><label>Longitude<input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -50.050000" disabled={writing} /></label></div><div className="census-household-address-grid"><label>Tipo de imóvel<select value={propertyType} onChange={(event) => setPropertyType(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('PROPERTY_TYPE').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Situação de ocupação<select value={occupancyStatus} onChange={(event) => setOccupancyStatus(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('OCCUPANCY_STATUS').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Material da construção<select value={constructionMaterial} onChange={(event) => setConstructionMaterial(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('CONSTRUCTION_MATERIAL').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Cômodos<input type="number" min="0" max="100" value={roomsCount} onChange={(event) => setRoomsCount(event.target.value)} disabled={writing} /></label><label>Quartos<input type="number" min="0" max="100" value={bedroomsCount} onChange={(event) => setBedroomsCount(event.target.value)} disabled={writing} /></label>{([['waterSupply','Abastecimento de água','WATER_SUPPLY',waterSupply,setWaterSupply],['waterTreatment','Tratamento da água','WATER_TREATMENT',waterTreatment,setWaterTreatment],['sewageDisposal','Destino do esgoto','SEWAGE_DISPOSAL',sewageDisposal,setSewageDisposal],['toiletAvailable','Banheiro disponível','TOILET_AVAILABLE',toiletAvailable,setToiletAvailable],['electricityAccess','Energia elétrica','ELECTRICITY_ACCESS',electricityAccess,setElectricityAccess],['garbageDisposal','Destino do lixo','GARBAGE_DISPOSAL',garbageDisposal,setGarbageDisposal],['cookingFuel','Combustível para cozinhar','COOKING_FUEL',cookingFuel,setCookingFuel],['housingCondition','Condição da moradia','HOUSING_CONDITION',housingCondition,setHousingCondition]] as const).map(([key,label,domain,value,setValue]) => <label key={key}>{label}<select value={value} onChange={(event) => setValue(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor(domain).map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>)}</div><small>Os atributos de moradia e saneamento usam catálogo municipal versionado. Códigos oficiais do e-SUS APS permanecem pendentes de confirmação; a exportação não é iniciada nesta etapa.</small><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
             {!readOnly && !selectedLot.indicator_exclusion_reason && <button type="button" className="census-add-household-button" onClick={() => { setHouseholdLabel(`Domicílio ${households.length + 1}`); setShowHouseholdForm((current) => !current) }} disabled={writing}><Home size={15} />Cadastrar domicílio</button>}
           </section>
           {!readOnly && !activeForms.length && <div className="census-no-active-form"><FileText size={17} /><span>Não há questionários ativos para aplicar.</span><button type="button" onClick={onOpenQuestionnaires}>Abrir Questionários</button></div>}

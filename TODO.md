@@ -218,6 +218,16 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Preservar os estados/cores e a persistência atuais; não criar funcionalidades, indicadores, tabelas ou regras de acesso nem alterar schema/RLS do Supabase.
 - [x] Build/lint concluídos; commit `2c6f2f4` enviado à `main`; workflow Pages `42928604684` concluído com sucesso; página pública e assets responderam HTTP 200 com as mudanças confirmadas. URL: https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/.
 
+## Lacunas ACS: moradia, saneamento e dados sociodemográficos
+
+- [x] Aplicar no Supabase os campos estruturados de moradia e saneamento em `census_households`, com versão local, catálogo municipal versionado e RLS de leitura para usuários autenticados.
+- [x] Aplicar em `census_citizens` raça/cor, nacionalidade, escolaridade, ocupação e filiação, com versão sociodemográfica e normalização de textos.
+- [x] Validar no banco e no frontend domínios catalogados, quantidade de cômodos/quartos e a regra de quartos não superiores a cômodos.
+- [x] Integrar o cadastro de domicílio do mapa territorial e o cadastro de cidadão do fluxo de campo do ACS aos novos campos.
+- [x] Atualizar a matriz de correspondência de `A IMPLEMENTAR` para `A VALIDAR` nos itens implementados.
+- [ ] Confirmar os códigos, obrigatoriedades e regras condicionais no leiaute oficial vigente do e-SUS APS/PEC/LEDI/SISAB; `official_code` e `official_version` permanecem nulos.
+- [ ] Desenvolver e homologar a exportação oficial somente após a confirmação do leiaute; esta etapa não envia dados ao PEC/SISAB/SIAPS.
+
 
 ## Carga sintética para demonstração da Saúde da Família/ACS
 - [x] Alimentar com registros claramente identificados como DEMO as telas Visão Geral, Mapa Territorial e Famílias/visitas, usando o mapa existente (1.582 lotes), as cinco zonas, ACS e o questionário ativo; preservar os registros sintéticos atuais e não apagar linhas. Resultado: 255 domicílios DEMO (50 domicílios principais e um complementar por zona), 185 visitas e 70 respostas.
