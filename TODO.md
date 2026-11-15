@@ -356,12 +356,12 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 
 Observação de teste: o Supabase não tem atribuição ativa `HEALTH_MANAGER`/`UNIT_MANAGER`; o caminho de gestor precisa do primeiro teste por uma conta que o Admin do Sistema associe à Saúde. Nenhuma conta ou convite foi criado nesta implementação.
 
-## Convite pela Saúde com aprovação posterior do Admin (implementado; publicação/teste remoto pendentes)
+## Convite pela Saúde com aprovação posterior do Admin (implementado e publicado; teste remoto pendente)
 - [x] Na tela `Usuários e acessos da Saúde`, o Gestor pode iniciar um convite por nome e e-mail, escolher apenas ACS ou Supervisor de Saúde e uma unidade do próprio escopo, e enviar o convite por e-mail sem criar uma segunda identidade por módulo.
 - [x] O e-mail é enviado imediatamente, mas um trigger no banco mantém a conta inativa e sem atribuições/concessões até aprovação global. O Gestor acompanha o estado; endereços já cadastrados não geram convites duplicados.
 - [x] A Governança Global tem uma tela `Convites pendentes` exclusiva do Admin, mostrando solicitante, pessoa, papel, unidade, módulo e data, com ações distintas de aprovar ou rejeitar.
 - [x] Aprovar, em uma única operação, ativa a conta e concede somente o acesso solicitado após revalidar papel, módulo, unidade, escopo e estado do pedido. Rejeitar registra auditoria e deixa a conta sem acesso.
 - [x] Uma pessoa que tentar entrar antes da decisão vê estado específico de aguardo; uma rejeição não é apresentada como falha técnica nem como acesso liberado.
 - [x] RPCs e Edge Function autorizam o pedido pelo escopo do Gestor, fecham leitura/gravação direta das tabelas e registram envio, aprovação e rejeição na auditoria. Migration aplicada e Edge Function v4 publicada; nenhum convite real foi enviado.
-- [ ] Publicar frontend em `main`/GitHub Pages e confirmar o workflow bem-sucedido.
+- [x] Publicar frontend em `main` no commit `b68f9bc`; o workflow GitHub Pages `43760779919` concluiu com sucesso, e a página e o bundle com os novos marcadores responderam HTTP 200.
 - [ ] Validar visualmente a tela Saúde, a fila Admin, aprovação/rejeição e primeiro acesso com conta de Gestor de Saúde autorizada. Essa conta ainda não existe no Supabase de teste; criar/associar uma requer decisão explícita do Admin, e não foi criada conta sintética.
