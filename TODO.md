@@ -327,3 +327,31 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Criar estrutura versionada de mapeamento por questionário, versão e pergunta, impedindo que respostas JSONB sejam tratadas como payload oficial sem correspondência.
 - [x] Aplicar as migrations no Supabase do projeto `qgkjnzcqjhhqdgxmvtew` e validar o build TypeScript/Vite.
 - [ ] Confirmar códigos e nomes finais contra o leiaute oficial vigente e homologar o adaptador antes de iniciar exportação.
+
+
+## Frontend ACS alinhado à identidade profissional e ao mapa territorial (implementado; aguardando validação visual e publicação)
+- [x] Cadastro/edição de ACS usa somente `health_professionals`; identidade e vínculos oficiais de equipe/microárea usam a estrutura nova. A atribuição direta opcional por lote chama `census_assign_professional_to_lot`.
+- [x] `Zonas e ACS` administra zonas ligadas a microáreas oficiais e encaminha cadastro/vínculo do ACS para Administração da Saúde, sem escrita em tabelas ACS legadas.
+- [x] ACS continua abrindo o mapa; o RPC `census_lot_registration_overview` dirige os estados sem domicílio, domicílio sem família e família vinculada, com detalhes protegidos pelas policies e funções do backend.
+- [x] Só Comércio e Área da Prefeitura são motivos ativos para excluir o lote dos indicadores. Lote vazio legado é tratado como pendência; o banco rejeita motivos antigos e a auditoria das alterações é preservada.
+- [x] O dossiê do gestor continua agregado e somente leitura; autoria de visita no mapa/overview usa `professional_id`, sem leituras diretas do catálogo ACS legado.
+- [x] Corrigido o contexto de Governança: `health_professionals.user_id` é integer, então a sessão UUID agora é resolvida via `usuarios.id`/`usuarios.uuid`; a execução autenticada foi preservada e o teste de regressão passou.
+- [x] Transferência de membro usa `census_transfer_family_member`, com versionamento do vínculo, parentesco do catálogo e opção de responsável substituto; a tela separa transferência de cadastro da pessoa.
+- [x] Build TypeScript/Vite e testes de território, mapa e questionário passaram. Oxlint nos arquivos alterados teve 0 erros e 18 avisos não bloqueantes.
+- [ ] Cobertura gerencial agregada por questionário (um status para cada lote × questionário ativo) ainda requer RPC seguro próprio; o resumo atual mostra a situação cadastral e a atividade agregada, não a cobertura individual de cada formulário.
+- [ ] Validar visualmente com um mapa publicado e testar o fluxo com contas de ACS/gestor. O banco de teste consultado não contém mapa territorial publicado.
+- Offline e sincronização continuam deliberadamente adiados até o fechamento funcional e a liberação do teste de campo; esta entrega não foi enviada ao GitHub Pages.
+
+
+## Governança de contas e acessos por módulo (implementada; publicação pendente)
+- [x] O Admin do Sistema mantém o controle global: convite/criação de contas, ativação e reativação de contas, atribuições de papel/unidade, concessões a todos os módulos, estrutura organizacional e auditoria.
+- [x] Um Gestor de Saúde com papel e concessão `census` ativos vê “Usuários e acessos da Saúde” e pode conceder, alterar ou revogar somente acessos de Saúde a contas municipais existentes.
+- [x] A gestão de Saúde não cria/convoca contas, não pode alterar nem conceder papéis administrativos/de gestor, não pode inativar a conta inteira e não pode conceder acesso a módulos externos à Saúde.
+- [x] Unidades disponíveis ao Gestor de Saúde se limitam à sua unidade organizacional e descendentes; o backend rejeita operações fora do escopo.
+- [x] A Governança global permite ao Admin atribuir papéis ativos de domínio e o backend valida papel×módulo; papéis ACS/ACE/saúde ficam restritos a `census` e papéis genéricos usam apenas os módulos marcados.
+- [x] A gestão local do módulo Saúde oferece apenas ACS e Supervisor de Saúde, que já têm fluxo operacional; papéis de gestor e futuros fluxos clínicos/ACE permanecem no Admin global até sua liberação.
+- [x] O papel `ACS` habilita entrada no módulo, mas não cria identidade profissional, categoria, equipe nem microárea; o cadastro continua separado em Administração da Saúde.
+- [x] Listagens e alterações de acesso usam RPCs autenticados, preservam outros módulos e registram auditoria. A migração encontrou 0 atribuições históricas incompatíveis; o smoke test administrativo retornou 8 papéis concedíveis, 72 unidades e 8 contas, sem retornar nomes/e-mails ao teste.
+- [ ] Integrar ao `main` remoto, publicar no GitHub Pages e confirmar o commit/workflow. Não enviar convites nem criar usuários sintéticos.
+
+Observação de teste: o Supabase não tem atribuição ativa `HEALTH_MANAGER`/`UNIT_MANAGER`; o caminho de gestor precisa do primeiro teste por uma conta que o Admin do Sistema associe à Saúde. Nenhuma conta ou convite foi criado nesta implementação.

@@ -34,8 +34,8 @@ type DashboardRow = {
   household_created_at: string | null
   latest_visit_status: VisitStatus | null
   latest_visit_date: string | null
-  latest_visit_acs_id: string | null
-  latest_visit_acs_name: string | null
+  latest_visit_professional_id: string | null
+  latest_visit_professional_name: string | null
   visit_count: number
   completed_visit_count: number
   in_progress_visit_count: number
@@ -211,7 +211,7 @@ async function fetchDashboardData(): Promise<DashboardData> {
       .limit(500),
     fetchPages<DashboardRow>((from, to) => db
       .from('census_families_visits_dashboard_rows')
-      .select('lot_id,indicator_exclusion_reason,indicator_excluded_at,source_handle,lot_label,zone_id,zone_name,zone_color,household_id,household_label,is_presumed,active_households_in_lot,household_created_at,latest_visit_status,latest_visit_date,latest_visit_acs_id,latest_visit_acs_name,visit_count,completed_visit_count,in_progress_visit_count,no_contact_visit_count,cancelled_visit_count,questionnaire_response_count,submitted_questionnaire_count,draft_questionnaire_count,latest_questionnaire_status,latest_questionnaire_created_at,lot_latest_visit_status,lot_latest_visit_date')
+      .select('lot_id,indicator_exclusion_reason,indicator_excluded_at,source_handle,lot_label,zone_id,zone_name,zone_color,household_id,household_label,is_presumed,active_households_in_lot,household_created_at,latest_visit_status,latest_visit_date,visit_count,completed_visit_count,in_progress_visit_count,no_contact_visit_count,cancelled_visit_count,questionnaire_response_count,submitted_questionnaire_count,draft_questionnaire_count,latest_questionnaire_status,latest_questionnaire_created_at,lot_latest_visit_status,lot_latest_visit_date,latest_visit_professional_id,latest_visit_professional_name')
       .order('source_handle')
       .order('lot_id')
       .order('household_id')
@@ -341,8 +341,8 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
   const acsOptions = useMemo(() => {
     const people = new Map<string, string>()
     for (const row of rows) {
-      if (row.latest_visit_acs_id && row.latest_visit_acs_name) {
-        people.set(row.latest_visit_acs_id, row.latest_visit_acs_name)
+      if (row.latest_visit_professional_id && row.latest_visit_professional_name) {
+        people.set(row.latest_visit_professional_id, row.latest_visit_professional_name)
       }
     }
     return [...people.entries()]
@@ -384,12 +384,12 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
         row.lot_label,
         row.source_handle,
         row.zone_name,
-        row.latest_visit_acs_name,
+        row.latest_visit_professional_name,
       ].some((value) => value?.toLocaleLowerCase('pt-BR').includes(query))
       const matchesZone = zoneFilter === 'ALL'
         || (zoneFilter === 'NO_ZONE' ? !row.zone_id : row.zone_id === zoneFilter)
       const matchesLotVisit = lotVisitFilter === 'ALL' || !row.lot_latest_visit_status
-      const matchesAcs = acsFilter === 'ALL' || row.latest_visit_acs_id === acsFilter
+      const matchesAcs = acsFilter === 'ALL' || row.latest_visit_professional_id === acsFilter
       const matchesHousehold = householdFilter === 'ALL'
         || (householdFilter === 'PRESUMED' ? row.is_presumed : !row.is_presumed)
       const matchesVisit = visitFilter === 'ALL'
@@ -801,7 +801,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
                       {row.zone_name || 'Sem zona'}
                     </span>
                   </td>
-                  <td data-label="ACS da última visita">{row.latest_visit_acs_name || '—'}</td>
+                  <td data-label="ACS da última visita">{row.latest_visit_professional_name || '—'}</td>
                   <td data-label="Visita do domicílio">
                     <span className={`census-family-status-pill ${visitStatusClass(latestStatus)}`}>
                       {latestStatus ? VISIT_LABELS[latestStatus] : 'Sem visita'}

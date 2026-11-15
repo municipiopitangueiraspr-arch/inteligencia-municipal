@@ -162,3 +162,45 @@ Evoluir o painel de Governança já existente, que hoje apenas cadastra secretar
 
 ## Design
 Estilo: **governança institucional clara**. Interface com abas, listas densas, hierarquia organizacional visível, estados de alto contraste e ações reversíveis. Azul petróleo e cinza institucional indicam controle; verde indica ativo/aprovado; âmbar indica pendência; vermelho indica inativo/revogado. Editar uma unidade não apaga histórico; inativar impede novos vínculos, preservando auditoria. Convites deixam explícito que a senha será criada pelo próprio usuário.
+
+
+## Plano — Frontend ACS alinhado à identidade profissional e ao cadastro territorial
+
+### Objetivo e escopo
+Atualizar a interface existente de Saúde da Família/ACS para usar `health_professionals` e `health_professional_assignments` como fonte oficial da identidade e dos vínculos dos ACS, e consumir `census_lot_registration_overview(p_zone_id, p_from, p_to)` para visualizar os estados de registro do território. O ACS continua entrando diretamente no Mapa territorial; o fluxo visual diferencia lote sem domicílio, domicílio sem família e domicílio com família, sem confundir classificação não residencial com pendência. A gestão mantém criação de zona vinculada a microárea oficial; cadastro e vínculo de profissionais são feitos exclusivamente em Administração da Saúde.
+
+### Decisões
+- Remover do frontend gravações e consultas diretas ao catálogo operacional legado `census_acs`; não recriar nem sincronizar registros legados ao salvar um profissional.
+- Usar `health_professionals` para nomes/IDs de ACS e `health_professional_assignments` para microárea/equipe/unidade; as funções territoriais existentes podem manter nomes históricos no contrato RPC, mas seus IDs são tratados como `professional_id` no cliente.
+- Consumir os campos agregados do RPC territorial para estado do domicílio, família, motivo de exclusão e contagens, preservando o mapa/dossiê e as consultas detalhadas somente nos escopos já autorizados.
+- Manter o modelo online nesta etapa. Offline e sincronização de campo continuam fora do escopo até o fechamento funcional e a liberação para teste em campo.
+- Atualizar testes de código que hoje exigem a tabela ACS legada. Fazer build/lint e testes direcionados; não gravar dados de teste no Supabase nem fazer push/publicação nesta etapa.
+
+### Resultado da implementação (15/11/2026)
+- Cadastro de ACS, atribuições profissionais e telas de zona foram alinhados a `health_professionals`, `health_professional_assignments` e microáreas oficiais. O mapa usa a identidade oficial também para autoria de visitas e a atribuição direta por lote chama `census_assign_professional_to_lot`.
+- A visão territorial usa `census_lot_registration_overview` para estados cadastrais e contagens agregadas; o ACS continua com o mapa como entrada. O painel gerencial não recebe conteúdo de respostas.
+- A migration `20261115183000_acs_exclusion_reason_alignment.sql` foi aplicada ao Supabase. O banco agora aceita exclusivamente `COMMERCE` e `MUNICIPAL_AREA`; o guard interromperia a migration se existissem exclusões ativas legadas não revisadas. A verificação posterior confirmou constraint e validação RPC.
+- Build TypeScript/Vite e testes de território, mapa e questionário passaram. Oxlint: zero erros, 18 avisos não bloqueantes.
+- Limites ainda explícitos: falta um RPC agregado seguro de cobertura por lote × questionário ativo para a visão do gestor; o banco de teste não tem mapa publicado para validação visual com lotes; o fluxo offline permanece adiado conforme decisão do projeto. O frontend foi mantido local, sem commit, push ou publicação no GitHub Pages.
+
+
+### Complemento de alinhamento de runtime ACS
+A migration `20261115184000_professional_acs_runtime_alignment.sql` também foi aplicada. A view de famílias/visitas mantém `security_invoker=true`, passa a resolver a autoria pela identidade profissional e acrescenta aliases novos para a tela; a função de vínculo direto a lote não consulta mais `census_acs`; e o contexto de Governança encontra o ACS pelo profissional e vínculo vigentes. A validação pós-migration confirmou esses três pontos e a manutenção das proteções da view. As exclusões e esse alinhamento foram aplicados ao Supabase de teste; nesta migration não houve criação ou alteração de respostas/cadastros pessoais. A exclusão autorizada dos seis ACS legados ocorreu na etapa anterior, com as visitas históricas preservadas.
+
+## Plano — Governança municipal de usuários e acessos por módulo
+
+### Objetivo e limites
+Concluir a gestão central de usuários, papéis, módulos e escopos organizacionais para permitir a expansão futura a outros módulos sem misturar acesso à plataforma com identidade profissional. O Admin do Sistema administra convites e a Governança global; o Gestor de Saúde administra somente contas existentes no módulo Saúde e nas unidades que lhe forem autorizadas. A concessão de módulo não cria cadastro profissional, equipe, microárea ou identidade de ACS.
+
+### Decisões implementadas
+- Restringir cada atribuição aos módulos compatíveis com seu papel, validando a regra no backend durante listagem, gravação e pré-validação do convite.
+- Manter o Admin global como único emissor de convites. O Gestor local não convida, não edita outros módulos e só opera dentro da unidade e das descendentes autorizadas.
+- Mostrar na tela local de Saúde somente os papéis com fluxo operacional liberado hoje: ACS e Supervisor de Saúde. Papéis de gestão ainda não testados e papéis de futuros fluxos clínicos/ACE não podem ser concedidos nessa tela até esses fluxos serem liberados.
+- Registrar alterações de atribuição e módulo na auditoria, com RPCs de acesso autenticado e autorização verificada no servidor.
+
+### Resultado da implementação (15/11/2026)
+A migration `20261115190000_module_scoped_access_governance.sql` implementou a matriz de módulos/papéis, a gestão escopada de acessos, os RPCs e a auditoria. Ela foi seguida por `20261115191000_module_access_grantable_roles.sql`, que restringe no banco e na interface os papéis concedíveis na tela de Saúde. Verificação no Supabase de teste: zero atribuições históricas incompatíveis; a lista sob a identidade Admin retornou 72 unidades, 8 contas visíveis e somente ACS/Supervisor de Saúde como escolhas locais. Teste direto da regra confirmou que outros papéis não são concedíveis nesse fluxo.
+
+O frontend do módulo Saúde e a Governança global foram integrados localmente. A Edge Function `invite-municipal-user` está na versão 3, com verificação JWT e validação de papel/módulo antes do convite. Ainda não existe conta de Gestor de Saúde de teste associada no Supabase; por isso, o escopo visual de um Gestor não foi validado remotamente. Nenhuma conta ou convite de teste foi criado. O frontend ainda não foi enviado para `main` nem publicado no GitHub Pages; o teste remoto de Gestor fica pendente dessa publicação e da associação explícita de uma conta de teste.
+
+Validação final local: build de produção e os quatro testes estruturais (Governança, território, mapa e questionários) passaram. Oxlint retornou zero erros e 20 avisos não bloqueantes. O build mantém o aviso de bundle principal acima de 500 kB após minificação.

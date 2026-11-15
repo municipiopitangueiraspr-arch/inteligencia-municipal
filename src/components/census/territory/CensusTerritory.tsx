@@ -12,20 +12,23 @@ import './CensusTerritory.css'
 
 type Point = [number, number]
 type Bbox = { minX: number; minY: number; maxX: number; maxY: number }
-type LotIndicatorExclusionReason = 'VACANT' | 'PUBLIC'
+type LotIndicatorExclusionReason = 'VACANT' | 'PUBLIC' | 'COMMERCE' | 'MUNICIPAL_AREA'
 type TerritoryLot = { id: string; source_handle: string; label: string | null; cadastral_label: string | null; street_name: string | null; neighborhood_name: string | null; block_reference: string | null; layer_name: string; geometry: Point[]; area: number | null; is_valid: boolean; zone_number: number | null; zone_id: string | null; indicator_exclusion_reason: LotIndicatorExclusionReason | null; indicator_excluded_at: string | null }
 type CensusZone = { id: string; name: string; color: string; microarea_id: string | null; active: boolean }
 type CensusMicroarea = { id: string; code: string; name: string }
 type MapImport = { id: string; file_name: string; status: 'DRAFT' | 'PUBLISHED' | 'ERROR'; bbox: Bbox | null; updated_at: string; division_saved_at: string }
 type Household = { id: string; lot_id: string; label: string; active: boolean; created_at: string }
-type LotAcs = { acs_id: string; full_name: string; scope: 'LOTE' | 'ZONA' }
-type AcsOption = { id: string; full_name: string; email: string | null; active: boolean }
+type LotAcs = { acs_id: string; full_name: string; scope: 'LOTE' | 'ZONA' | 'TERRITORIO' }
+type AcsOption = { id: string; full_name: string; active: boolean; user_id: string | null }
 type ManagerAcs = { id: string; name: string }
-type Visit = { id: string; household_id: string; visit_date: string; status: 'IN_PROGRESS' | 'COMPLETED' | 'NO_CONTACT' | 'CANCELLED'; notes: string; created_at: string; completed_at: string | null; acs_id: string | null }
+type Visit = { id: string; household_id: string; visit_date: string; status: 'IN_PROGRESS' | 'COMPLETED' | 'NO_CONTACT' | 'CANCELLED'; notes: string; created_at: string; completed_at: string | null; professional_id: string | null }
 type FormSnapshot = Pick<QuestionnaireRecord, 'id' | 'slug' | 'title' | 'subtitle' | 'description' | 'version' | 'form_schema'>
 type ResponseMeta = { id: string; visit_id: string; questionnaire_id: string; status: 'DRAFT' | 'SUBMITTED'; submitted_at: string | null; created_at: string; questionnaire_version: number; questionnaire_snapshot: FormSnapshot }
 type AttributeOption = { domain: string; code: string; label: string; version: number }
-type MapMode = 'zones' | 'questionnaire' | 'visits'
+type RegistrationStatus = 'NO_HOUSEHOLD' | 'HOUSEHOLD_WITHOUT_FAMILY' | 'FAMILIES_LINKED' | 'EXCLUDED_NONRESIDENTIAL' | 'EXCLUDED_VACANT'
+type LotRegistrationOverview = { lot_id: string; zone_id: string | null; registration_status: RegistrationStatus; exclusion_reason: LotIndicatorExclusionReason | null; household_count: number; household_without_family_count: number; family_count: number; last_visit_date: string | null; visit_attempt_count: number; completed_visit_count: number }
+type ManagerMonitoringRow = { lot_id: string; zone_id: string | null; zone_name: string | null; acs_id: string | null; acs_name: string | null; lot_status: string; visit_status: string; last_movement_at: string | null; pending_reason: string | null; household_count: number; visit_count: number; submitted_response_count: number }
+type MapMode = 'zones' | 'registration' | 'questionnaire' | 'visits'
 type CoverageStatus = 'answered' | 'partial' | 'draft' | 'questionnaire_pending' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type VisitMapStatus = 'completed' | 'in_progress' | 'no_contact' | 'no_visit' | 'no_activity' | 'cancelled'
 type MapTooltip = { lotId: string; x: number; y: number }
@@ -45,8 +48,10 @@ const mapSelect = 'id,source_handle,label,cadastral_label,street_name,neighborho
 const formSelect = 'id,slug,title,subtitle,description,status,version,form_schema,created_at,updated_at'
 const PAGE_SIZE = 1000
 const indicatorExclusionLabels: Record<LotIndicatorExclusionReason, string> = {
-  VACANT: 'Sem domicílio ocupado / lote vazio',
-  PUBLIC: 'Área ou imóvel público/municipal',
+  VACANT: 'Terreno vazio',
+  PUBLIC: 'Imóvel público/municipal',
+  COMMERCE: 'Comércio',
+  MUNICIPAL_AREA: 'Área da Prefeitura',
 }
 
 function friendlyLotContext(lot: TerritoryLot) {
@@ -90,12 +95,14 @@ function formSnapshot(form: QuestionnaireRecord): FormSnapshot {
 export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all', initialManagerZone = '', onOpenQuestionnaires, onOpenPopulation }: { readOnly?: boolean; initialManagerStatus?: 'all' | 'pending_visit' | CoverageStatus; initialManagerZone?: string; onOpenQuestionnaires: () => void; onOpenPopulation: () => void }) {
   const [mapImport, setMapImport] = useState<MapImport | null>(null)
   const [lots, setLots] = useState<TerritoryLot[]>([])
+  const [registrationOverview, setRegistrationOverview] = useState<LotRegistrationOverview[]>([])
+  const [managerMonitoring, setManagerMonitoring] = useState<ManagerMonitoringRow[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
   const [microareas, setMicroareas] = useState<CensusMicroarea[]>([])
   const [activeForms, setActiveForms] = useState<QuestionnaireRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [mapError, setMapError] = useState('')
-  const [mapMode, setMapMode] = useState<MapMode>('questionnaire')
+  const [mapMode, setMapMode] = useState<MapMode>('registration')
   const [zoneFilterIds, setZoneFilterIds] = useState<string[]>([])
   const [lotSearch, setLotSearch] = useState('')
   const [coverageFormId, setCoverageFormId] = useState('')
@@ -171,6 +178,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const requestRef = useRef(0)
   const tooltipAcsRequestRef = useRef('')
   const tooltipAcsFetchTimerRef = useRef<number | null>(null)
+  const managerByLot = useMemo(() => new Map(managerMonitoring.map((row) => [row.lot_id, row])), [managerMonitoring])
 
   const loadMap = useCallback(async () => {
     const db = supabase
@@ -178,13 +186,14 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setLoading(true)
     setMapError('')
     try {
-      const [importsResult, zonesResult, formsResult, attributeResult, assignmentsResult, microareaResult] = await Promise.all([
+      const [importsResult, zonesResult, formsResult, attributeResult, assignmentsResult, microareaResult, registrationResult] = await Promise.all([
         db.from('census_territory_map_imports').select('id,file_name,status,bbox,updated_at,division_saved_at').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1),
         db.from('census_zones').select('id,name,color,microarea_id,active').order('created_at').limit(500),
         db.from('census_questionnaires').select(formSelect).eq('status', 'ACTIVE').order('updated_at', { ascending: false }).limit(100),
         db.from('census_attribute_catalog').select('domain,code,label,version').eq('active', true).order('domain').order('label').limit(500),
         db.rpc('census_manager_lot_assignments'),
         db.from('health_microareas').select('id,code,name').eq('active', true).order('code').limit(2000),
+        db.rpc('census_lot_registration_overview', { p_zone_id: null, p_from: null, p_to: null }),
       ])
       if (importsResult.error) throw new Error(`Não foi possível localizar o mapa salvo: ${importsResult.error.message}`)
       if (zonesResult.error) throw new Error(`Não foi possível carregar as zonas: ${zonesResult.error.message}`)
@@ -192,40 +201,53 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       if (attributeResult.error) throw new Error(`Não foi possível carregar os catálogos domiciliares: ${attributeResult.error.message}`)
       if (assignmentsResult.error) throw new Error(`Não foi possível carregar as atribuições gerenciais: ${assignmentsResult.error.message}`)
       if (microareaResult.error) throw new Error(`Não foi possível carregar as microáreas: ${microareaResult.error.message}`)
+      if (registrationResult.error) throw new Error(`Não foi possível carregar o resumo de cadastro do território: ${registrationResult.error.message}`)
+      const managerResult = readOnly ? await db.rpc('census_manager_monitoring_context') : null
+      if (managerResult?.error) throw new Error(`Não foi possível carregar o resumo gerencial: ${managerResult.error.message}`)
       const current = (importsResult.data?.[0] || null) as MapImport | null
+      const registrationRows = (registrationResult.data || []) as LotRegistrationOverview[]
       setMapImport(current)
       setZones((zonesResult.data || []) as CensusZone[])
       setMicroareas((microareaResult.data || []) as CensusMicroarea[])
       setActiveForms((formsResult.data || []) as QuestionnaireRecord[])
       setAttributeCatalog((attributeResult.data || []) as AttributeOption[])
+      setRegistrationOverview(registrationRows)
+      setManagerMonitoring((managerResult?.data || []) as ManagerMonitoringRow[])
       const assignments = (assignmentsResult.data || []) as { lot_id: string; acs_id: string; acs_name: string }[]
       setManagerAcs([...new Map(assignments.map((item) => [item.acs_id, { id: item.acs_id, name: item.acs_name }])).values()].sort((a, b) => a.name.localeCompare(b.name)))
       setManagerAssignments(Object.fromEntries(assignments.map((item) => [item.lot_id, item.acs_id])))
-      if (!current) { setLots([]); return }
+      if (!current) { setLots([]); setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([]); setAcsNames({}); return }
       const lotRows = await fetchAllPages<TerritoryLot>((from, to) => db.from('census_territory_map_lots').select(mapSelect).eq('import_id', current.id).order('source_handle').order('id').range(from, to))
-      setLots(lotRows)
-      const lotIds = lotRows.map((lot) => lot.id)
-      const householdRows = (await Promise.all(splitIntoBatches(lotIds).map((batch) => fetchAllPages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,active,created_at').in('lot_id', batch).eq('active', true).order('created_at').order('id').range(from, to))))).flat()
-      setCoverageHouseholds(householdRows)
-      const householdIds = householdRows.map((item) => item.id)
-      const visitRows = householdIds.length ? (await Promise.all(splitIntoBatches(householdIds).map((batch) => fetchAllPages<Visit>((from, to) => db.from('census_visits').select('id,household_id,visit_date,status,notes,created_at,completed_at,acs_id').in('household_id', batch).order('visit_date', { ascending: false }).order('id').range(from, to))))).flat() : []
-      setCoverageVisits(visitRows)
-      const visitIds = visitRows.map((item) => item.id)
-      const responseRows = visitIds.length ? (await Promise.all(splitIntoBatches(visitIds).map((batch) => fetchAllPages<ResponseMeta>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,questionnaire_id,status,submitted_at,created_at,questionnaire_version,questionnaire_snapshot').in('visit_id', batch).order('created_at', { ascending: false }).order('id').range(from, to))))).flat() : []
-      setCoverageResponses(responseRows)
-      const actorIds = [...new Set(visitRows.map((visit) => visit.acs_id).filter((id): id is string => Boolean(id)))]
-      if (actorIds.length) {
-        const actorRows = await Promise.all(splitIntoBatches(actorIds).map((batch) => db.from('census_acs').select('id,full_name').in('id', batch)))
-        setAcsNames(Object.fromEntries(actorRows.flatMap(({ data }) => data || []).map((row) => [row.id, row.full_name])))
-      } else setAcsNames({})
-      if (!coverageFormId && formsResult.data?.[0]?.id) setCoverageFormId(formsResult.data[0].id)
+      const registrationById = new Map(registrationRows.map((row) => [row.lot_id, row]))
+      setLots(lotRows.map((lot) => ({ ...lot, indicator_exclusion_reason: registrationById.get(lot.id)?.exclusion_reason ?? null })))
+      if (readOnly) {
+        setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([]); setAcsNames({})
+      } else {
+        const lotIds = lotRows.map((lot) => lot.id)
+        const householdRows = (await Promise.all(splitIntoBatches(lotIds).map((batch) => fetchAllPages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,active,created_at').in('lot_id', batch).eq('active', true).order('created_at').order('id').range(from, to))))).flat()
+        setCoverageHouseholds(householdRows)
+        const householdIds = householdRows.map((item) => item.id)
+        const visitRows = householdIds.length ? (await Promise.all(splitIntoBatches(householdIds).map((batch) => fetchAllPages<Visit>((from, to) => db.from('census_visits').select('id,household_id,visit_date,status,notes,created_at,completed_at,professional_id').in('household_id', batch).order('visit_date', { ascending: false }).order('id').range(from, to))))).flat() : []
+        setCoverageVisits(visitRows)
+        const visitIds = visitRows.map((item) => item.id)
+        const responseRows = visitIds.length ? (await Promise.all(splitIntoBatches(visitIds).map((batch) => fetchAllPages<ResponseMeta>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,questionnaire_id,status,submitted_at,created_at,questionnaire_version,questionnaire_snapshot').in('visit_id', batch).order('created_at', { ascending: false }).order('id').range(from, to))))).flat() : []
+        setCoverageResponses(responseRows)
+        const actorIds = [...new Set(visitRows.map((visit) => visit.professional_id).filter((id): id is string => Boolean(id)))]
+        if (actorIds.length) {
+          const actorRows = await Promise.all(splitIntoBatches(actorIds).map((batch) => db.from('health_professionals').select('id,full_name').in('id', batch)))
+          setAcsNames(Object.fromEntries(actorRows.flatMap(({ data }) => data || []).map((row) => [row.id, row.full_name])))
+        } else setAcsNames({})
+      }
+      const firstFormId = formsResult.data?.[0]?.id
+      if (firstFormId) setCoverageFormId((current) => current || firstFormId)
     } catch (error) {
       setMapError(error instanceof Error ? error.message : 'Não foi possível carregar o mapa territorial.')
       setMapImport(null)
       setLots([])
-      setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([]); setManagerAcs([]); setManagerAssignments({})
+      setRegistrationOverview([]); setManagerMonitoring([])
+      setCoverageHouseholds([]); setCoverageVisits([]); setCoverageResponses([]); setManagerAcs([]); setManagerAssignments({}); setAcsNames({})
     } finally { setLoading(false) }
-  }, [])
+  }, [readOnly])
 
   useEffect(() => { void loadMap() }, [loadMap])
   useEffect(() => { if (readOnly && initialManagerZone && !initialZoneApplied && lots.length) { setZoneFilterIds([initialManagerZone]); setInitialZoneApplied(true) } }, [initialManagerZone, initialZoneApplied, lots.length, readOnly])
@@ -280,7 +302,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   }, [svgPoint])
 
   useEffect(() => {
-    if (!['zones', 'questionnaire'].includes(mapMode)) return
+    if (!['zones', 'registration', 'questionnaire'].includes(mapMode)) return
     const frame = requestAnimationFrame(() => {
       if (!zoneFilterIds.length) resetMap()
       else fitLotsInViewport(lots.filter((lot) => Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id))))
@@ -298,6 +320,15 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     setHouseholds([]); setAuthorized(false)
     setLotAcs([]); setAcsOptions([]); setCanManageAcs(false); setShowAcsForm(false); setSelectedAcsId('')
     try {
+      if (readOnly) {
+        const managerRow = managerByLot.get(lot.id)
+        if (!managerRow) throw new Error('O resumo gerencial não retornou dados para este lote.')
+        if (requestId === requestRef.current) {
+          setAuthorized(true)
+          setLotAcs(managerRow.acs_id && managerRow.acs_name ? [{ acs_id: managerRow.acs_id, full_name: managerRow.acs_name, scope: 'TERRITORIO' }] : [])
+        }
+        return
+      }
       const { data: canAccess, error: accessError } = await db.rpc('census_user_can_access_lot', { p_lot_id: lot.id })
       if (accessError) throw new Error(`Não foi possível verificar o acesso ao lote: ${accessError.message}`)
       if (canAccess !== true) {
@@ -313,8 +344,8 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       const isManager = managerResult.data === true
       let options: AcsOption[] = []
       if (isManager) {
-        const optionsResult = await db.from('census_acs').select('id,full_name,email,active').eq('active', true).order('full_name').limit(500)
-        if (optionsResult.error) throw new Error(`Não foi possível carregar o catálogo de ACS: ${optionsResult.error.message}`)
+        const optionsResult = await db.from('health_professionals').select('id,full_name,active,user_id').eq('professional_category', 'ACS').eq('active', true).order('full_name').limit(500)
+        if (optionsResult.error) throw new Error(`Não foi possível carregar os profissionais ACS: ${optionsResult.error.message}`)
         options = (optionsResult.data || []) as AcsOption[]
       }
       const householdRows = await fetchAllPages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,active,created_at').eq('lot_id', lot.id).eq('active', true).order('created_at').order('id').range(from, to))
@@ -325,7 +356,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     } finally {
       if (requestId === requestRef.current) setDetailLoading(false)
     }
-  }, [])
+  }, [managerByLot, readOnly])
 
   function selectLot(lot: TerritoryLot) {
     setMapTooltip(null)
@@ -371,6 +402,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     }
     return result
   }, [coverageFormId, coverageHouseholds, coverageResponses, coverageVisits, lots, readOnly])
+  const registrationByLot = useMemo(() => new Map(registrationOverview.map((row) => [row.lot_id, row])), [registrationOverview])
   const visitStatusByLot = useMemo(() => {
     const householdByLot = new Map<string, Household[]>()
     for (const household of coverageHouseholds) householdByLot.set(household.lot_id, [...(householdByLot.get(household.lot_id) || []), household])
@@ -378,12 +410,17 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     for (const visit of coverageVisits) visitsByHousehold.set(visit.household_id, [...(visitsByHousehold.get(visit.household_id) || []), visit])
     const result = new Map<string, VisitMapStatus>()
     for (const lot of lots) {
+      if (readOnly) {
+        const status = managerByLot.get(lot.id)?.visit_status
+        result.set(lot.id, status === 'NO_ACTIVITY' ? 'no_activity' : status === 'NO_VISIT' ? 'no_visit' : status === 'IN_PROGRESS' ? 'in_progress' : status === 'NO_CONTACT' ? 'no_contact' : status === 'CANCELLED' ? 'cancelled' : 'completed')
+        continue
+      }
       const visits = (householdByLot.get(lot.id) || []).flatMap((household) => visitsByHousehold.get(household.id) || []).sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
       const latest = visits[0]
       result.set(lot.id, !(householdByLot.get(lot.id) || []).length ? 'no_activity' : !latest ? 'no_visit' : latest.status === 'IN_PROGRESS' ? 'in_progress' : latest.status === 'NO_CONTACT' ? 'no_contact' : latest.status === 'CANCELLED' ? 'cancelled' : 'completed')
     }
     return result
-  }, [coverageHouseholds, coverageVisits, lots])
+  }, [coverageHouseholds, coverageVisits, lots, managerByLot, readOnly])
   const activityByLot = useMemo(() => {
     const result = new Map<string, LotActivity>()
     const lotByHousehold = new Map<string, string>()
@@ -403,8 +440,9 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       if (!current.latestVisit || visitTime > latestTime) current.latestVisit = visit
       result.set(lotId, current)
     }
+    if (readOnly) for (const row of managerMonitoring) result.set(row.lot_id, { householdCount: row.household_count, visitCount: row.visit_count, latestVisit: null })
     return result
-  }, [coverageHouseholds, coverageVisits])
+  }, [coverageHouseholds, coverageVisits, managerMonitoring, readOnly])
   const householdLabelByLot = useMemo(() => {
     const result = new Map<string, string>()
     for (const household of coverageHouseholds) if (!result.has(household.lot_id) && household.label?.trim()) result.set(household.lot_id, household.label.trim())
@@ -425,8 +463,27 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     }
     return result
   }, [coverageHouseholds, coverageResponses, coverageVisits])
-  const mapStatus = (lot: TerritoryLot): CoverageStatus => coverageByLot.get(lot.id) || 'no_visit'
+  const mapStatus = (lot: TerritoryLot): CoverageStatus => {
+    if (readOnly) {
+      const row = managerByLot.get(lot.id)
+      if (row?.lot_status === 'COMPLETED') return 'answered'
+      if (row?.lot_status === 'NO_CONTACT') return 'no_contact'
+      if (row?.lot_status === 'NOT_STARTED') return 'no_activity'
+      if (row?.visit_status === 'IN_PROGRESS') return 'in_progress'
+      if (row?.visit_status === 'NO_VISIT') return 'no_visit'
+      if (row?.visit_status === 'CANCELLED') return 'cancelled'
+      return row?.visit_status === 'COMPLETED' ? 'questionnaire_pending' : 'no_activity'
+    }
+    return coverageByLot.get(lot.id) || 'no_visit'
+  }
   const mapVisitStatus = (lot: TerritoryLot): VisitMapStatus => visitStatusByLot.get(lot.id) || 'no_visit'
+  const isNonResidentialLot = (lot: TerritoryLot) => ['COMMERCE', 'MUNICIPAL_AREA', 'PUBLIC'].includes(lot.indicator_exclusion_reason || '')
+  const registrationStatus = (lot: TerritoryLot): RegistrationStatus => {
+    const status = registrationByLot.get(lot.id)?.registration_status
+    return status === 'EXCLUDED_VACANT' && !isNonResidentialLot(lot) ? 'NO_HOUSEHOLD' : status || 'NO_HOUSEHOLD'
+  }
+  const registrationLabels: Record<RegistrationStatus, string> = { NO_HOUSEHOLD: 'Sem domicílio', HOUSEHOLD_WITHOUT_FAMILY: 'Domicílio sem família', FAMILIES_LINKED: 'Família cadastrada', EXCLUDED_NONRESIDENTIAL: 'Comércio/área não residencial', EXCLUDED_VACANT: 'Lote vazio' }
+  const registrationColors: Record<RegistrationStatus, string> = { NO_HOUSEHOLD: '#94a3b8', HOUSEHOLD_WITHOUT_FAMILY: '#e07b16', FAMILIES_LINKED: '#198754', EXCLUDED_NONRESIDENTIAL: '#6b7280', EXCLUDED_VACANT: '#6b7280' }
   const mapStatusLabels: Record<CoverageStatus, string> = { answered: 'Concluído', partial: 'Pendente', draft: 'Pendente', questionnaire_pending: 'Pendente', in_progress: 'Pendente', no_contact: 'Sem contato', no_visit: 'Não iniciado', no_activity: 'Não iniciado', cancelled: 'Pendente' }
   const statusColors: Record<CoverageStatus, string> = { answered: '#198754', partial: '#e07b16', draft: '#e07b16', questionnaire_pending: '#e07b16', in_progress: '#e07b16', no_contact: '#c62828', no_visit: '#9aa3ad', no_activity: '#9aa3ad', cancelled: '#e07b16' }
   const visitStatusLabels: Record<VisitMapStatus, string> = { completed: 'Visita concluída', in_progress: 'Em andamento', no_contact: 'Sem contato', no_visit: 'Sem visita', no_activity: 'Sem cadastro e sem atividade', cancelled: 'Cancelada' }
@@ -434,7 +491,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const activeMapForm = activeForms.find((form) => form.id === coverageFormId)
   const visibleZoneOptions = zones.filter((zone) => zone.active && lots.some((lot) => lot.zone_id === zone.id))
   const zoneLabel = (zone: CensusZone) => { const microarea = microareas.find((item) => item.id === zone.microarea_id); return microarea ? `${zone.name} · ${microarea.code}` : `${zone.name} · microárea pendente` }
-  const zoneScopedLots = lots.filter((lot) => !(mapMode === 'zones' || mapMode === 'questionnaire') || !zoneFilterIds.length || Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id)))
+  const zoneScopedLots = lots.filter((lot) => !(mapMode === 'zones' || mapMode === 'registration' || mapMode === 'questionnaire') || !zoneFilterIds.length || Boolean(lot.zone_id && zoneFilterIds.includes(lot.zone_id)))
   const visibleLots = lots.filter((lot) => {
     const normalizedSearch = lotSearch.trim().toLowerCase()
     if (normalizedSearch) {
@@ -444,22 +501,23 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       const zoneText = zone ? zoneLabel(zone) : ''
       if (![lotDisplayName(lot), code, lot.label || '', lot.cadastral_label || '', lot.street_name || '', lot.neighborhood_name || '', lot.block_reference || '', lot.source_handle, zoneText].some((value) => value.toLowerCase().includes(normalizedSearch))) return false
     }
-    if ((mapMode === 'zones' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
+    if ((mapMode === 'zones' || mapMode === 'registration' || mapMode === 'questionnaire') && zoneFilterIds.length && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))) return false
     if (readOnly && managerAcsFilter && managerAssignments[lot.id] !== managerAcsFilter) return false
     if (readOnly && managerStatusFilter !== 'all' && mapStatus(lot) !== managerStatusFilter) return false
     if (readOnly && managerVisitFilter !== 'all' && mapVisitStatus(lot) !== managerVisitFilter) return false
     if (readOnly && managerPeriodFilter !== 'all') {
       const latest = activityByLot.get(lot.id)?.latestVisit
       const cutoff = Date.now() - Number(managerPeriodFilter) * 24 * 60 * 60 * 1000
-      if (!latest || new Date(`${latest.visit_date}T12:00:00`).getTime() < cutoff) return false
+      const movement = readOnly ? managerByLot.get(lot.id)?.last_movement_at : latest?.visit_date
+      if (!movement || new Date(movement).getTime() < cutoff) return false
     }
     if (mapMode === 'questionnaire' && coverageFormId && questionnaireStatusFilter !== 'all' && (lot.indicator_exclusion_reason || mapStatus(lot) !== questionnaireStatusFilter)) return false
     return true
   })
-  const preserveContextLots = !managerAcsFilter && managerStatusFilter === 'all' && managerVisitFilter === 'all' && managerPeriodFilter === 'all' && (mapMode === 'zones' || mapMode === 'questionnaire') && (zoneFilterIds.length > 0 || (mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all'))
+  const preserveContextLots = !managerAcsFilter && managerStatusFilter === 'all' && managerVisitFilter === 'all' && managerPeriodFilter === 'all' && (mapMode === 'zones' || mapMode === 'registration' || mapMode === 'questionnaire') && (zoneFilterIds.length > 0 || (mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all'))
   const mapLotsToRender = preserveContextLots ? lots : visibleLots
   const mapMetrics = (() => {
-    const eligibleLots = visibleLots.filter((lot) => !lot.indicator_exclusion_reason)
+    const eligibleLots = visibleLots.filter((lot) => !isNonResidentialLot(lot))
     const coverageStatuses = eligibleLots.map((lot) => mapStatus(lot))
     const visitStatuses = eligibleLots.map((lot) => mapVisitStatus(lot))
     const answered = coverageStatuses.filter((status) => status === 'answered').length
@@ -468,7 +526,8 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     const noContact = visitStatuses.filter((status) => status === 'no_contact').length
     const inProgress = visitStatuses.filter((status) => status === 'in_progress').length
     const completed = visitStatuses.filter((status) => status === 'completed').length
-    return { answered, pending, visited, noContact, inProgress, completed, noVisit: visitStatuses.filter((status) => status === 'no_visit').length, noActivity: visitStatuses.filter((status) => status === 'no_activity').length, coverage: coverageStatuses.length ? Math.round((answered / coverageStatuses.length) * 1000) / 10 : 0, eligibleLots: eligibleLots.length, excludedLots: zoneScopedLots.filter((lot) => Boolean(lot.indicator_exclusion_reason)).length }
+    const registrationRows = eligibleLots.map((lot) => registrationByLot.get(lot.id)?.registration_status).filter((status): status is RegistrationStatus => Boolean(status))
+    return { answered, pending, visited, noContact, inProgress, completed, noVisit: visitStatuses.filter((status) => status === 'no_visit').length, noActivity: visitStatuses.filter((status) => status === 'no_activity').length, coverage: coverageStatuses.length ? Math.round((answered / coverageStatuses.length) * 1000) / 10 : 0, eligibleLots: eligibleLots.length, excludedLots: zoneScopedLots.filter(isNonResidentialLot).length, noHousehold: registrationRows.filter((status) => status === 'NO_HOUSEHOLD').length, householdWithoutFamily: registrationRows.filter((status) => status === 'HOUSEHOLD_WITHOUT_FAMILY').length, familiesLinked: registrationRows.filter((status) => status === 'FAMILIES_LINKED').length }
   })()
 
   function startPan(event: ReactPointerEvent<HTMLDivElement>) {
@@ -594,17 +653,17 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
 
   function requestAcsSave() {
     const option = acsOptions.find((item) => item.id === selectedAcsId)
-    if (!selectedLot || !option?.email?.trim()) return
+    if (!selectedLot || !option?.user_id) return
     setPendingWrite({ kind: 'lot-acs', lot: selectedLot, lotCode: getMapLotCode(selectedLot.label, selectedLot.source_handle, selectedIndex), acsId: option.id, acsName: option.full_name })
   }
 
   function requestLotIndicatorExclusion() {
-    if (!selectedLot || !indicatorExclusionReason || selectedLot.indicator_exclusion_reason) return
+    if (!selectedLot || !indicatorExclusionReason || isNonResidentialLot(selectedLot)) return
     setPendingWrite({ kind: 'exclude-lot', lot: selectedLot, reason: indicatorExclusionReason })
   }
 
   function requestLotIndicatorRestoration() {
-    if (!selectedLot || !canManageAcs || !selectedLot.indicator_exclusion_reason) return
+    if (!selectedLot || !canManageAcs || !isNonResidentialLot(selectedLot)) return
     setPendingWrite({ kind: 'restore-lot', lot: selectedLot })
   }
 
@@ -691,7 +750,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
         setNoticeTone('success'); setNotice(activeForms.length ? 'Domicílio cadastrado. Agora escolha o questionário para completar o levantamento.' : 'Domicílio cadastrado com sucesso.')
       }
       if (action.kind === 'lot-acs') {
-        const { error } = await supabase.rpc('census_assign_acs_to_lot', { p_lot_id: action.lot.id, p_acs_id: action.acsId })
+        const { error } = await supabase.rpc('census_assign_professional_to_lot', { p_lot_id: action.lot.id, p_professional_id: action.acsId })
         if (error) throw new Error(error.message)
         setShowAcsForm(false); setSelectedAcsId('')
         await loadDossier(action.lot)
@@ -746,12 +805,8 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const tooltipZone = tooltipLot ? zones.find((zone) => zone.id === tooltipLot.zone_id) : null
   const tooltipActivity = tooltipLot ? activityByLot.get(tooltipLot.id) : null
   const tooltipLatestCensus = tooltipLot ? latestSubmissionByLot.get(tooltipLot.id) : null
-  const selectedLotHistory = selectedLot ? coverageVisits
-    .filter((visit) => coverageHouseholds.some((household) => household.id === visit.household_id && household.lot_id === selectedLot.id))
-    .sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`)) : []
-  const selectedLotResponseCount = selectedLot ? coverageResponses.filter((response) => selectedLotHistory.some((visit) => visit.id === response.visit_id)).length : 0
-  const tooltipStatus = tooltipLot ? (tooltipLot.indicator_exclusion_reason ? `Fora dos indicadores · ${indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason]}` : mapMode === 'zones' ? tooltipZone ? `Zona: ${tooltipZone.name}` : 'Sem zona' : mapMode === 'visits' ? visitStatusLabels[mapVisitStatus(tooltipLot)] : mapStatusLabels[mapStatus(tooltipLot)]) : ''
-  const tooltipStatusColor = tooltipLot ? (tooltipLot.indicator_exclusion_reason ? '#6b7280' : mapMode === 'zones' ? tooltipZone?.color || 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[mapVisitStatus(tooltipLot)] : statusColors[mapStatus(tooltipLot)]) : ''
+  const tooltipStatus = tooltipLot ? (isNonResidentialLot(tooltipLot) ? `Fora dos indicadores · ${indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason!]}` : mapMode === 'zones' ? tooltipZone ? `Zona: ${tooltipZone.name}` : 'Sem zona' : mapMode === 'registration' ? registrationLabels[registrationStatus(tooltipLot)] : mapMode === 'visits' ? visitStatusLabels[mapVisitStatus(tooltipLot)] : mapStatusLabels[mapStatus(tooltipLot)]) : ''
+  const tooltipStatusColor = tooltipLot ? (isNonResidentialLot(tooltipLot) ? '#6b7280' : mapMode === 'zones' ? tooltipZone?.color || 'var(--acs-chart-no-activity)' : mapMode === 'registration' ? registrationColors[registrationStatus(tooltipLot)] : mapMode === 'visits' ? visitStatusColors[mapVisitStatus(tooltipLot)] : statusColors[mapStatus(tooltipLot)]) : ''
 
   return <section className="census-territory" aria-busy={loading || writing}>
     {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={16} /> : noticeTone === 'success' ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}{notice}</div>}
@@ -762,20 +817,22 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">MONITORAMENTO TERRITORIAL</span><strong>{readOnly ? 'Onde a equipe precisa de atenção?' : 'O que você precisa fazer?'}</strong></div></div>
       {readOnly && <div className="census-map-filter-row census-manager-filter-row"><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><UsersRound size={14} />ACS responsável</span><select value={managerAcsFilter} onChange={(event) => { setManagerAcsFilter(event.target.value); setMapTooltip(null) }}><option value="">Todos os ACS</option>{managerAcs.map((acs) => <option key={acs.id} value={acs.id}>{acs.name}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><Filter size={14} />Situação do lote</span><select value={managerStatusFilter} onChange={(event) => { setManagerStatusFilter(event.target.value as 'all' | 'pending_visit' | CoverageStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option><option value="pending_visit">Pendente · visita não concluída</option><option value="no_activity">Não iniciado</option><option value="no_visit">Não iniciado · sem visita</option><option value="in_progress">Pendente · em andamento</option><option value="questionnaire_pending">Pendente · falta questionário</option><option value="draft">Pendente · rascunho</option><option value="no_contact">Sem contato</option><option value="answered">Concluído</option></select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><ClipboardCheck size={14} />Situação da visita</span><select value={managerVisitFilter} onChange={(event) => { setManagerVisitFilter(event.target.value as 'all' | VisitMapStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option>{Object.entries(visitStatusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><RotateCcw size={14} />Período da última visita</span><select value={managerPeriodFilter} onChange={(event) => { setManagerPeriodFilter(event.target.value as 'all' | '7' | '30' | '90'); setMapTooltip(null) }}><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label><span className="census-manager-filter-help">{initialManagerZone ? `Recorte inicial: zona ${zones.find((zone) => zone.id === initialManagerZone)?.name || 'selecionada'}. ` : ''}{initialManagerStatus === 'draft' ? 'Recorte inicial: lotes com questionário em rascunho. ' : initialManagerStatus === 'pending_visit' ? 'Recorte inicial: lotes sem visita concluída. ' : ''}Filtros apenas recortam o mapa e a lista. Gestor e Prefeito não alteram domicílios, visitas ou questionários nesta visão.</span></div>}
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
-        <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><MapPinned size={15} />Situação dos lotes</button>
+        <button type="button" aria-pressed={mapMode === 'registration'} data-state="territory" className={mapMode === 'registration' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('registration') }}><Home size={15} />Cadastro e famílias</button>
+        {!readOnly && <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><MapPinned size={15} />Questionários</button>}
         <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><Home size={15} />Visualizar zonas</button>
         <button type="button" aria-pressed={mapMode === 'visits'} data-state="visits" className={mapMode === 'visits' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('visits') }}><ClipboardCheck size={15} />Visitas de rotina</button>
       </div>
-      {(mapMode === 'zones' || mapMode === 'questionnaire') && <div className="census-map-step-group census-map-step-filters"><div className="census-map-stage-heading compact"><span className="census-map-stage-number">2</span><div><span className="fleet-kicker">REFINE O RECORTE</span><strong>{mapMode === 'questionnaire' ? 'Escolha a zona em foco' : 'Quais zonas deseja ver?'}</strong></div></div><div className="census-map-zone-filters" role="group" aria-label="Filtrar lotes por zona">
+      {(mapMode === 'zones' || mapMode === 'registration' || mapMode === 'questionnaire') && <div className="census-map-step-group census-map-step-filters"><div className="census-map-stage-heading compact"><span className="census-map-stage-number">2</span><div><span className="fleet-kicker">REFINE O RECORTE</span><strong>{mapMode === 'questionnaire' ? 'Escolha a zona em foco' : 'Quais zonas deseja ver?'}</strong></div></div><div className="census-map-zone-filters" role="group" aria-label="Filtrar lotes por zona">
         <div className="census-map-zone-filter-options"><span className="census-map-filter-caption"><Filter size={14} />Zonas exibidas</span><button type="button" className={`census-map-zone-chip all${zoneFilterIds.length === 0 ? ' active' : ''}`} aria-pressed={zoneFilterIds.length === 0} onClick={resetZoneFilter}>Todas as zonas</button>{visibleZoneOptions.map((zone) => <button type="button" key={zone.id} className={`census-map-zone-chip${zoneFilterIds.includes(zone.id) ? ' active' : ''}`} aria-pressed={zoneFilterIds.includes(zone.id)} onClick={() => toggleZoneFilter(zone.id)}><i style={{ background: zone.color }} />{zoneLabel(zone)}</button>)}</div>
         <small className="census-map-filter-count">Exibindo {visibleLots.length.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes</small>
       </div></div>}
-      {mapMode === 'questionnaire' && <div className="census-map-step-group census-map-step-filters"><div className="census-map-filter-subheading"><FileText size={14} /><strong>Critérios da cobertura</strong></div><div className="census-map-filter-row">
+      {mapMode === 'questionnaire' && !readOnly && <div className="census-map-step-group census-map-step-filters"><div className="census-map-filter-subheading"><FileText size={14} /><strong>Critérios da cobertura</strong></div><div className="census-map-filter-row">
         <label className="census-map-filter-control acs-filter-select" data-tone="questionnaire"><span className="acs-filter-caption"><FileText size={14} />Questionário</span><select value={coverageFormId} onChange={(event) => { setMapTooltip(null); setCoverageFormId(event.target.value) }}><option value="">Selecione</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label>
         {!readOnly && <label className="census-map-filter-control acs-filter-select" data-tone="questionnaire"><span className="acs-filter-caption"><Filter size={14} />Situação do questionário</span><select value={questionnaireStatusFilter} onChange={(event) => { setMapTooltip(null); setQuestionnaireStatusFilter(event.target.value as 'all' | CoverageStatus) }} disabled={!coverageFormId}><option value="all">Todas as situações</option>{Object.entries(mapStatusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>}
         <small className="census-map-filter-count">Exibindo {visibleLots.length.toLocaleString('pt-BR')} de {lots.length.toLocaleString('pt-BR')} lotes</small>
       </div></div>}
-      {(mapMode === 'questionnaire' && coverageFormId || mapMode === 'visits' || mapMode === 'zones') && <div className="census-map-stage-heading census-map-metrics-heading"><span className="census-map-stage-number">3</span><div><span className="fleet-kicker">RESUMO DO RECORTE</span><strong>{mapMode === 'zones' ? 'Composição territorial' : mapMode === 'visits' ? 'Indicadores das visitas' : 'Cobertura do questionário'}</strong></div><small>Os números acompanham os filtros selecionados.</small></div>}
+      {(mapMode === 'registration' || mapMode === 'questionnaire' && coverageFormId || mapMode === 'visits' || mapMode === 'zones') && <div className="census-map-stage-heading census-map-metrics-heading"><span className="census-map-stage-number">3</span><div><span className="fleet-kicker">RESUMO DO RECORTE</span><strong>{mapMode === 'registration' ? 'Cadastro domiciliar e familiar' : mapMode === 'zones' ? 'Composição territorial' : mapMode === 'visits' ? 'Indicadores das visitas' : 'Cobertura do questionário'}</strong></div><small>Os números acompanham os filtros selecionados.</small></div>}
+      {mapMode === 'registration' && <div className="census-map-metrics zone-metrics" aria-label="Resumo do cadastro domiciliar e familiar"><div><strong>{mapMetrics.noHousehold.toLocaleString('pt-BR')}</strong><span>Lotes sem domicílio</span></div><div><strong>{mapMetrics.householdWithoutFamily.toLocaleString('pt-BR')}</strong><span>Domicílios sem família</span></div><div><strong>{mapMetrics.familiesLinked.toLocaleString('pt-BR')}</strong><span>Lotes com famílias</span></div><div><strong>{mapMetrics.excludedLots.toLocaleString('pt-BR')}</strong><span>Comércio/área excluídos</span></div></div>}
       {mapMode === 'questionnaire' && coverageFormId && <div className="census-map-metrics" aria-label={`Indicadores de ${mapMetrics.eligibleLots.toLocaleString('pt-BR')} lotes incluídos`}><div className="coverage"><strong>{mapMetrics.coverage}%<small>{mapMetrics.eligibleLots.toLocaleString('pt-BR')} lotes incluídos</small></strong><span>Cobertura</span></div><div className="completed"><strong>{mapMetrics.answered.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes respondidos</span></div><div className="pending"><strong>{mapMetrics.pending.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes sem resposta enviada</span></div><div className="no-contact"><strong>{mapMetrics.noContact.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes sem contato</span></div></div>}
       {mapMode === 'questionnaire' && coverageFormId && mapMetrics.excludedLots > 0 && <div className="census-map-exclusion-note" role="status"><ShieldCheck size={15} /><span>{mapMetrics.excludedLots.toLocaleString('pt-BR')} lote(s) fora do cálculo. Continuam visíveis no mapa, mas não entram nos indicadores atuais ou históricos.</span></div>}
       {mapMode === 'visits' && <div className="census-map-metrics" aria-label={`Indicadores de ${mapMetrics.eligibleLots.toLocaleString('pt-BR')} lotes incluídos`}><div className="recorded"><strong>{mapMetrics.visited.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita registrada</span></div><div className="no-visit"><strong>{mapMetrics.noVisit.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Domicílio cadastrado, sem visita</span></div><div className="no-activity"><strong>{mapMetrics.noActivity.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Sem cadastro e sem atividade</span></div><div className="in-progress"><strong>{mapMetrics.inProgress.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes em andamento</span></div><div className="completed"><strong>{mapMetrics.completed.toLocaleString('pt-BR')}<small>/ {mapMetrics.eligibleLots.toLocaleString('pt-BR')}</small></strong><span>Lotes com visita concluída</span></div></div>}
@@ -787,7 +844,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     <label className="census-territory-search"><Search size={16} /><input value={lotSearch} onChange={(event) => setLotSearch(event.target.value)} placeholder="Buscar código, identificação ou zona" aria-label="Buscar domicílio" /><span>{visibleLots.length.toLocaleString('pt-BR')} resultado(s)</span></label>
     <div className={`census-territory-workspace${selectedLot ? ' with-panel' : ''}`}>
       <div className="census-territory-map-card">
-        <div className="census-territory-toolbar"><span><MapPinned size={15} />{mapMode === 'zones' ? 'As cores identificam as zonas selecionadas' : mapMode === 'visits' ? 'Cores indicam a situação das visitas' : activeMapForm ? `Cobertura do questionário: ${activeMapForm.title}` : 'Selecione um questionário para consultar a cobertura'} · Selecione um lote para abrir o dossiê; arraste o mapa para deslocá-lo.</span><div><button type="button" onClick={() => setZoom((current) => Math.min(24, current * 1.25))} aria-label="Aumentar zoom" disabled={loading || !lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(0.65, current / 1.25))} aria-label="Reduzir zoom" disabled={loading || !lots.length}><Minus size={16} /></button><button type="button" onClick={resetMap} aria-label="Restaurar mapa" disabled={loading || !lots.length}><RotateCcw size={15} /></button></div></div>
+        <div className="census-territory-toolbar"><span><MapPinned size={15} />{mapMode === 'registration' ? 'As cores mostram lote sem domicílio, domicílio sem família e família cadastrada' : mapMode === 'zones' ? 'As cores identificam as zonas selecionadas' : mapMode === 'visits' ? 'Cores indicam a situação das visitas' : activeMapForm ? `Cobertura do questionário: ${activeMapForm.title}` : 'Selecione um questionário para consultar a cobertura'} · Selecione um lote para abrir o dossiê; arraste o mapa para deslocá-lo.</span><div><button type="button" onClick={() => setZoom((current) => Math.min(24, current * 1.25))} aria-label="Aumentar zoom" disabled={loading || !lots.length}><Plus size={16} /></button><b>{Math.round(zoom * 100)}%</b><button type="button" onClick={() => setZoom((current) => Math.max(0.65, current / 1.25))} aria-label="Reduzir zoom" disabled={loading || !lots.length}><Minus size={16} /></button><button type="button" onClick={resetMap} aria-label="Restaurar mapa" disabled={loading || !lots.length}><RotateCcw size={15} /></button></div></div>
         <div ref={viewportRef} className={`census-territory-viewport${dragging ? ' dragging' : ''}`} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan}>
           {loading ? <div className="census-territory-empty"><LoaderCircle className="spin" size={23} /><strong>Carregando o mapa preparado…</strong></div> : mapError ? <div className="census-territory-empty error"><AlertCircle size={24} /><strong>Não foi possível abrir o mapa</strong><span>{mapError}</span><button type="button" className="fleet-secondary-button" onClick={() => void loadMap()}>Tentar novamente</button></div> : !mapImport ? <div className="census-territory-empty"><MapPinned size={25} /><strong>Nenhum mapa preparado</strong><span>Importe e salve a divisão em Preparar mapa para iniciar o trabalho territorial.</span></div> : !lots.length ? <div className="census-territory-empty"><ShieldCheck size={25} /><strong>Nenhum lote disponível para esta conta</strong><span>Confirme se o mapa foi salvo e se sua conta está vinculada a uma zona ativa.</span></div> : <>
             <svg className="census-territory-svg" viewBox="0 0 1000 1000" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }} role="list" aria-label="Mapa territorial com lotes autorizados">
@@ -796,76 +853,78 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
                 const status = mapStatus(lot)
                 const visitStatus = mapVisitStatus(lot)
                 const isSelected = selectedLot?.id === lot.id
-                const outsideZoneFilter = zoneFilterIds.length > 0 && (mapMode === 'zones' || mapMode === 'questionnaire') && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))
-                const outsideStatusFilter = mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all' && (Boolean(lot.indicator_exclusion_reason) || mapStatus(lot) !== questionnaireStatusFilter)
+                const outsideZoneFilter = zoneFilterIds.length > 0 && (mapMode === 'zones' || mapMode === 'registration' || mapMode === 'questionnaire') && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))
+                const outsideStatusFilter = mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all' && (isNonResidentialLot(lot) || mapStatus(lot) !== questionnaireStatusFilter)
                 const outsideManagerFilter = readOnly && ((managerStatusFilter === 'pending_visit' && mapVisitStatus(lot) === 'completed') || (managerStatusFilter !== 'all' && managerStatusFilter !== 'pending_visit' && mapStatus(lot) !== managerStatusFilter) || (managerVisitFilter !== 'all' && mapVisitStatus(lot) !== managerVisitFilter) || (managerAcsFilter !== '' && managerAssignments[lot.id] !== managerAcsFilter))
                 const silhouette = outsideZoneFilter || outsideStatusFilter || outsideManagerFilter
                 const mapCode = lotDisplayName(lot)
                 const mapContext = friendlyLotContext(lot)
-                const visualLabel = mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
-                const fill = lot.indicator_exclusion_reason && mapMode !== 'zones' ? '#6b7280' : mapMode === 'zones' ? lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)' : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
+                const visualLabel = mapMode === 'registration' ? registrationLabels[registrationStatus(lot)] : mapMode === 'visits' ? visitStatusLabels[visitStatus] : mapStatusLabels[status]
+                const fill = isNonResidentialLot(lot) && mapMode !== 'zones' ? '#6b7280' : mapMode === 'zones' ? lot.zone_id ? getLotFillColor(lot, zones) : 'var(--acs-chart-no-activity)' : mapMode === 'registration' ? registrationColors[registrationStatus(lot)] : mapMode === 'visits' ? visitStatusColors[visitStatus] : statusColors[status]
                 const lotStyle = silhouette ? { fill: 'none', stroke: '#202833', strokeWidth: 1.5, vectorEffect: 'non-scaling-stroke' as const } : { fill }
-                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={silhouette ? 'none' : fill} style={lotStyle} className={`${isSelected ? 'selected' : ''}${silhouette ? ' silhouette' : ''}${lot.indicator_exclusion_reason ? ' indicator-excluded' : ''}`} tabIndex={0} role="button" aria-label={`${mapCode}${mapContext ? `, ${mapContext}` : ''}, ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? `, fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} aria-describedby={mapTooltip?.lotId === lot.id ? 'territory-map-tooltip' : undefined} onPointerEnter={(event) => showMapTooltip(lot.id, event.currentTarget)} onPointerLeave={() => hideMapTooltip(lot.id)} onFocus={(event) => showMapTooltip(lot.id, event.currentTarget)} onBlur={() => hideMapTooltip(lot.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode}${mapContext ? ` · ${mapContext}` : ''} · ${zone?.name || 'sem zona'}${lot.indicator_exclusion_reason ? ` · Fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason]}` : mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon> })}
+                return <polygon key={lot.id} data-lot-id={lot.id} points={lot.geometry.map(toSvg).join(' ')} fill={silhouette ? 'none' : fill} style={lotStyle} className={`${isSelected ? 'selected' : ''}${silhouette ? ' silhouette' : ''}${isNonResidentialLot(lot) ? ' indicator-excluded' : ''}`} tabIndex={0} role="button" aria-label={`${mapCode}${mapContext ? `, ${mapContext}` : ''}, ${zone?.name || 'sem zona'}${isNonResidentialLot(lot) ? `, fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason!]}` : mapMode !== 'zones' ? `, ${visualLabel}` : ''}`} aria-describedby={mapTooltip?.lotId === lot.id ? 'territory-map-tooltip' : undefined} onPointerEnter={(event) => showMapTooltip(lot.id, event.currentTarget)} onPointerLeave={() => hideMapTooltip(lot.id)} onFocus={(event) => showMapTooltip(lot.id, event.currentTarget)} onBlur={() => hideMapTooltip(lot.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLot(lot) } }}><title>{`${mapCode}${mapContext ? ` · ${mapContext}` : ''} · ${zone?.name || 'sem zona'}${isNonResidentialLot(lot) ? ` · Fora dos indicadores: ${indicatorExclusionLabels[lot.indicator_exclusion_reason!]}` : mapMode !== 'zones' ? ` · ${visualLabel}` : ''}`}</title></polygon> })}
             </svg>
             {visibleLots.length === 0 && <div className="census-territory-empty-filter" role="status"><Filter size={20} /><strong>Nenhum lote corresponde aos filtros</strong><span>Ajuste o filtro de zona ou de situação do questionário.</span></div>}
             {mapTooltip && tooltipLot && <div id="territory-map-tooltip" className={`census-map-tooltip${mapTooltip.y < 100 ? ' below' : ''}`} role="tooltip" style={{ left: mapTooltip.x, top: mapTooltip.y }}>
               <strong>{lotDisplayName(tooltipLot)}</strong>
               {friendlyLotContext(tooltipLot) && <span>{friendlyLotContext(tooltipLot)}</span>}
               {mapMode !== 'zones' && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />{tooltipStatus}</span>}
-              {mapMode === 'zones' && tooltipLot.indicator_exclusion_reason && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />Fora dos indicadores · {indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason]}</span>}
+              {mapMode === 'registration' && registrationByLot.get(tooltipLot.id) && <span>{registrationByLot.get(tooltipLot.id)?.household_count || 0} domicílio(s) · {registrationByLot.get(tooltipLot.id)?.household_without_family_count || 0} sem família · {registrationByLot.get(tooltipLot.id)?.family_count || 0} família(s)</span>}
+              {mapMode === 'zones' && isNonResidentialLot(tooltipLot) && <span className="census-map-tooltip-status"><i style={{ background: tooltipStatusColor }} />Fora dos indicadores · {indicatorExclusionLabels[tooltipLot.indicator_exclusion_reason!]}</span>}
               <span>Zona: {tooltipZone?.name || 'Sem zona'}</span>
               <span>ACS responsável: {tooltipAcs.length ? tooltipAcs.map((item) => item.full_name).join(', ') : 'Não identificado'}</span>
               <span>Último censo aplicado: {tooltipLatestCensus ? formatDate(tooltipLatestCensus.response.submitted_at, true) : 'Ainda não aplicado'}</span>
-              {tooltipLatestCensus && <span>Aplicado por: {tooltipLatestCensus.visit?.acs_id ? acsNames[tooltipLatestCensus.visit.acs_id] || tooltipAcs.find((item) => item.acs_id === tooltipLatestCensus.visit?.acs_id)?.full_name || 'Nome não disponível para esta conta' : 'Não identificado'}</span>}
+              {tooltipLatestCensus && <span>Aplicado por: {tooltipLatestCensus.visit?.professional_id ? acsNames[tooltipLatestCensus.visit.professional_id] || tooltipAcs.find((item) => item.acs_id === tooltipLatestCensus.visit?.professional_id)?.full_name || 'Nome não disponível para esta conta' : 'Não identificado'}</span>}
               {mapMode !== 'zones' && <>
                 <span>{tooltipActivity?.householdCount ? `${tooltipActivity.householdCount.toLocaleString('pt-BR')} ${tooltipActivity.householdCount === 1 ? 'domicílio ativo' : 'domicílios ativos'} · ${tooltipActivity.visitCount.toLocaleString('pt-BR')} ${tooltipActivity.visitCount === 1 ? 'visita registrada' : 'visitas registradas'}` : null}</span>
                 {mapMode === 'questionnaire' && activeMapForm && <span>Questionário: {activeMapForm.title}</span>}
                 {tooltipActivity?.latestVisit && <span>{tooltipActivity.latestVisit.status === 'NO_CONTACT' ? 'Última tentativa' : tooltipActivity.latestVisit.status === 'CANCELLED' ? 'Último registro' : 'Última visita'}: {formatDate(tooltipActivity.latestVisit.visit_date)}</span>}
               </>}
             </div>}
-            <div className="census-territory-legend">{mapMode === 'zones' ? <>{visibleZoneOptions.filter((zone) => !zoneFilterIds.length || zoneFilterIds.includes(zone.id)).map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zoneLabel(zone)}</span>)}{zoneFilterIds.length > 0 && <span><i className="filtered-out" />Fora do filtro</span>}</> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : <><span><i style={{ background: '#9aa3ad' }} />Não iniciado</span><span><i style={{ background: '#198754' }} />Concluído</span><span><i style={{ background: '#e07b16' }} />Pendente</span><span><i style={{ background: '#c62828' }} />Sem contato</span></>}</div>
+            <div className="census-territory-legend">{mapMode === 'registration' ? <>{Object.entries(registrationLabels).filter(([status]) => status !== 'EXCLUDED_VACANT').map(([status, label]) => <span key={status}><i style={{ background: registrationColors[status as RegistrationStatus] }} />{label}</span>)}</> : mapMode === 'zones' ? <>{visibleZoneOptions.filter((zone) => !zoneFilterIds.length || zoneFilterIds.includes(zone.id)).map((zone) => <span key={zone.id}><i style={{ background: zone.color }} />{zoneLabel(zone)}</span>)}{zoneFilterIds.length > 0 && <span><i className="filtered-out" />Fora do filtro</span>}</> : mapMode === 'visits' ? Object.entries(visitStatusLabels).map(([status, label]) => <span key={status}><i style={{ background: visitStatusColors[status as VisitMapStatus] }} />{label}</span>) : <><span><i style={{ background: '#9aa3ad' }} />Não iniciado</span><span><i style={{ background: '#198754' }} />Concluído</span><span><i style={{ background: '#e07b16' }} />Pendente</span><span><i style={{ background: '#c62828' }} />Sem contato</span></>}</div>
           </>}
         </div>
       </div>
 
       {selectedLot && <aside className="census-territory-panel" aria-label={`Dossiê do ${lotLabel}`}>
-        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ DO DOMICÍLIO</span><h3>{households[0]?.label || 'Novo domicílio'}</h3>{selectedLot && friendlyLotContext(selectedLot) && <small className="census-territory-zone-context">{friendlyLotContext(selectedLot)}</small>}<span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
+        <header className="census-territory-panel-header"><div><span className="fleet-kicker">DOSSIÊ DO LOTE</span><h3>{households[0]?.label || lotDisplayName(selectedLot)}</h3>{friendlyLotContext(selectedLot) && <small className="census-territory-zone-context">{friendlyLotContext(selectedLot)}</small>}<span className="census-territory-zone"><i style={{ background: selectedZone?.color || 'var(--acs-chart-no-activity)' }} />{selectedZone?.name || 'Sem zona'}</span></div><button type="button" className="census-icon-button" onClick={() => { setSelectedLot(null); setResponseEditor(null); setQuestionnaireApplyRequest(null) }} aria-label="Fechar dossiê"><X size={18} /></button></header>
         {panelError && <div className="census-territory-panel-error" role="alert"><AlertCircle size={16} />{panelError}</div>}
         {detailLoading ? <div className="census-territory-panel-loading"><LoaderCircle className="spin" size={19} />Carregando dossiê…</div> : authorized && <div className="census-territory-panel-scroll census-territory-dossier-simple">
           <section className="census-territory-acs-card" aria-label="ACS responsável pelo lote">
             <div className="census-territory-acs-heading"><UsersRound size={17} /><div><strong>ACS responsável</strong><small>{lotAcs.some((item) => item.scope === 'LOTE') ? 'Vínculo específico deste lote' : lotAcs.length ? 'Responsável pela zona' : 'Sem vínculo de ACS ativo'}</small></div></div>
-            {lotAcs.length ? <div className="census-territory-acs-list">{lotAcs.map((item) => <div key={`${item.scope}-${item.acs_id}`}><span className="census-territory-acs-avatar">{item.full_name.trim().charAt(0).toUpperCase() || 'A'}</span><span><strong>{item.full_name}</strong><small>{item.scope === 'LOTE' ? 'Responsável pelo lote' : 'Responsável pela zona'}</small></span></div>)}</div> : <p className="census-territory-acs-empty">Nenhum ACS está vinculado a este lote ou à sua zona.</p>}
+            {lotAcs.length ? <div className="census-territory-acs-list">{lotAcs.map((item) => <div key={`${item.scope}-${item.acs_id}`}><span className="census-territory-acs-avatar">{item.full_name.trim().charAt(0).toUpperCase() || 'A'}</span><span><strong>{item.full_name}</strong><small>{item.scope === 'LOTE' ? 'Responsável pelo lote' : item.scope === 'ZONA' ? 'Responsável pela zona' : 'Responsável identificado no resumo territorial'}</small></span></div>)}</div> : <p className="census-territory-acs-empty">Nenhum ACS está vinculado a este lote ou à sua zona.</p>}
             {canManageAcs && !readOnly && !showAcsForm && <button type="button" className="census-territory-acs-link" onClick={openAcsForm} disabled={writing}>{lotAcs.some((item) => item.scope === 'LOTE') ? 'Alterar ACS deste lote' : lotAcs.length ? 'Vincular ACS específico a este lote' : 'Vincular ACS ao lote'}</button>}
-            {showAcsForm && !readOnly && <div className="census-territory-acs-form"><label>ACS ativo com e-mail cadastrado<select value={selectedAcsId} onChange={(event) => setSelectedAcsId(event.target.value)} disabled={writing}><option value="">Selecione um ACS</option>{acsOptions.map((option) => <option key={option.id} value={option.id} disabled={!option.email?.trim()}>{option.full_name}{option.email?.trim() ? ` · ${option.email}` : ' · sem e-mail cadastrado'}</option>)}</select></label><div><button type="button" className="fleet-secondary-button" onClick={() => setShowAcsForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestAcsSave} disabled={writing || !acsOptions.find((option) => option.id === selectedAcsId)?.email?.trim()}><UsersRound size={14} />Confirmar vínculo</button></div></div>}
+            {showAcsForm && !readOnly && <div className="census-territory-acs-form"><label>ACS ativo com usuário vinculado<select value={selectedAcsId} onChange={(event) => setSelectedAcsId(event.target.value)} disabled={writing}><option value="">Selecione um ACS</option>{acsOptions.map((option) => <option key={option.id} value={option.id} disabled={!option.user_id}>{option.full_name}{option.user_id ? '' : ' · sem usuário vinculado'}</option>)}</select></label><div><button type="button" className="fleet-secondary-button" onClick={() => setShowAcsForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestAcsSave} disabled={writing || !acsOptions.find((option) => option.id === selectedAcsId)?.user_id}><UsersRound size={14} />Confirmar vínculo</button></div></div>}
           </section>
           {notice && <div className={`census-territory-panel-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}{notice}</div>}
-          <>{readOnly && <section className="census-manager-lot-state" aria-label="Situação consolidada do lote"><div><strong>Situação do lote</strong><span className={`census-manager-status census-manager-status--${mapStatus(selectedLot)}`}>{mapStatusLabels[mapStatus(selectedLot)]}</span></div><dl><div><dt>Domicílio</dt><dd>{households.length ? 'Cadastrado' : 'Não cadastrado'}</dd></div><div><dt>Questionário em foco</dt><dd>{activeMapForm?.title || 'Nenhum selecionado'}</dd></div><div><dt>Última visita</dt><dd>{activityByLot.get(selectedLot.id)?.latestVisit ? formatDate(activityByLot.get(selectedLot.id)?.latestVisit?.visit_date) : 'Ainda não registrada'}</dd></div><div><dt>Visitas registradas</dt><dd>{activityByLot.get(selectedLot.id)?.visitCount || 0}</dd></div></dl></section>}<section className={`census-lot-indicator-exclusion${selectedLot.indicator_exclusion_reason ? ' excluded' : ''}`} aria-label="Elegibilidade do lote nos indicadores ACS">
-            <div className="census-lot-exclusion-heading"><ShieldCheck size={16} /><strong>Indicadores ACS</strong><span>{selectedLot.indicator_exclusion_reason ? 'Fora do cálculo' : 'Incluído'}</span></div>
-            {selectedLot.indicator_exclusion_reason ? <>
-              <p><strong>Motivo:</strong> {indicatorExclusionLabels[selectedLot.indicator_exclusion_reason]}</p>
+          <>{readOnly && <section className="census-manager-lot-state" aria-label="Situação consolidada do lote"><div><strong>Situação do lote</strong><span className={`census-manager-status census-manager-status--${mapStatus(selectedLot)}`}>{mapStatusLabels[mapStatus(selectedLot)]}</span></div><dl><div><dt>Domicílios cadastrados</dt><dd>{registrationByLot.get(selectedLot.id)?.household_count || 0}</dd></div><div><dt>Domicílios sem família</dt><dd>{registrationByLot.get(selectedLot.id)?.household_without_family_count || 0}</dd></div><div><dt>Famílias cadastradas</dt><dd>{registrationByLot.get(selectedLot.id)?.family_count || 0}</dd></div><div><dt>Última movimentação</dt><dd>{managerByLot.get(selectedLot.id)?.last_movement_at ? formatDate(managerByLot.get(selectedLot.id)?.last_movement_at, true) : 'Ainda não registrada'}</dd></div><div><dt>Respostas enviadas</dt><dd>{managerByLot.get(selectedLot.id)?.submitted_response_count || 0}</dd></div></dl></section>}<section className={`census-lot-indicator-exclusion${isNonResidentialLot(selectedLot) ? ' excluded' : ''}`} aria-label="Elegibilidade do lote nos indicadores ACS">
+            <div className="census-lot-exclusion-heading"><ShieldCheck size={16} /><strong>Indicadores ACS</strong><span>{isNonResidentialLot(selectedLot) ? 'Fora do cálculo' : 'Incluído'}</span></div>
+            {isNonResidentialLot(selectedLot) ? <>
+              <p><strong>Motivo:</strong> {indicatorExclusionLabels[selectedLot.indicator_exclusion_reason!]}</p>
               <small>Este lote continua visível no mapa, mas não entra nos indicadores atuais ou históricos. Registros vinculados foram preservados.</small>
               {selectedLot.indicator_excluded_at && <small>Classificado em {formatDate(selectedLot.indicator_excluded_at, true)}.</small>}
               {canManageAcs && !readOnly ? <button type="button" className="census-lot-exclusion-restore" onClick={requestLotIndicatorRestoration} disabled={writing}>Reintegrar aos indicadores</button> : <small>Este lote permanece visível para consulta gerencial.</small>}
             </> : <>
-              <p>Se o lote não tem domicílio ocupado ou é uma área/imóvel público, retire-o da base dos indicadores sem removê-lo do mapa.</p>
-              {!readOnly && <label>Motivo<select value={indicatorExclusionReason} onChange={(event) => setIndicatorExclusionReason(event.target.value as LotIndicatorExclusionReason | '')} disabled={writing}><option value="">Selecione um motivo</option><option value="VACANT">Sem domicílio ocupado / lote vazio</option><option value="PUBLIC">Área ou imóvel público/municipal</option></select></label>}
+              <p>Classifique como não residencial somente se o local for comércio ou área da Prefeitura. Um lote vazio permanece como pendência de cadastro, até ser verificado.</p>
+              {!readOnly && <label>Motivo<select value={indicatorExclusionReason} onChange={(event) => setIndicatorExclusionReason(event.target.value as LotIndicatorExclusionReason | '')} disabled={writing}><option value="">Selecione um motivo</option><option value="COMMERCE">Comércio</option><option value="MUNICIPAL_AREA">Área da Prefeitura</option></select></label>}
               {!readOnly && <button type="button" className="census-lot-exclusion-action" onClick={requestLotIndicatorExclusion} disabled={writing || !indicatorExclusionReason}>Excluir dos indicadores</button>}
             </>}
           </section></>
-          {readOnly && <section className="census-manager-history" aria-label="Histórico das etapas do lote"><header><div><span className="fleet-kicker">HISTÓRICO DO TRABALHO</span><strong>O que já foi realizado</strong></div><span>{selectedLotHistory.length} visita(s)</span></header><ol><li className={households.length ? 'done' : ''}><i />Domicílio cadastrado<small>{households.length ? `${households.length} registro(s) ativo(s)` : 'Ainda pendente'}</small></li><li className={selectedLotHistory.length ? 'done' : ''}><i />Atendimento iniciado<small>{selectedLotHistory.length ? `Última movimentação em ${formatDate(selectedLotHistory[0].created_at, true)}` : 'Nenhuma visita registrada'}</small></li><li className={selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'done' : ''}><i />Visita concluída<small>{selectedLotHistory.some((visit) => visit.status === 'COMPLETED') ? 'Há visita concluída no histórico' : 'Ainda pendente'}</small></li><li className={selectedLotResponseCount > 0 ? 'done' : ''}><i />Questionário registrado<small>{selectedLotResponseCount ? `${selectedLotResponseCount} resposta(s) no histórico` : 'Ainda não há resposta registrada'}</small></li></ol>{selectedLotHistory[0]?.status === 'NO_CONTACT' && <p className="census-manager-history-reason"><strong>Motivo da pendência:</strong> {selectedLotHistory[0].notes?.trim() || 'Sem contato informado pelo ACS.'}</p>}</section>}
-          <section className="census-dossier-households"><div className="census-dossier-section-heading"><strong>Domicílios</strong><span>{households.length.toLocaleString('pt-BR')}</span></div>
-            {households.map((household, index) => <article className="census-dossier-household" key={household.id}><div><Home size={16} /><strong>{household.label || `Domicílio ${index + 1}`}</strong></div>{readOnly ? <span className="census-dossier-readonly-note">Consulta gerencial · {activeMapForm?.title || 'questionário não selecionado'}</span> : <div className="census-dossier-household-actions"><button type="button" className="fleet-secondary-button" onClick={onOpenPopulation} disabled={writing}>Atualizar cadastro completo</button>{activeForms.length ? <label><span>Aplicar questionário</span><select aria-label={`Aplicar questionário ao ${household.label || `Domicílio ${index + 1}`}`} defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) void requestQuestionnaireApply(household, form); event.currentTarget.value = '' }} disabled={writing || Boolean(selectedLot.indicator_exclusion_reason)}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label> : <span className="census-dossier-no-forms">Nenhum questionário ativo</span>}</div>}</article>)}
+          {readOnly && <section className="census-manager-history" aria-label="Histórico das etapas do lote"><header><div><span className="fleet-kicker">HISTÓRICO DO TRABALHO</span><strong>Etapas consolidadas</strong></div><span>{managerByLot.get(selectedLot.id)?.visit_count || 0} visita(s)</span></header><ol><li className={(registrationByLot.get(selectedLot.id)?.household_count || 0) > 0 ? 'done' : ''}><i />Domicílio cadastrado<small>{registrationByLot.get(selectedLot.id)?.household_count || 0} domicílio(s) ativo(s)</small></li><li className={(managerByLot.get(selectedLot.id)?.visit_count || 0) > 0 ? 'done' : ''}><i />Atendimento iniciado<small>{managerByLot.get(selectedLot.id)?.visit_count ? `${managerByLot.get(selectedLot.id)?.visit_count} visita(s) registrada(s)` : 'Nenhuma visita registrada'}</small></li><li className={managerByLot.get(selectedLot.id)?.visit_status === 'COMPLETED' ? 'done' : ''}><i />Visita concluída<small>{managerByLot.get(selectedLot.id)?.visit_status === 'COMPLETED' ? 'Há atividade concluída no histórico agregado' : 'Ainda pendente'}</small></li><li className={(managerByLot.get(selectedLot.id)?.submitted_response_count || 0) > 0 ? 'done' : ''}><i />Questionário registrado<small>{managerByLot.get(selectedLot.id)?.submitted_response_count || 0} resposta(s) enviada(s) no total</small></li></ol>{managerByLot.get(selectedLot.id)?.pending_reason && <p className="census-manager-history-reason"><strong>Motivo da pendência:</strong> {managerByLot.get(selectedLot.id)?.pending_reason}</p>}</section>}
+          <section className="census-dossier-households"><div className="census-dossier-section-heading"><strong>{readOnly ? 'Resumo domiciliar' : 'Domicílios'}</strong><span>{readOnly ? (registrationByLot.get(selectedLot.id)?.household_count || 0).toLocaleString('pt-BR') : households.length.toLocaleString('pt-BR')}</span></div>
+            {readOnly && <div className="census-manager-household-summary"><p>{registrationByLot.get(selectedLot.id)?.household_without_family_count || 0} domicílio(s) ainda sem família vinculada.</p><p>{registrationByLot.get(selectedLot.id)?.family_count || 0} família(s) cadastrada(s) neste lote.</p><small>Consulta gerencial agregada. Os detalhes individuais permanecem no escopo da equipe autorizada.</small></div>}
+            {households.map((household, index) => <article className="census-dossier-household" key={household.id}><div><Home size={16} /><strong>{household.label || `Domicílio ${index + 1}`}</strong></div>{readOnly ? <span className="census-dossier-readonly-note">Consulta gerencial · {activeMapForm?.title || 'questionário não selecionado'}</span> : <div className="census-dossier-household-actions"><button type="button" className="fleet-secondary-button" onClick={onOpenPopulation} disabled={writing}>Atualizar cadastro completo</button>{activeForms.length ? <label><span>Aplicar questionário</span><select aria-label={`Aplicar questionário ao ${household.label || `Domicílio ${index + 1}`}`} defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) void requestQuestionnaireApply(household, form); event.currentTarget.value = '' }} disabled={writing || isNonResidentialLot(selectedLot)}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label> : <span className="census-dossier-no-forms">Nenhum questionário ativo</span>}</div>}</article>)}
             {followUpHousehold && activeForms.length > 0 && <div className="census-dossier-next-step"><strong>Domicílio cadastrado. Próximo passo: levantar as informações da casa.</strong><span>Escolha um questionário para iniciar a visita e registrar a população, a família e as condições encontradas.</span><label>Questionário<select defaultValue="" onChange={(event) => { const form = activeForms.find((item) => item.id === event.target.value); if (form) { void requestQuestionnaireApply(followUpHousehold, form); setFollowUpHousehold(null) } }} disabled={writing}><option value="">Selecione um questionário</option>{activeForms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}</select></label><button type="button" className="fleet-secondary-button" onClick={() => setFollowUpHousehold(null)}>Fazer depois</button></div>}
-            {!readOnly && showHouseholdForm && !selectedLot.indicator_exclusion_reason && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div className="census-household-address-grid"><label>Logradouro<input value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Rua, avenida ou estrada" disabled={writing} /></label><label>Número<input value={addressNumber} onChange={(event) => setAddressNumber(event.target.value)} disabled={writing} /></label><label>Complemento<input value={addressComplement} onChange={(event) => setAddressComplement(event.target.value)} disabled={writing} /></label><label>Bairro/localidade<input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} disabled={writing} /></label><label>CEP<input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="00000-000" disabled={writing} /></label><label>Município/localidade<input value={locality} onChange={(event) => setLocality(event.target.value)} placeholder="Pitangueiras" disabled={writing} /></label><label>Latitude<input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -23.230000" disabled={writing} /></label><label>Longitude<input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -50.050000" disabled={writing} /></label></div><div className="census-household-address-grid"><label>Tipo de imóvel<select value={propertyType} onChange={(event) => setPropertyType(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('PROPERTY_TYPE').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Situação de ocupação<select value={occupancyStatus} onChange={(event) => setOccupancyStatus(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('OCCUPANCY_STATUS').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Material da construção<select value={constructionMaterial} onChange={(event) => setConstructionMaterial(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('CONSTRUCTION_MATERIAL').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Cômodos<input type="number" min="0" max="100" value={roomsCount} onChange={(event) => setRoomsCount(event.target.value)} disabled={writing} /></label><label>Quartos<input type="number" min="0" max="100" value={bedroomsCount} onChange={(event) => setBedroomsCount(event.target.value)} disabled={writing} /></label>{([['waterSupply','Abastecimento de água','WATER_SUPPLY',waterSupply,setWaterSupply],['waterTreatment','Tratamento da água','WATER_TREATMENT',waterTreatment,setWaterTreatment],['sewageDisposal','Destino do esgoto','SEWAGE_DISPOSAL',sewageDisposal,setSewageDisposal],['toiletAvailable','Banheiro disponível','TOILET_AVAILABLE',toiletAvailable,setToiletAvailable],['electricityAccess','Energia elétrica','ELECTRICITY_ACCESS',electricityAccess,setElectricityAccess],['garbageDisposal','Destino do lixo','GARBAGE_DISPOSAL',garbageDisposal,setGarbageDisposal],['cookingFuel','Combustível para cozinhar','COOKING_FUEL',cookingFuel,setCookingFuel],['housingCondition','Condição da moradia','HOUSING_CONDITION',housingCondition,setHousingCondition]] as const).map(([key,label,domain,value,setValue]) => <label key={key}>{label}<select value={value} onChange={(event) => setValue(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor(domain).map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>)}</div><small>Os atributos de moradia e saneamento usam catálogo municipal versionado. Códigos oficiais do e-SUS APS permanecem pendentes de confirmação; a exportação não é iniciada nesta etapa.</small><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
-            {!readOnly && !selectedLot.indicator_exclusion_reason && <button type="button" className="census-add-household-button" onClick={() => { setHouseholdLabel(`Domicílio ${households.length + 1}`); setShowHouseholdForm((current) => !current) }} disabled={writing}><Home size={15} />Cadastrar domicílio</button>}
+            {!readOnly && showHouseholdForm && !isNonResidentialLot(selectedLot) && <div className="census-territory-inline-form"><strong>Novo domicílio</strong><label>Identificação<input value={householdLabel} onChange={(event) => setHouseholdLabel(event.target.value)} maxLength={100} placeholder={`Ex.: Domicílio ${households.length + 1}`} disabled={writing} /></label><div className="census-household-address-grid"><label>Logradouro<input value={addressLine} onChange={(event) => setAddressLine(event.target.value)} placeholder="Rua, avenida ou estrada" disabled={writing} /></label><label>Número<input value={addressNumber} onChange={(event) => setAddressNumber(event.target.value)} disabled={writing} /></label><label>Complemento<input value={addressComplement} onChange={(event) => setAddressComplement(event.target.value)} disabled={writing} /></label><label>Bairro/localidade<input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} disabled={writing} /></label><label>CEP<input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="00000-000" disabled={writing} /></label><label>Município/localidade<input value={locality} onChange={(event) => setLocality(event.target.value)} placeholder="Pitangueiras" disabled={writing} /></label><label>Latitude<input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -23.230000" disabled={writing} /></label><label>Longitude<input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="Ex.: -50.050000" disabled={writing} /></label></div><div className="census-household-address-grid"><label>Tipo de imóvel<select value={propertyType} onChange={(event) => setPropertyType(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('PROPERTY_TYPE').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Situação de ocupação<select value={occupancyStatus} onChange={(event) => setOccupancyStatus(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('OCCUPANCY_STATUS').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Material da construção<select value={constructionMaterial} onChange={(event) => setConstructionMaterial(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor('CONSTRUCTION_MATERIAL').map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label><label>Cômodos<input type="number" min="0" max="100" value={roomsCount} onChange={(event) => setRoomsCount(event.target.value)} disabled={writing} /></label><label>Quartos<input type="number" min="0" max="100" value={bedroomsCount} onChange={(event) => setBedroomsCount(event.target.value)} disabled={writing} /></label>{([['waterSupply','Abastecimento de água','WATER_SUPPLY',waterSupply,setWaterSupply],['waterTreatment','Tratamento da água','WATER_TREATMENT',waterTreatment,setWaterTreatment],['sewageDisposal','Destino do esgoto','SEWAGE_DISPOSAL',sewageDisposal,setSewageDisposal],['toiletAvailable','Banheiro disponível','TOILET_AVAILABLE',toiletAvailable,setToiletAvailable],['electricityAccess','Energia elétrica','ELECTRICITY_ACCESS',electricityAccess,setElectricityAccess],['garbageDisposal','Destino do lixo','GARBAGE_DISPOSAL',garbageDisposal,setGarbageDisposal],['cookingFuel','Combustível para cozinhar','COOKING_FUEL',cookingFuel,setCookingFuel],['housingCondition','Condição da moradia','HOUSING_CONDITION',housingCondition,setHousingCondition]] as const).map(([key,label,domain,value,setValue]) => <label key={key}>{label}<select value={value} onChange={(event) => setValue(event.target.value)} disabled={writing}><option value="">Não informado</option>{optionsFor(domain).map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>)}</div><small>Os atributos de moradia e saneamento usam catálogo municipal versionado. Códigos oficiais do e-SUS APS permanecem pendentes de confirmação; a exportação não é iniciada nesta etapa.</small><div><button type="button" className="fleet-secondary-button" onClick={() => setShowHouseholdForm(false)} disabled={writing}>Cancelar</button><button type="button" className="fleet-primary-button" onClick={requestHouseholdSave} disabled={writing || !householdLabel.trim()}><Save size={14} />Cadastrar domicílio</button></div></div>}
+            {!readOnly && !isNonResidentialLot(selectedLot) && <button type="button" className="census-add-household-button" onClick={() => { setHouseholdLabel(`Domicílio ${households.length + 1}`); setShowHouseholdForm((current) => !current) }} disabled={writing}><Home size={15} />Cadastrar domicílio</button>}
           </section>
           {!readOnly && !activeForms.length && <div className="census-no-active-form"><FileText size={17} /><span>Não há questionários ativos para aplicar.</span><button type="button" onClick={onOpenQuestionnaires}>Abrir Questionários</button></div>}
         </div>}
       </aside>}
     </div>
-    <section className="census-territory-list-card" aria-label={readOnly ? 'Lista de lotes em acompanhamento' : 'Lista de domicílios'}>
-      <header><div><span className="fleet-kicker">{readOnly ? 'LOTES NO RECORTE' : 'LISTA DE DOMICÍLIOS'}</span><strong>{readOnly ? 'Onde está pendente e quem responde?' : 'Inicie uma atividade pelo cadastro'}</strong></div><small>{visibleLots.length > 100 ? 'Mostrando os 100 primeiros resultados' : readOnly ? 'Selecione uma linha para abrir o dossiê somente leitura' : 'Selecione uma linha para abrir o dossiê'}</small></header>
-      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const context = friendlyLotContext(lot); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); const lotStatus = mapStatus(lot); return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: readOnly ? statusColors[lotStatus] : zone?.color || '#c8a15b' }} /><span><strong>{lotDisplayName(lot)}</strong><small>{context || 'Referência territorial ainda não associada'} · {zone?.name || 'Sem zona'}{readOnly ? ` · ${mapStatusLabels[lotStatus]}` : ''}</small></span><em className={activity?.visitCount ? 'has-activity' : 'needs-activity'}>{readOnly ? (managerAssignments[lot.id] ? managerAcs.find((acs) => acs.id === managerAssignments[lot.id])?.name || 'ACS atribuído' : 'ACS não identificado') : activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
+    <section className="census-territory-list-card" aria-label={readOnly ? 'Lista de lotes em acompanhamento' : 'Lista de lotes do território'}>
+      <header><div><span className="fleet-kicker">{readOnly ? 'LOTES NO RECORTE' : 'LOTES DO TERRITÓRIO'}</span><strong>{readOnly ? 'Onde está pendente e quem responde?' : 'Inicie uma atividade pelo local no mapa'}</strong></div><small>{visibleLots.length > 100 ? 'Mostrando os 100 primeiros resultados' : readOnly ? 'Selecione uma linha para abrir o resumo gerencial agregado' : 'Selecione um lote para abrir o dossiê'}</small></header>
+      <div className="census-territory-list-grid">{visibleLots.slice(0, 100).map((lot) => { const context = friendlyLotContext(lot); const zone = zones.find((item) => item.id === lot.zone_id); const activity = activityByLot.get(lot.id); const lotStatus = mapStatus(lot); const dotColor = mapMode === 'registration' ? registrationColors[registrationStatus(lot)] : readOnly ? statusColors[lotStatus] : zone?.color || '#c8a15b'; return <button type="button" key={lot.id} className={selectedLot?.id === lot.id ? 'active' : ''} onClick={() => selectLot(lot)}><span className="census-territory-list-dot" style={{ background: dotColor }} /><span><strong>{lotDisplayName(lot)}</strong><small>{context || 'Referência territorial ainda não associada'} · {zone?.name || 'Sem zona'}{mapMode === 'registration' ? ` · ${registrationLabels[registrationStatus(lot)]}` : readOnly ? ` · ${mapStatusLabels[lotStatus]}` : ''}</small></span><em className={activity?.visitCount ? 'has-activity' : 'needs-activity'}>{readOnly ? (managerAssignments[lot.id] ? managerAcs.find((acs) => acs.id === managerAssignments[lot.id])?.name || 'ACS atribuído' : 'ACS não identificado') : activity?.visitCount ? `${activity.visitCount} visita(s)` : 'Iniciar atividade'}</em></button> })}</div>
       {!visibleLots.length && <div className="census-territory-list-empty">Nenhum domicílio corresponde à busca ou aos filtros selecionados.</div>}
     </section>
 

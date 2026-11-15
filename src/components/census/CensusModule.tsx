@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, SlidersHorizontal, Upload, UserPlus, UsersRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, SlidersHorizontal, Upload, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { MunicipalAccessContextValue } from '../../auth/MunicipalAccessContext'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
@@ -12,6 +12,7 @@ import { CensusTerritory } from './territory/CensusTerritory'
 import { AcsFieldWorkflow } from './AcsFieldWorkflow'
 import { AcsRegistryManagement } from './AcsRegistryManagement'
 import { PopulationManagement } from './PopulationManagement'
+import { CensusModuleAccess } from './CensusModuleAccess'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -38,7 +39,6 @@ type Lot = {
 }
 type CensusZone = { id: string; name: string; color: string; microarea_id: string | null; active: boolean }
 type CensusMicroarea = { id: string; code: string; name: string; team_id: string; active: boolean }
-type CensusAcs = { id: string; full_name: string; email: string | null; phone: string | null; active: boolean; user_id?: string | null }
 type AreaSelectionGesture = { start: Point; current: Point; startClientX: number; startClientY: number; targetLotKey: string | null; additive: boolean }
 
 type MapImport = {
@@ -58,7 +58,7 @@ type MapImport = {
   division_saved_at: string | null
   is_current?: boolean
 }
-type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones' | 'agenda' | 'registry' | 'population'
+type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones' | 'agenda' | 'registry' | 'population' | 'access' | 'denied'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type ManagerStatusFilter = 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered'
@@ -74,8 +74,9 @@ const managerNavItems: { id: CensusSection; label: string; icon: typeof LayoutDa
 ]
 const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
   ...managerNavItems,
+  { id: 'access', label: 'Usuários e acessos', icon: UsersRound },
   { id: 'forms', label: 'Questionários', icon: FileText },
-  { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
+  { id: 'zones', label: 'Zonas e microáreas', icon: ClipboardList },
   { id: 'registry', label: 'Administração da Saúde', icon: SlidersHorizontal },
   { id: 'population', label: 'Cadastro populacional', icon: UsersRound },
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
@@ -113,17 +114,22 @@ async function fetchPreparationLots(db: NonNullable<typeof supabase>, importId: 
 }
 
 export function CensusModule({ userEmail, accessContext, onBack, onLogout }: CensusModuleProps) {
-  const [view, setView] = useState<CensusSection>('overview')
+  const [view, setView] = useState<CensusSection>('denied')
   const [familyInitialFilter, setFamilyInitialFilter] = useState<OperationalFilter>('ALL')
   const [managerInitialStatus, setManagerInitialStatus] = useState<ManagerStatusFilter>('all')
   const [managerInitialZone, setManagerInitialZone] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [profile, setProfile] = useState<{ name: string; photo: string | null }>({ name: userEmail || 'Usuário autenticado', photo: null })
-  const [access, setAccess] = useState<CensusAccess>({ role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+  const [access, setAccess] = useState<CensusAccess>({ role: 'manager', label: 'Verificando acesso', description: 'Aguarde a validação do seu perfil e escopo.', acsId: null })
   const [isAdministrator, setIsAdministrator] = useState(false)
   const [accessLoading, setAccessLoading] = useState(true)
+  const [accessDenied, setAccessDenied] = useState(true)
+  const [accessDeniedReason, setAccessDeniedReason] = useState('Estamos validando sua autorização para este módulo.')
   const [zones, setZones] = useState<CensusZone[]>([])
-  const navItems = access.role === 'acs' ? acsNavItems : isAdministrator ? adminNavItems : managerNavItems
+  const canManageModuleAccess = accessContext.isAdministrator || (accessContext.hasModule('census') && accessContext.hasPermission('governance.module_access.manage') && (accessContext.hasRole('HEALTH_MANAGER') || accessContext.hasRole('UNIT_MANAGER')))
+  const moduleAccessNavItem = { id: 'access' as CensusSection, label: 'Usuários e acessos', icon: UsersRound }
+  const scopedManagerNavItems = canManageModuleAccess ? [...managerNavItems, moduleAccessNavItem] : managerNavItems
+  const navItems = accessDenied ? [] : access.role === 'acs' ? acsNavItems : isAdministrator ? adminNavItems : scopedManagerNavItems
   const loadZones = async () => {
     if (!supabase) return
     const { data } = await supabase.from('census_zones').select('id,name,color,microarea_id,active').order('created_at').limit(500)
@@ -135,15 +141,26 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
     const loadProfile = async () => {
       const name = accessContext.user?.name || userEmail || accessContext.user?.email || 'Usuário autenticado'
       const photo = accessContext.user?.avatarUrl || null
-      const isAcs = accessContext.hasRole('ACS') && (accessContext.acs !== null || accessContext.foundation?.professional?.professionalCategory === 'ACS')
       const isAdmin = accessContext.isAdministrator
+      const hasCensusModule = isAdmin || accessContext.hasModule('census')
+      const hasAcsRole = accessContext.hasRole('ACS')
+      const hasAcsIdentity = accessContext.acs?.active === true || (accessContext.foundation?.professional?.professionalCategory === 'ACS' && accessContext.foundation.professional.active)
+      const isAcs = !isAdmin && hasCensusModule && hasAcsRole && hasAcsIdentity
+      const missingAcsIdentity = !isAdmin && hasCensusModule && hasAcsRole && !hasAcsIdentity
+      const canViewManager = hasCensusModule && (isAdmin || accessContext.hasRole('HEALTH_MANAGER') || accessContext.hasRole('HEALTH_SUPERVISOR') || accessContext.hasRole('UNIT_MANAGER') || accessContext.hasRole('EXECUTIVE_VIEW'))
+      const denied = missingAcsIdentity || (!isAcs && !canViewManager)
+      const denialReason = missingAcsIdentity
+        ? 'Sua conta recebeu o papel ACS, mas ainda não tem um cadastro profissional ACS ativo. O Admin/Gestor de Saúde precisa concluir o cadastro e os vínculos de equipe e microárea em Administração da Saúde.'
+        : 'Sua conta não possui um papel ativo autorizado para abrir este módulo. Peça ao Admin do Sistema para revisar sua atribuição de Saúde.'
       if (mounted) {
         setProfile({ name, photo })
         setIsAdministrator(isAdmin)
+        setAccessDenied(denied)
+        setAccessDeniedReason(denialReason)
         setAccess(isAcs
           ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: accessContext.acs?.id || null }
-          : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
-        setView('territory')
+          : { role: 'manager', label: denied ? 'Acesso pendente' : isAdmin ? 'Administração da Saúde' : 'Gestão municipal', description: denied ? 'Seu papel ainda não está autorizado para este módulo.' : 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
+        setView(denied ? 'denied' : 'territory')
         setAccessLoading(false)
       }
     }
@@ -152,7 +169,9 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
   }, [accessContext, userEmail])
 
   const selectView = (nextView: CensusSection) => {
+    if (accessDenied) return
     if (access.role === 'acs' && !acsNavItems.some((item) => item.id === nextView)) return
+    if (nextView === 'access' && !canManageModuleAccess) return
     setView(nextView); setMenuOpen(false)
   }
   const profileInitials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
@@ -164,7 +183,8 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
 
   return <div className="fleet-shell census-shell">
     <aside className="fleet-sidebar"><div className="fleet-sidebar-top"><button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button><div className="fleet-brand"><span className="fleet-brand-icon"><MapPinned size={20} /></span><div><strong>Saúde da Família/ACS</strong><small>Inteligência Municipal</small></div></div></div><div className="fleet-section-label">{access.role === 'acs' ? 'ROTINA DE CAMPO' : 'GESTÃO TERRITORIAL'}</div><nav className="fleet-nav" aria-label="Navegação de Saúde da Família/ACS">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`fleet-nav-item${view === id ? ' active' : ''}`} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button></nav><div className="fleet-sidebar-bottom"><div className="fleet-user-chip"><span className="fleet-user-avatar">{profile.photo ? <img src={profile.photo} alt="" /> : profileInitials}</span><div><strong>{profile.name}</strong><small>{access.label}</small></div></div><button type="button" className="fleet-logout" onClick={onLogout}><LogOut size={16} /> Sair do sistema</button></div></aside>
-    <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
+    <main className={`fleet-main census-main census-role-${access.role}`}><header className="fleet-header"><div><p className="fleet-kicker">MÓDULO MUNICIPAL · {access.label.toUpperCase()}</p><h1>{view === 'denied' ? 'Acesso não configurado' : navItems.find((item) => item.id === view)?.label || 'Visão geral'}</h1><small className="census-role-description">{accessLoading ? 'Verificando seu escopo de acesso…' : access.description}</small></div><button type="button" className="census-mobile-menu-button" aria-label="Abrir menu de Saúde da Família/ACS" aria-expanded={menuOpen} onClick={() => setMenuOpen((current) => !current)}>{menuOpen ? <X size={21} /> : <Menu size={21} />}</button>{menuOpen && <div className="census-mobile-menu" role="menu">{navItems.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={view === id ? 'active' : ''} onClick={() => selectView(id)}><Icon size={17} />{label}</button>)}<button type="button" onClick={onLogout}><LogOut size={17} />Sair</button></div>}</header><div className="fleet-content census-content">
+      {view === 'denied' && <section className="census-no-access" role={accessLoading ? 'status' : 'alert'}><AlertCircle size={28} /><div><h2>{accessLoading ? 'Validando seu acesso…' : 'Seu acesso ainda não está configurado'}</h2><p>{accessDeniedReason}</p></div></section>}
       {view === 'overview' && <CensusOverview role={access.role} onOpen={openOverview} />}
       {view === 'agenda' && access.role === 'acs' && <AcsFieldWorkflow accessContext={accessContext} onOpenTerritory={() => selectView('territory')} />}
       {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
@@ -174,6 +194,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} onOpenPopulation={() => selectView('population')} />}
       {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'registry' && access.role === 'manager' && isAdministrator && <AcsRegistryManagement />}
+      {view === 'access' && canManageModuleAccess && <CensusModuleAccess />}
       {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
       {view === 'forms' && access.role === 'manager' && isAdministrator && <QuestionnairesManagement />}
 
@@ -181,75 +202,37 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
   </div>
 }
 
-type DirectoryUser = { uuid: string; nome: string; email: string; telefone: string | null }
-type ZoneAssignment = { id: string; acs_id: string; zone_id: string; active: boolean; created_at: string; ended_at: string | null }
 
 function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: () => void }) {
-  const [acs, setAcs] = useState<CensusAcs[]>([])
   const [microareas, setMicroareas] = useState<CensusMicroarea[]>([])
-  const [assignments, setAssignments] = useState<ZoneAssignment[]>([])
   const [zoneName, setZoneName] = useState('')
   const [zoneColor, setZoneColor] = useState('#2c7892')
   const [zoneMicroareaId, setZoneMicroareaId] = useState('')
   const [editingZoneId, setEditingZoneId] = useState('')
   const [showZoneForm, setShowZoneForm] = useState(false)
-  const [userSearch, setUserSearch] = useState('')
-  const [userResults, setUserResults] = useState<DirectoryUser[]>([])
-  const [selectedUser, setSelectedUser] = useState<DirectoryUser | null>(null)
-  const [selectedAcs, setSelectedAcs] = useState('')
-  const [selectedZone, setSelectedZone] = useState('')
-  const [editingAssignmentId, setEditingAssignmentId] = useState('')
-  const [showAssignmentForm, setShowAssignmentForm] = useState(false)
   const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
-  const [loadingLists, setLoadingLists] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [noticeTone, setNoticeTone] = useState<'success' | 'error'>('success')
-  const [pendingWrite, setPendingWrite] = useState<'zone' | 'zone-status' | 'acs' | 'link' | 'unlink' | null>(null)
-  const [pendingAssignment, setPendingAssignment] = useState<ZoneAssignment | null>(null)
-  const [savingAction, setSavingAction] = useState<'zone' | 'zone-status' | 'acs' | 'link' | null>(null)
-  const activeZones = zones.filter((zone) => zone.active)
-
-  const loadLists = async () => {
+  const [pendingWrite, setPendingWrite] = useState<'zone' | 'zone-status' | null>(null)
+  async function loadMicroareas() {
     if (!supabase) return
-    setLoadingLists(true)
+    setLoading(true)
     try {
-      const [{ data: people, error: peopleError }, { data: links, error: linksError }, { data: microareaRows, error: microareaError }] = await Promise.all([
-        supabase.from('census_acs').select('id,full_name,email,phone,active,user_id').eq('active', true).order('full_name').limit(500),
-        supabase.from('census_acs_zone_assignments').select('id,acs_id,zone_id,active,created_at,ended_at').order('created_at', { ascending: false }).limit(2000),
-        supabase.from('health_microareas').select('id,code,name,team_id,active').eq('active', true).order('code').limit(2000),
-      ])
-      if (peopleError) throw new Error(peopleError.message)
-      if (linksError) throw new Error(linksError.message)
-      if (microareaError) throw new Error(microareaError.message)
-      setAcs((people || []) as CensusAcs[])
-      setAssignments((links || []) as ZoneAssignment[])
-      setMicroareas((microareaRows || []) as CensusMicroarea[])
+      const { data, error } = await supabase.from('health_microareas').select('id,code,name,team_id,active').eq('active', true).order('code').limit(2000)
+      if (error) throw new Error(error.message)
+      setMicroareas((data || []) as CensusMicroarea[])
     } catch (error) {
-      setNoticeTone('error'); setNotice(`Não foi possível atualizar as listas: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setLoadingLists(false) }
+      setNoticeTone('error')
+      setNotice(`Não foi possível carregar as microáreas oficiais: ${error instanceof Error ? error.message : 'tente novamente.'}`)
+    } finally { setLoading(false) }
   }
-  useEffect(() => { void loadLists() }, [])
-  useEffect(() => { if (!selectedZone && activeZones[0]) setSelectedZone(activeZones[0].id) }, [selectedZone, zones])
-  useEffect(() => {
-    const term = userSearch.trim()
-    if (!supabase || term.length < 2 || selectedUser) { setUserResults([]); return }
-    const db = supabase
-    let cancelled = false
-    const timer = window.setTimeout(async () => {
-      const { data, error } = await db.from('usuarios').select('uuid,nome,email,telefone').eq('ativo', true).not('uuid', 'is', null).ilike('nome', `%${term}%`).order('nome').limit(12)
-      if (!cancelled) {
-        if (error) { setNoticeTone('error'); setNotice(`Não foi possível pesquisar usuários cadastrados: ${error.message}`); setUserResults([]) }
-        else setUserResults((data || []).filter((item) => item.uuid && item.nome && item.email).map((item) => ({ uuid: item.uuid as string, nome: item.nome as string, email: item.email as string, telefone: item.telefone as string | null })))
-      }
-    }, 250)
-    return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [userSearch, selectedUser])
+  useEffect(() => { void loadMicroareas() }, [])
 
   async function saveZone() {
-    if (!supabase || !zoneName.trim()) return
-    setSaving(true); setSavingAction('zone'); setNotice('')
+    if (!supabase || !zoneName.trim() || !zoneMicroareaId) return
+    setSaving(true); setNotice('')
     try {
-      if (!zoneMicroareaId) throw new Error('Selecione a microárea oficial correspondente a esta zona.')
       const query = editingZoneId
         ? supabase.from('census_zones').update({ name: zoneName.trim(), color: zoneColor, microarea_id: zoneMicroareaId, updated_at: new Date().toISOString() }).eq('id', editingZoneId)
         : supabase.from('census_zones').insert({ name: zoneName.trim(), color: zoneColor, microarea_id: zoneMicroareaId })
@@ -260,132 +243,52 @@ function ZoneManagement({ zones, onChanged }: { zones: CensusZone[]; onChanged: 
       setNoticeTone('success'); setNotice(wasEditing ? 'Zona atualizada.' : 'Zona criada com sucesso.'); onChanged()
     } catch (error) {
       setNoticeTone('error'); setNotice(`Não foi possível salvar a zona: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setSaving(false); setSavingAction(null) }
+    } finally { setSaving(false) }
   }
   async function toggleZoneActive() {
     const zone = zones.find((item) => item.id === editingZoneId)
     if (!supabase || !zone) return
-    setSaving(true); setSavingAction('zone-status'); setNotice('')
+    setSaving(true); setNotice('')
     try {
       const { error } = await supabase.from('census_zones').update({ active: !zone.active, updated_at: new Date().toISOString() }).eq('id', zone.id)
       if (error) throw new Error(error.message)
       setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId('')
-      setNoticeTone('success'); setNotice(zone.active ? 'Zona inativada. O histórico e os vínculos foram preservados.' : 'Zona reativada.'); onChanged(); await loadLists()
+      setNoticeTone('success'); setNotice(zone.active ? 'Zona inativada. O histórico e os vínculos territoriais foram preservados.' : 'Zona reativada.'); onChanged()
     } catch (error) {
       setNoticeTone('error'); setNotice(`Não foi possível alterar o estado da zona: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setSaving(false); setSavingAction(null) }
-  }
-  async function createAcs() {
-    if (!supabase || !selectedUser) return
-    setSaving(true); setSavingAction('acs'); setNotice('')
-    try {
-      const { error } = await supabase.from('census_acs').insert({ full_name: selectedUser.nome, email: selectedUser.email, phone: selectedUser.telefone, user_id: selectedUser.uuid })
-      if (error) throw new Error(error.message)
-      setUserSearch(''); setSelectedUser(null); setNoticeTone('success'); setNotice('ACS vinculado ao usuário cadastrado no sistema.'); await loadLists()
-    } catch (error) {
-      setNoticeTone('error'); setNotice(`Não foi possível cadastrar o ACS: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setSaving(false); setSavingAction(null) }
-  }
-  async function saveAssignment() {
-    if (!supabase || !selectedAcs || !selectedZone) return
-    setSaving(true); setSavingAction('link'); setNotice('')
-    try {
-      const { error } = await supabase.rpc('census_save_acs_zone_assignment', { p_assignment_id: editingAssignmentId || null, p_acs_id: selectedAcs, p_zone_id: selectedZone })
-      if (error) throw new Error(error.message)
-      setEditingAssignmentId(''); setShowAssignmentForm(false); setSelectedAcs(''); setSelectedZone(activeZones[0]?.id || '')
-      setNoticeTone('success'); setNotice('Vínculo territorial salvo; o vínculo anterior foi preservado no histórico.'); await loadLists()
-    } catch (error) {
-      setNoticeTone('error'); setNotice(`Não foi possível salvar o vínculo: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setSaving(false); setSavingAction(null) }
-  }
-  async function deactivateAssignment(assignment: ZoneAssignment) {
-    if (!supabase) return
-    setSaving(true); setSavingAction('link'); setNotice('')
-    try {
-      const { error } = await supabase.rpc('census_save_acs_zone_assignment', { p_assignment_id: assignment.id, p_acs_id: null, p_zone_id: null })
-      if (error) throw new Error(error.message)
-      setNoticeTone('success'); setNotice('Vínculo encerrado e mantido no histórico.'); await loadLists()
-    } catch (error) {
-      setNoticeTone('error'); setNotice(`Não foi possível encerrar o vínculo: ${error instanceof Error ? error.message : 'tente novamente.'}`)
-    } finally { setSaving(false); setSavingAction(null) }
+    } finally { setSaving(false) }
   }
   function startEditZone(zone: CensusZone) { setEditingZoneId(zone.id); setZoneName(zone.name); setZoneColor(zone.color); setZoneMicroareaId(zone.microarea_id || ''); setShowZoneForm(true) }
-  function startEditAssignment(link: ZoneAssignment) { setEditingAssignmentId(link.id); setSelectedAcs(link.acs_id); setSelectedZone(link.zone_id); setShowAssignmentForm(true) }
   function startNewZone() { setEditingZoneId(''); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId(microareas[0]?.id || ''); setShowZoneForm(true) }
-  function startNewAssignment() { setEditingAssignmentId(''); setSelectedAcs(''); setSelectedZone(activeZones[0]?.id || ''); setShowAssignmentForm(true) }
   function confirmPendingWrite() {
     const action = pendingWrite; setPendingWrite(null)
     if (action === 'zone') void saveZone()
     if (action === 'zone-status') void toggleZoneActive()
-    if (action === 'acs') void createAcs()
-    if (action === 'link') void saveAssignment()
-    if (action === 'unlink' && pendingAssignment) { const assignment = pendingAssignment; setPendingAssignment(null); void deactivateAssignment(assignment) }
   }
   const confirmation = pendingWrite === 'zone'
-    ? { title: editingZoneId ? 'Salvar alterações da zona?' : 'Criar esta zona?', description: `A zona “${zoneName.trim()}” será ${editingZoneId ? 'atualizada' : 'adicionada'} sem remover o histórico dos lotes.`, confirmLabel: editingZoneId ? 'Salvar zona' : 'Criar zona' }
+    ? { title: editingZoneId ? 'Salvar alterações da zona?' : 'Criar esta zona?', description: `A zona “${zoneName.trim()}” será ${editingZoneId ? 'atualizada' : 'adicionada'} e associada à microárea oficial selecionada.`, confirmLabel: editingZoneId ? 'Salvar zona' : 'Criar zona' }
     : pendingWrite === 'zone-status'
       ? { title: zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar esta zona?' : 'Reativar esta zona?', description: 'A zona não será excluída. Lotes, domicílios, visitas e vínculos históricos permanecem preservados.', confirmLabel: zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar zona' : 'Reativar zona' }
-      : pendingWrite === 'acs'
-        ? { title: 'Vincular usuário como ACS?', description: `${selectedUser?.nome || ''} (${selectedUser?.email || ''}) já possui cadastro no sistema e será associado ao catálogo ACS.`, confirmLabel: 'Vincular ACS' }
-        : pendingWrite === 'link'
-          ? { title: editingAssignmentId ? 'Atualizar vínculo territorial?' : 'Criar vínculo territorial?', description: `${acs.find((person) => person.id === selectedAcs)?.full_name || 'O ACS selecionado'} será vinculado a ${activeZones.find((zone) => zone.id === selectedZone)?.name || 'à zona selecionada'}. O vínculo anterior será encerrado, não apagado.`, confirmLabel: editingAssignmentId ? 'Atualizar vínculo' : 'Criar vínculo' }
-          : pendingWrite === 'unlink'
-            ? { title: 'Encerrar este vínculo?', description: 'A relação atual será encerrada, mas permanecerá disponível no histórico territorial.', confirmLabel: 'Encerrar vínculo' }
-            : null
-  const linkedAcs = acs.filter((person) => Boolean(person.user_id))
-  const activeLinks = assignments.filter((link) => link.active)
-  const zoneAcsNames = (zoneId: string) => activeLinks.filter((link) => link.zone_id === zoneId).map((link) => acs.find((person) => person.id === link.acs_id)?.full_name).filter(Boolean)
-  const acsZoneNames = (acsId: string) => activeLinks.filter((link) => link.acs_id === acsId).map((link) => zones.find((zone) => zone.id === link.zone_id)?.name).filter(Boolean)
-  const microareaName = (id: string | null) => { const item = microareas.find((microarea) => microarea.id === id); return item ? `${item.code} · ${item.name}` : 'Microárea não vinculada' }
-  const cancelZoneEdit = () => { setEditingZoneId(''); setShowZoneForm(false); setZoneName(''); setZoneColor('#2c7892'); setZoneMicroareaId('') }
-  const cancelAssignmentEdit = () => { setEditingAssignmentId(''); setShowAssignmentForm(false); setSelectedAcs(''); setSelectedZone(activeZones[0]?.id || '') }
-  const refreshLists = () => { void loadLists(); onChanged() }
+      : null
+  const microareaName = (microareaId: string | null) => {
+    const microarea = microareas.find((item) => item.id === microareaId)
+    return microarea ? `${microarea.code} · ${microarea.name}` : 'Microárea oficial não associada'
+  }
 
-  return <section className="fleet-section fleet-page-section census-zones-page">
-    <header className="census-zones-intro">
-      <span className="fleet-kicker">ORGANIZAÇÃO DO TERRITÓRIO</span><h2>Zonas e ACS</h2>
-      <p>Faça em ordem: organize as zonas, vincule os ACS já cadastrados no sistema e confira quem responde por cada território.</p>
-      <ol className="census-zones-step-guide" aria-label="Etapas para organizar o território"><li><span>1</span><div><strong>Zonas</strong><small>Crie ou revise</small></div></li><li aria-hidden="true" className="census-step-arrow">›</li><li><span>2</span><div><strong>Equipe ACS</strong><small>Selecione usuários</small></div></li><li aria-hidden="true" className="census-step-arrow">›</li><li><span>3</span><div><strong>Responsáveis</strong><small>Associe à zona</small></div></li></ol>
-    </header>
-    {notice && <div className={noticeTone === 'error' ? 'fleet-inline-error' : 'fleet-inline-success'} role={noticeTone === 'error' ? 'alert' : 'status'}>{noticeTone === 'error' ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}{notice}</div>}
-    {saving && <div className="census-write-progress" role="status"><LoaderCircle className="spin" size={18} /><span>{savingAction === 'zone' ? 'Salvando a zona…' : savingAction === 'zone-status' ? 'Atualizando o estado da zona…' : savingAction === 'acs' ? 'Vinculando o usuário ao catálogo ACS…' : 'Salvando o vínculo…'} Aguarde.</span></div>}
-
-    <div className="census-zones-flow">
-      <section className="fleet-panel census-management-card census-workflow-step" aria-labelledby="zoneStepTitle">
-        <div className="census-step-heading"><span className="census-step-number">1</span><div><span className="fleet-kicker">PRIMEIRO PASSO</span><h3 id="zoneStepTitle">Organize as zonas</h3></div><button type="button" className="fleet-primary-button" onClick={startNewZone} disabled={saving}><Plus size={15} />Nova zona</button></div>
-        <p>As zonas dividem o território visualmente. Cada cor deve apontar para uma microárea oficial já cadastrada; lotes, ACS e histórico continuam vinculados à zona.</p>
-        <div className="census-zone-directory">{zones.map((zone) => { const names = zoneAcsNames(zone.id); return <article className={`census-zone-directory-row${zone.active ? '' : ' inactive'}`} key={zone.id}><i className="census-zone-swatch" style={{ background: zone.color }} /><div className="census-zone-directory-copy"><strong>{zone.name}</strong><small>{microareaName(zone.microarea_id)} · {names.length ? `Responsável${names.length > 1 ? 'is' : ''}: ${names.join(', ')}` : 'Nenhum ACS responsável vinculado'}</small></div><span className={`census-state-pill${zone.active ? ' active' : ''}`}>{zone.active ? 'Ativa' : 'Inativa'}</span><button type="button" className="fleet-secondary-button" onClick={() => startEditZone(zone)} disabled={saving}>Editar</button></article> })}{!zones.length && <div className="census-flow-empty"><MapPinned size={20} /><span><strong>Nenhuma zona cadastrada</strong><small>Comece criando a primeira zona do território.</small></span></div>}</div>
-        {showZoneForm && <div className="census-flow-form census-zone-edit-form"><div className="census-flow-form-title"><strong>{editingZoneId ? 'Editar dados da zona' : 'Nova zona'}</strong><small>Informe o nome visual, a cor e a microárea oficial que ela representa.</small></div><div className="census-zone-edit-fields"><label>Nome da zona<input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ex.: Zona Azul" disabled={saving} /></label><label>Microárea oficial<select value={zoneMicroareaId} onChange={(event) => setZoneMicroareaId(event.target.value)} disabled={saving} required><option value="">Selecione a microárea</option>{microareas.map((microarea) => <option key={microarea.id} value={microarea.id}>{microarea.code} · {microarea.name}</option>)}</select></label><label>Cor no mapa<div className="census-color-input"><input type="color" value={zoneColor} onChange={(event) => setZoneColor(event.target.value)} disabled={saving} /><span>{zoneColor}</span></div></label></div><div className="census-zone-form-actions"><button type="button" className="fleet-primary-button" disabled={saving || !zoneName.trim() || !zoneMicroareaId} onClick={() => setPendingWrite('zone')}>{editingZoneId ? <Save size={15} /> : <Check size={15} />}{editingZoneId ? 'Salvar zona' : 'Criar zona'}</button>{editingZoneId && <button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => setPendingWrite('zone-status')}>{zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar zona' : 'Reativar zona'}</button>}<button type="button" className="fleet-secondary-button" disabled={saving} onClick={cancelZoneEdit}>Cancelar</button></div></div>}
-      </section>
-
-      <section className="fleet-panel census-management-card census-workflow-step" aria-labelledby="acsStepTitle">
-        <div className="census-step-heading"><span className="census-step-number">2</span><div><span className="fleet-kicker">EQUIPE</span><h3 id="acsStepTitle">Selecione os ACS cadastrados</h3></div></div>
-        <p>Digite o nome e escolha uma pessoa da lista. O ACS precisa ter uma conta ativa no sistema; não é criado um usuário novo aqui.</p>
-        <div className="census-acs-work-area"><div className="census-acs-search-panel">
-          <label>Buscar usuário pelo nome<input value={userSearch} onChange={(event) => { setUserSearch(event.target.value); setSelectedUser(null) }} placeholder="Comece a digitar um nome…" disabled={saving} autoComplete="off" /></label>
-          {userSearch.trim().length > 0 && userSearch.trim().length < 2 && <small className="census-directory-help">Digite mais uma letra para ver sugestões.</small>}
-          {userResults.length > 0 && <div className="census-user-suggestions" role="listbox" aria-label="Usuários encontrados">{userResults.map((user) => <button type="button" role="option" aria-selected={false} key={user.uuid} onClick={() => { setSelectedUser(user); setUserSearch(user.nome); setUserResults([]) }}><strong>{user.nome}</strong><small>{user.email}</small></button>)}</div>}
-          {userSearch.trim().length >= 2 && !selectedUser && !userResults.length && <small className="census-directory-help">Nenhum usuário ativo encontrado com esse nome.</small>}
-          {selectedUser && <div className="census-selected-user"><CheckCircle2 size={17} /><span><strong>{selectedUser.nome}</strong><small>{selectedUser.email}</small></span></div>}
-          <button type="button" className="fleet-primary-button" disabled={saving || !selectedUser} onClick={() => setPendingWrite('acs')}>{savingAction === 'acs' ? <LoaderCircle className="spin" size={15} /> : <UserPlus size={15} />}{savingAction === 'acs' ? 'Vinculando…' : 'Adicionar à equipe ACS'}</button>
-        </div><div className="census-acs-directory"><div className="census-sublist-heading"><strong>Equipe cadastrada</strong><span>{linkedAcs.length} vinculado(s) a usuário</span></div>
-          {acs.map((person) => { const zoneNames = acsZoneNames(person.id); return <div className={`census-acs-directory-row${person.user_id ? '' : ' legacy'}`} key={person.id}><span className="fleet-user-avatar">{person.full_name[0]?.toUpperCase()}</span><span><strong>{person.full_name}</strong><small>{!person.user_id ? 'Conta do sistema ainda não vinculada' : zoneNames.length ? `Zona${zoneNames.length > 1 ? 's' : ''}: ${zoneNames.join(', ')}` : 'Ainda sem zona responsável'}</small></span></div> })}
-          {!acs.length && <div className="census-flow-empty compact"><UsersRound size={18} /><span><strong>A equipe ainda não tem ACS</strong><small>Pesquise pelo nome acima para adicionar um usuário cadastrado.</small></span></div>}
-        </div></div>
-      </section>
-
-      <section className="fleet-panel census-link-card census-workflow-step" aria-labelledby="assignmentStepTitle">
-        <div className="census-step-heading"><span className="census-step-number">3</span><div><span className="fleet-kicker">DISTRIBUIÇÃO DO TERRITÓRIO</span><h3 id="assignmentStepTitle">Quem responde por cada zona?</h3></div><button type="button" className="fleet-secondary-button census-refresh-list" onClick={refreshLists} disabled={loadingLists || saving}>{loadingLists ? <LoaderCircle className="spin" size={14} /> : <RotateCcw size={14} />}Atualizar lista</button></div>
-        <p>Confira a relação atual. Para mudar um responsável, edite o vínculo; o anterior fica guardado no histórico.</p>
-        <div className="census-zone-responsibilities">{zones.map((zone) => { const zoneLinks = activeLinks.filter((link) => link.zone_id === zone.id); return <article className={`census-zone-responsibility${zone.active ? '' : ' inactive'}`} key={zone.id}><header><i style={{ background: zone.color }} /><div><strong>{zone.name}</strong><small>{zone.active ? 'Zona ativa' : 'Zona inativa · sem operação até reativar'}</small></div></header><div className="census-zone-responsibility-links">{zoneLinks.length ? zoneLinks.map((link) => { const person = acs.find((item) => item.id === link.acs_id); return <div className="census-zone-responsibility-link" key={link.id}><span><strong>{person?.full_name || 'ACS indisponível'}</strong><small>{person?.user_id ? 'Responsável vinculado' : 'Conta pendente de associação'}</small></span><button type="button" className="fleet-secondary-button" onClick={() => startEditAssignment(link)} disabled={saving}>Editar vínculo</button></div> }) : <div className="census-zone-unassigned"><span>Sem ACS responsável</span>{zone.active && <button type="button" onClick={() => { startNewAssignment(); setSelectedZone(zone.id) }} disabled={!linkedAcs.length || saving}>Atribuir ACS</button>}</div>}</div></article> })}{!zones.length && <div className="census-flow-empty compact"><MapPinned size={18} /><span><strong>Cadastre uma zona primeiro</strong><small>Ela aparecerá aqui para receber um ACS responsável.</small></span></div>}</div>
-        <div className="census-assignment-actions"><button type="button" className="fleet-primary-button" onClick={startNewAssignment} disabled={!activeZones.length || !linkedAcs.length || saving}><Plus size={15} />Novo vínculo Zona × ACS</button>{!activeZones.length && <small>Cadastre ou reative uma zona para criar vínculos.</small>}{activeZones.length > 0 && !linkedAcs.length && <small>Adicione um ACS cadastrado no passo 2 para começar.</small>}</div>
-        {showAssignmentForm && <div className="census-flow-form census-assignment-edit-form"><div className="census-flow-form-title"><strong>{editingAssignmentId ? 'Atualizar vínculo' : 'Novo vínculo territorial'}</strong><small>Escolha a pessoa e a zona ativa que ficará sob sua responsabilidade.</small></div><div className="census-link-form"><label>ACS<select value={selectedAcs} onChange={(event) => setSelectedAcs(event.target.value)} disabled={saving}><option value="">Selecione um ACS</option>{linkedAcs.map((person) => <option key={person.id} value={person.id}>{person.full_name}</option>)}{editingAssignmentId && acs.find((person) => person.id === selectedAcs && !person.user_id) && <option value={selectedAcs}>{acs.find((person) => person.id === selectedAcs)?.full_name} — conta não vinculada</option>}</select>{editingAssignmentId && acs.find((person) => person.id === selectedAcs && !person.user_id) && <small className="census-directory-help">Escolha um ACS associado a usuário cadastrado para substituir este vínculo antigo.</small>}</label><label>Zona<select value={selectedZone} onChange={(event) => setSelectedZone(event.target.value)} disabled={saving}><option value="">Selecione uma zona ativa</option>{activeZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><div className="census-assignment-form-actions"><button type="button" className="fleet-primary-button" disabled={saving || !selectedAcs || !selectedZone || !linkedAcs.some((person) => person.id === selectedAcs)} onClick={() => setPendingWrite('link')}>{savingAction === 'link' ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{editingAssignmentId ? 'Salvar alteração' : 'Criar vínculo'}</button><button type="button" className="fleet-secondary-button" onClick={cancelAssignmentEdit} disabled={saving}>Cancelar</button></div></div></div>}
-        <details className="census-assignment-history"><summary>Histórico de vínculos encerrados ({assignments.filter((link) => !link.active).length})</summary><div className="census-assignment-history-list">{assignments.filter((link) => !link.active).map((link) => <div className="census-assignment-history-row" key={link.id}><span>{zones.find((zone) => zone.id === link.zone_id)?.name || 'Zona'} × {acs.find((person) => person.id === link.acs_id)?.full_name || 'ACS'}</span><small>{link.ended_at ? `Encerrado em ${new Intl.DateTimeFormat('pt-BR').format(new Date(link.ended_at))}` : 'Encerrado'}</small></div>)}{!assignments.some((link) => !link.active) && <small>Nenhum vínculo encerrado.</small>}</div></details>
-      </section>
-    </div>
+  return <section className="census-zones-page" aria-busy={loading || saving}>
+    <header className="census-zones-heading"><div><span className="fleet-kicker">CONFIGURAÇÃO TERRITORIAL</span><h2>Zonas e microáreas</h2><p>As zonas visuais do mapa representam microáreas oficiais. A identidade e os vínculos profissionais dos ACS são mantidos em Administração da Saúde.</p></div><button type="button" className="fleet-secondary-button" onClick={() => void loadMicroareas()} disabled={loading || saving}>{loading ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}Atualizar microáreas</button></header>
+    {notice && <div className={`census-territory-notice ${noticeTone}`} role={noticeTone === 'error' ? 'alert' : 'status'}>{notice}</div>}
+    <section className="fleet-panel census-management-card census-workflow-step" aria-labelledby="zoneStepTitle">
+      <div className="census-step-heading"><span className="census-step-number">1</span><div><span className="fleet-kicker">TERRITÓRIO OFICIAL</span><h3 id="zoneStepTitle">Organize as zonas do mapa</h3></div><button type="button" className="fleet-primary-button" onClick={startNewZone} disabled={!microareas.length || saving}><Plus size={15} />Nova zona</button></div>
+      <p>Associe cada zona visual a uma microárea cadastrada em Saúde. Isso mantém o mapa, a equipe e a estrutura territorial falando da mesma área.</p>
+      <div className="census-zone-directory">{zones.map((zone) => <article className={`census-zone-directory-row${zone.active ? '' : ' inactive'}`} key={zone.id}><i className="census-zone-swatch" style={{ background: zone.color }} /><div className="census-zone-directory-copy"><strong>{zone.name}</strong><small>{microareaName(zone.microarea_id)}</small></div><span className={`census-state-pill${zone.active ? ' active' : ''}`}>{zone.active ? 'Ativa' : 'Inativa'}</span><button type="button" className="fleet-secondary-button" onClick={() => startEditZone(zone)} disabled={saving}>Editar</button></article>)}{!zones.length && <div className="census-flow-empty"><MapPinned size={20} /><span><strong>Nenhuma zona cadastrada</strong><small>Cadastre ou associe uma microárea oficial antes de iniciar a distribuição territorial.</small></span></div>}</div>
+      {showZoneForm && <div className="census-flow-form census-zone-edit-form"><div className="census-flow-form-title"><strong>{editingZoneId ? 'Editar dados da zona' : 'Nova zona'}</strong><small>Informe o nome visual, a cor e a microárea oficial que ela representa.</small></div><div className="census-zone-edit-fields"><label>Nome da zona<input value={zoneName} onChange={(event) => setZoneName(event.target.value)} placeholder="Ex.: Zona Azul" disabled={saving} /></label><label>Microárea oficial<select value={zoneMicroareaId} onChange={(event) => setZoneMicroareaId(event.target.value)} disabled={saving} required><option value="">Selecione a microárea</option>{microareas.map((microarea) => <option key={microarea.id} value={microarea.id}>{microarea.code} · {microarea.name}</option>)}</select></label><label>Cor no mapa<div className="census-color-input"><input type="color" value={zoneColor} onChange={(event) => setZoneColor(event.target.value)} disabled={saving} /><span>{zoneColor}</span></div></label></div><div className="census-zone-form-actions"><button type="button" className="fleet-primary-button" disabled={saving || !zoneName.trim() || !zoneMicroareaId} onClick={() => setPendingWrite('zone')}>{editingZoneId ? <Save size={15} /> : <Check size={15} />}{editingZoneId ? 'Salvar zona' : 'Criar zona'}</button>{editingZoneId && <button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => setPendingWrite('zone-status')}>{zones.find((zone) => zone.id === editingZoneId)?.active ? 'Inativar zona' : 'Reativar zona'}</button>}<button type="button" className="fleet-secondary-button" disabled={saving} onClick={() => { setShowZoneForm(false); setEditingZoneId('') }}>Cancelar</button></div></div>}
+    </section>
+    <section className="fleet-panel census-link-card census-workflow-step" aria-labelledby="professionalAssignmentTitle"><div className="census-step-heading"><span className="census-step-number">2</span><div><span className="fleet-kicker">EQUIPE DE SAÚDE</span><h3 id="professionalAssignmentTitle">Vincule os ACS pela estrutura oficial</h3></div></div><p>Cadastre o profissional e associe sua unidade, equipe e microárea em <strong>Administração da Saúde → Profissionais e ACS → Vínculos territoriais</strong>. O acesso ao mapa usa a microárea da zona; não é necessário criar outro cadastro ACS nesta tela.</p></section>
     {confirmation && <CensusWriteConfirmation {...confirmation} onCancel={() => setPendingWrite(null)} onConfirm={confirmPendingWrite} />}
   </section>
 }
+
 function MapPreparationWorkspace() {
   const [mapImport, setMapImport] = useState<MapImport | null>(null)
   const [publishedMapImport, setPublishedMapImport] = useState<MapImport | null>(null)
@@ -817,7 +720,7 @@ function MapPreparationWorkspace() {
             <p>{showOnlyNewLots || showOnlyUnassigned ? `Filtros ativos: ${[showOnlyNewLots ? 'novos ou alterados' : '', showOnlyUnassigned ? 'sem zona' : ''].filter(Boolean).join(' · ')}.` : mapImport?.status === 'DRAFT' ? 'As zonas dos lotes reconhecidos foram preservadas; revise e atribua zonas aos demais.' : 'Mapa operacional exibido sem alterações pendentes.'}</p>
           </section>
           <div className="census-workspace-zones-heading"><div><span className="fleet-kicker">CLASSIFICAÇÃO</span><h2>Escolha uma zona</h2></div><span>{zones.length} zona(s)</span></div>
-          {zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} disabled={saving} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e ACS para criar as zonas do município.</small></div>}
+          {zones.length ? <div className="census-workspace-zone-list">{zones.map((zone) => <button type="button" key={zone.id} disabled={saving} className={activeZoneId === zone.id ? 'active' : ''} onClick={() => setActiveZoneId(zone.id)}><i style={{ background: zone.color }} /><span><strong>{zone.name}</strong><small>{zoneCount(zone.id).toLocaleString('pt-BR')} lote(s)</small></span><Check size={15} /></button>)}</div> : <div className="census-no-zones"><strong>Cadastre uma zona primeiro.</strong><small>Abra o menu Zonas e microáreas para criar as zonas do município.</small></div>}
           {selectedLotKeys.length > 0 && <div className="census-selection-actions"><strong>{selectedLotKeys.length.toLocaleString('pt-BR')} lote(s) selecionado(s)</strong><button type="button" className="fleet-primary-button" disabled={saving || !activeZoneId} onClick={assignSelectedLots}><Check size={15} /> Aplicar zona a {selectedLotKeys.length.toLocaleString('pt-BR')} lote(s)</button><button type="button" className="census-selection-clear" disabled={saving} onClick={() => setSelectedLotKeys([])}>Limpar seleção</button></div>}
           <div className="census-save-card">
             <div className="census-save-card-summary"><span className="census-save-card-icon"><Save size={19} /></span><span><strong>{mapImport?.status === 'DRAFT' ? 'Preparação do rascunho' : 'Mapa operacional'}</strong><small>{visibleAssignedCount.toLocaleString('pt-BR')} de {visibleLots.length.toLocaleString('pt-BR')} lotes visíveis com zona</small></span></div>

@@ -28,7 +28,9 @@ import { supabase } from '../lib/supabase'
 import './GovernancePanel.css'
 import './FleetModule.css'
 
-const BUSINESS_ROLE_IDS = new Set(['GOVERNANCE_ADMIN', 'EXECUTIVE_VIEW', 'UNIT_MANAGER', 'OPERATOR', 'READ_ONLY'])
+const HEALTH_DOMAIN_ROLE_IDS = new Set(['ACS', 'ACE', 'HEALTH_MANAGER', 'HEALTH_SUPERVISOR', 'HEALTH_PROFESSIONAL', 'NURSE', 'PHYSICIAN'])
+function isModuleRoleAllowed(roleId: string, moduleId: string) { return !HEALTH_DOMAIN_ROLE_IDS.has(roleId) || moduleId === 'census' }
+function modulesForRole(roleId: string, current: string[], modules: MunicipalModule[]) { return HEALTH_DOMAIN_ROLE_IDS.has(roleId) ? (modules.some((module) => module.id === 'census') ? ['census'] : []) : current }
 
 type GovernancePanelProps = {
   userEmail?: string
@@ -213,6 +215,8 @@ function humanAuditAction(action: string) {
     USER_ACTIVE: 'Situação do usuário alterada',
     ASSIGNMENT_SAVE: 'Acesso e responsabilidade atualizados',
     ASSIGNMENT_DELETE: 'Acesso removido',
+    MODULE_ACCESS_SAVE: 'Acesso limitado a um módulo atualizado',
+    MODULE_ACCESS_REVOKE: 'Acesso a um módulo revogado',
     MUNICIPALITY_SAVE: 'Dados do município atualizados',
   }
   return labels[action] || action.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase())
@@ -220,7 +224,7 @@ function humanAuditAction(action: string) {
 
 function humanAuditDetails(details: Record<string, unknown> | null) {
   if (!details) return 'Sem detalhes adicionais.'
-  const fields: Record<string, string> = { name: 'nome', email: 'e-mail', code: 'código', ibge_code: 'código IBGE', active: 'situação' }
+  const fields: Record<string, string> = { name: 'nome', email: 'e-mail', code: 'código', ibge_code: 'código IBGE', active: 'situação', module_id: 'módulo', role_id: 'papel', org_unit_id: 'unidade', valid_until: 'válido até' }
   const visible = Object.entries(details).filter(([key]) => fields[key]).map(([key, value]) => `${fields[key]}: ${typeof value === 'boolean' ? (value ? 'ativo' : 'inativo') : String(value)}`)
   return visible.length ? visible.join(' · ') : 'A alteração foi registrada no histórico.'
 }
@@ -287,7 +291,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setModules((moduleResult.data || []) as unknown as MunicipalModule[])
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
     setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
-    setRoles(((roleResult.data || []) as unknown as GovernanceRole[]).filter((role) => BUSINESS_ROLE_IDS.has(role.id)))
+    setRoles((roleResult.data || []) as unknown as GovernanceRole[])
     setAudit((auditResult.data || []) as unknown as GovernanceAudit[])
     setLoading(false)
   }, [auditSearch])
@@ -769,8 +773,8 @@ function MunicipalityDialog({ draft, saving, onChange, onCancel, onSubmit }: { d
 }
 
 function AssignmentManagerDialog({ user, orgUnits, roles, modules, draft, saving, onNew, onEdit, onDelete, onChange, onSave, onCancel }: { user: GovernanceUser; orgUnits: OrgUnit[]; roles: GovernanceRole[]; modules: MunicipalModule[]; draft: AssignmentForm | null; saving: boolean; onNew: () => void; onEdit: (assignment: GovernanceAssignment) => void; onDelete: (assignment: GovernanceAssignment) => void; onChange: (draft: AssignmentForm | null) => void; onSave: (draft: AssignmentForm) => void; onCancel: () => void }) {
-  const toggle = (moduleId: string) => { if (!draft) return; onChange({ ...draft, module_ids: draft.module_ids.includes(moduleId) ? draft.module_ids.filter((id) => id !== moduleId) : [...draft.module_ids, moduleId] }) }
-  return <div className="governance-overlay"><section className="governance-dialog governance-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="assignmentDialogTitle"><div className="governance-dialog-heading"><div><span className="governance-eyebrow">GOVERNANÇA DE ACESSOS</span><h2 id="assignmentDialogTitle">Atribuições de {user.name || user.email}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div><div className="governance-assignment-list">{user.assignments.map((assignment) => <div className="governance-assignment-item" key={assignment.id}><div><strong>{assignment.role_label}</strong><span>{assignment.org_unit_name} · {assignment.module_ids.length} módulo(s) · {assignment.active ? 'Ativa' : 'Inativa'}</span></div><div><button className="governance-text-button" type="button" onClick={() => onEdit(assignment)}>Editar</button><button className="governance-text-button governance-text-button--danger" type="button" onClick={() => onDelete(assignment)}>Remover</button></div></div>)}</div>{draft ? <div className="governance-assignment-editor"><div className="governance-form-grid governance-form-grid--two"><label className="governance-field">Unidade<select value={draft.org_unit_id} onChange={(event) => onChange({ ...draft, org_unit_id: event.target.value })} required><option value="">Selecione</option>{orgUnits.filter((unit) => unit.is_active).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label><label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => onChange({ ...draft, role_id: event.target.value })} required><option value="">Selecione</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label></div><label className="governance-field">Válida até<input type="date" value={draft.valid_until} onChange={(event) => onChange({ ...draft, valid_until: event.target.value })} /></label><div className="governance-checkbox-list">{modules.map((module) => <label className="governance-check" key={module.id}><input type="checkbox" checked={draft.module_ids.includes(module.id)} onChange={() => toggle(module.id)} /><span><strong>{module.label}</strong><small>{module.status_label}</small></span></label>)}</div><div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={() => onChange(null)}>Cancelar</button><button className="governance-primary-button" type="button" disabled={saving || !draft.org_unit_id || !draft.role_id} onClick={() => onSave(draft)}>Salvar atribuição</button></div></div> : <button className="governance-primary-button" type="button" onClick={onNew}>Adicionar outra atribuição</button>}</section></div>
+  const toggle = (moduleId: string) => { if (!draft || !isModuleRoleAllowed(draft.role_id, moduleId)) return; onChange({ ...draft, module_ids: draft.module_ids.includes(moduleId) ? draft.module_ids.filter((id) => id !== moduleId) : [...draft.module_ids, moduleId] }) }
+  return <div className="governance-overlay"><section className="governance-dialog governance-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="assignmentDialogTitle"><div className="governance-dialog-heading"><div><span className="governance-eyebrow">GOVERNANÇA DE ACESSOS</span><h2 id="assignmentDialogTitle">Atribuições de {user.name || user.email}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div><div className="governance-assignment-list">{user.assignments.map((assignment) => <div className="governance-assignment-item" key={assignment.id}><div><strong>{assignment.role_label}</strong><span>{assignment.org_unit_name} · {assignment.module_ids.length} módulo(s) · {assignment.active ? 'Ativa' : 'Inativa'}</span></div><div><button className="governance-text-button" type="button" onClick={() => onEdit(assignment)}>Editar</button><button className="governance-text-button governance-text-button--danger" type="button" onClick={() => onDelete(assignment)}>Remover</button></div></div>)}</div>{draft ? <div className="governance-assignment-editor"><div className="governance-form-grid governance-form-grid--two"><label className="governance-field">Unidade<select value={draft.org_unit_id} onChange={(event) => onChange({ ...draft, org_unit_id: event.target.value })} required><option value="">Selecione</option>{orgUnits.filter((unit) => unit.is_active).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label><label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => onChange({ ...draft, role_id: event.target.value, module_ids: modulesForRole(event.target.value, draft.module_ids, modules) })} required><option value="">Selecione</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label></div><label className="governance-field">Válida até<input type="date" value={draft.valid_until} onChange={(event) => onChange({ ...draft, valid_until: event.target.value })} /></label><div className="governance-checkbox-list">{modules.map((module) => <label className="governance-check" key={module.id}><input type="checkbox" checked={draft.module_ids.includes(module.id)} disabled={!isModuleRoleAllowed(draft.role_id, module.id)} onChange={() => toggle(module.id)} /><span><strong>{module.label}</strong><small>{!isModuleRoleAllowed(draft.role_id, module.id) ? 'Este papel de Saúde só pode acessar o módulo Saúde.' : module.status_label}</small></span></label>)}</div><div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={() => onChange(null)}>Cancelar</button><button className="governance-primary-button" type="button" disabled={saving || !draft.org_unit_id || !draft.role_id} onClick={() => onSave(draft)}>Salvar atribuição</button></div></div> : <button className="governance-primary-button" type="button" onClick={onNew}>Adicionar outra atribuição</button>}</section></div>
 }
 function ModuleDialog({
   draft,
@@ -897,10 +901,13 @@ function UserDialog({
   const isInvite = draft.user_id === null
 
   const toggleModule = (id: string) => {
+    if (!isModuleRoleAllowed(draft.role_id, id)) return
     const key = 'module_ids'
     const current = draft[key]
     setDraft({ ...draft, [key]: current.includes(id) ? current.filter((item) => item !== id) : [...current, id] })
   }
+
+  const changeRole = (roleId: string) => setDraft({ ...draft, role_id: roleId, module_ids: modulesForRole(roleId, draft.module_ids, modules) })
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -921,14 +928,14 @@ function UserDialog({
             <div className="governance-user-identity"><strong>{draft.name || 'Nome não informado'}</strong><span>{draft.email}</span></div>
           )}
 
-          <div className="governance-assignment-note"><ShieldCheck size={18} aria-hidden="true" /><p>A atribuição define onde a pessoa trabalha, qual papel exerce e quais módulos pode acessar. O escopo territorial e as regras específicas continuam protegidos pelo backend.</p></div>
+          <div className="governance-assignment-note"><ShieldCheck size={18} aria-hidden="true" /><p>A atribuição define a unidade, o papel e os módulos acessíveis. Papéis de Saúde são exclusivos do módulo Saúde. Para o ACS atuar no território, o cadastro profissional, a equipe e a microárea continuam em Administração da Saúde.</p></div>
 
           <div className="governance-assignment-columns">
             <fieldset className="governance-check-group">
               <legend>Lotação e papel</legend>
               <p>A unidade organizacional e o papel formam a atribuição institucional.</p>
               <label className="governance-field">Unidade organizacional<select value={draft.org_unit_id} onChange={(event) => setDraft({ ...draft, org_unit_id: event.target.value })} required><option value="">Selecione uma unidade</option>{orgUnits.filter((unit) => unit.is_active).map((unit) => <option key={unit.id} value={unit.id}>{unit.code} · {unit.name}</option>)}</select></label>
-              <label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => setDraft({ ...draft, role_id: event.target.value })} required><option value="">Selecione um papel</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label>
+              <label className="governance-field">Papel<select value={draft.role_id} onChange={(event) => changeRole(event.target.value)} required><option value="">Selecione um papel</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label>
               <div className="governance-form-grid governance-form-grid--two">
                 <label className="governance-field">Válida até<input type="date" value={draft.valid_until} onChange={(event) => setDraft({ ...draft, valid_until: event.target.value })} /></label>
                 <label className="governance-check"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /><span><strong>Atribuição ativa</strong><small>Pode acessar os módulos autorizados.</small></span></label>
@@ -937,11 +944,11 @@ function UserDialog({
 
             <fieldset className="governance-check-group">
               <legend>Módulos atribuídos</legend>
-              <p>Escolha os módulos que essa atribuição pode abrir.</p>
+              <p>Papéis operacionais de Saúde ficam restritos ao módulo Saúde; outras funções podem receber apenas os módulos selecionados.</p>
               <div className="governance-checkbox-list">
                 {modules.map((module) => (
                   <label className="governance-check" key={module.id}>
-                    <input type="checkbox" checked={draft.module_ids.includes(module.id)} onChange={() => toggleModule(module.id)} />
+                    <input type="checkbox" checked={draft.module_ids.includes(module.id)} disabled={!isModuleRoleAllowed(draft.role_id, module.id)} onChange={() => toggleModule(module.id)} />
                     <span><strong>{module.label}</strong><small>{module.status_label}</small></span>
                   </label>
                 ))}

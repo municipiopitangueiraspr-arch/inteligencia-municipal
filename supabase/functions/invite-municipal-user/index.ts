@@ -66,6 +66,12 @@ Deno.serve(async (request: Request) => {
     if (adminCheckError) throw adminCheckError;
     if (isAdmin !== true) return json(request, { error: "Acesso administrativo obrigatório." }, 403);
 
+    const { error: assignmentValidationError } = await userClient.rpc("municipal_governance_validate_assignment", {
+      p_role_id: roleId,
+      p_module_ids: assignmentModuleIds,
+    });
+    if (assignmentValidationError) return json(request, { error: assignmentValidationError.message }, 400);
+
     serviceClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: existing, error: existingError } = await serviceClient.from("usuarios")
       .select("id,uuid,perfil").ilike("email", email).limit(1).maybeSingle();

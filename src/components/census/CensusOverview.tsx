@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, ArrowRight, CheckCircle2, ClipboardCheck, Gauge, LoaderCircle, MapPinned, UsersRound } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, ClipboardCheck, Gauge, Home, LoaderCircle, MapPinned, ShieldCheck, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import './CensusOverview.css'
 
 type Zone = { id: string; name: string; color: string }
-type Lot = { id: string; zone_id: string | null; street_name?: string | null; neighborhood_name?: string | null; block_reference?: string | null; indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null }
+type Lot = { id: string; zone_id: string | null; street_name?: string | null; neighborhood_name?: string | null; block_reference?: string | null; indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | 'COMMERCE' | 'MUNICIPAL_AREA' | null }
 type Household = { id: string; lot_id: string; label: string; created_at: string }
-type Visit = { id: string; household_id: string; acs_id: string | null; visit_date: string; status: string; created_at: string; completed_at: string | null }
+type Visit = { id: string; household_id: string; professional_id: string | null; visit_date: string; status: string; created_at: string; completed_at: string | null }
 type Response = { id: string; visit_id: string; status: string; created_at: string; submitted_at: string | null }
 type Acs = { id: string; full_name: string }
 type OverviewData = { lots: Lot[]; households: Household[]; visits: Visit[]; responses: Response[]; zones: Zone[]; acs: Acs[]; importReady: boolean }
+type RegistrationRow = { lot_id: string; zone_id: string | null; zone_name: string | null; registration_status: string; exclusion_reason: string | null; household_count: number; household_without_family_count: number; family_count: number }
+type ManagerRow = { lot_id: string; zone_id: string | null; zone_name: string | null; acs_id: string | null; acs_name: string | null; lot_status: string; visit_status: string; last_movement_at: string | null; pending_reason: string | null; household_count: number; visit_count: number; submitted_response_count: number }
+type ManagerSummaryData = { registrations: RegistrationRow[]; monitoring: ManagerRow[] }
 type Forecast = { key: string; label: string; daysRemaining: number | null }
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type NextAction = { id: string; title: string; detail: string; address: string; zone: string; lastAction: string; nextStep: string; cta: string; filter: OperationalFilter; tone: 'urgent' | 'pending' | 'neutral' }
@@ -71,6 +74,7 @@ function daysToCompletion(timestamps: string[], remaining: number, now = Date.no
 
 export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered', managerZone?: string) => void }) {
   const [data, setData] = useState<OverviewData | null>(null)
+  const [managerSummary, setManagerSummary] = useState<ManagerSummaryData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -84,14 +88,25 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
     setLoading(true)
     setError('')
     try {
+      if (role === 'manager') {
+        const [registration, monitoring] = await Promise.all([
+          db.rpc('census_lot_registration_overview', { p_zone_id: null, p_from: null, p_to: null }),
+          db.rpc('census_manager_monitoring_context'),
+        ])
+        if (registration.error || monitoring.error) throw new Error(registration.error?.message || monitoring.error?.message || 'Não foi possível carregar o resumo gerencial.')
+        setManagerSummary({ registrations: (registration.data || []) as RegistrationRow[], monitoring: (monitoring.data || []) as ManagerRow[] })
+        setData(null)
+        return
+      }
+      setManagerSummary(null)
       const [imports, lots, households, visits, responses, zones, acs] = await Promise.all([
         db.from('census_territory_map_imports').select('id').limit(1),
         pages<Lot>((from, to) => db.from('census_territory_map_lots').select('id,zone_id,street_name,neighborhood_name,block_reference,indicator_exclusion_reason').order('source_handle').order('id').range(from, to)),
         pages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,created_at').eq('active', true).range(from, to)),
-        pages<Visit>((from, to) => db.from('census_visits').select('id,household_id,acs_id,visit_date,status,created_at,completed_at').order('created_at', { ascending: false }).range(from, to)),
+        pages<Visit>((from, to) => db.from('census_visits').select('id,household_id,professional_id,visit_date,status,created_at,completed_at').order('created_at', { ascending: false }).range(from, to)),
         pages<Response>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,status,created_at,submitted_at').order('created_at', { ascending: false }).range(from, to)),
         db.from('census_zones').select('id,name,color').eq('active', true).order('created_at').limit(100),
-        db.from('census_acs').select('id,full_name').eq('active', true).order('full_name').limit(500),
+        db.from('health_professionals').select('id,full_name').eq('professional_category', 'ACS').eq('active', true).order('full_name').limit(500),
       ])
       if (imports.error || zones.error || acs.error) throw new Error(imports.error?.message || zones.error?.message || acs.error?.message || 'Não foi possível carregar o painel.')
       setData({
@@ -196,7 +211,7 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
     return data.visits.slice(0, 5).map((visit) => ({
       ...visit,
       household: householdNames.get(visit.household_id) || 'Domicílio',
-      acs: visit.acs_id ? acsNames.get(visit.acs_id) || 'Agente não informado' : 'Agente não informado',
+      acs: visit.professional_id ? acsNames.get(visit.professional_id) || 'Agente não informado' : 'Agente não informado',
     }))
   }, [data])
 
@@ -244,6 +259,8 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
       {error && <div className="fleet-inline-error"><AlertCircle size={15} />{error}</div>}
       {loading ? (
         <div className="fleet-loading"><LoaderCircle className="spin" size={20} />Carregando painel…</div>
+      ) : managerSummary ? (
+        <ManagerRegistrationSummary data={managerSummary} focus={focus} onOpen={onOpen} />
       ) : metrics && data ? role === 'manager' ? (
         <ManagerOverview data={data} metrics={metrics} zoneStats={zoneStats} recent={recent} focus={focus} onOpen={onOpen} />
       ) : (
@@ -279,7 +296,7 @@ function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview',
     ...zoneStats.filter((zone) => zone.lots > 0 && zone.coverage < 50).slice(0, 2).map((zone) => ({ id: zone.id, title: `${zone.name} com cobertura de ${zone.coverage}%`, detail: `${zone.done} de ${zone.lots} lotes com visita concluída.`, action: 'Abrir território', onClick: () => onOpen('territory', 'ALL', 'all', zone.id), tone: 'urgent' })),
   ].filter(Boolean).slice(0, 5) as { id: string; title: string; detail: string; action: string; onClick: () => void; tone: string }[]
   const teamRows = data.acs.map((acs) => {
-    const visits = data.visits.filter((visit) => visit.acs_id === acs.id)
+    const visits = data.visits.filter((visit) => visit.professional_id === acs.id)
     const completed = visits.filter((visit) => visit.status === 'COMPLETED').length
     const latest = visits.sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
     return { ...acs, completed, latest: latest ? fmtDate(latest.created_at) : 'Sem atividade registrada', active: Boolean(latest && Date.now() - new Date(latest.created_at).getTime() < 7 * DAY_MS) }
@@ -308,5 +325,56 @@ function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview',
       <section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">TERRITÓRIO</span><h3>Situação por zona</h3></div><button type="button" onClick={() => onOpen('territory')}>Abrir mapa <ArrowRight size={14} /></button></header>{zoneStats.length ? <div className="manager-zone-list">{zoneStats.slice(0, 6).map((zone) => <button type="button" key={zone.id} onClick={() => onOpen('territory', 'ALL', 'all', zone.id)}><span><strong>{zone.name}</strong><small>{zone.done} de {zone.lots} lotes visitados</small></span><b>{zone.coverage}%</b><i><em style={{ width: `${zone.coverage}%` }} /></i></button>)}</div> : <div className="manager-empty">Nenhuma zona ativa cadastrada.</div>}</section>
     </div>
     <section className="manager-recent"><span className="manager-kicker">ATIVIDADE RECENTE</span><strong>{recent.length ? `${recent.length} registros recentes carregados` : 'Nenhuma atividade recente registrada'}</strong><button type="button" onClick={() => onOpen('territory')}>Ver histórico de visitas <ArrowRight size={14} /></button></section>
+  </section>
+}
+
+
+function ManagerRegistrationSummary({ data, focus, onOpen }: { data: ManagerSummaryData; focus: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered', managerZone?: string) => void }) {
+  const excludedReasons = new Set(['COMMERCE', 'MUNICIPAL_AREA', 'PUBLIC'])
+  const eligible = data.registrations.filter((row) => !excludedReasons.has(row.exclusion_reason || ''))
+  const noHousehold = eligible.filter((row) => row.household_count === 0).length
+  const householdsWithoutFamily = eligible.reduce((sum, row) => sum + row.household_without_family_count, 0)
+  const familyCount = eligible.reduce((sum, row) => sum + row.family_count, 0)
+  const excludedCount = data.registrations.length - eligible.length
+  const notVisited = data.monitoring.filter((row) => row.visit_status === 'NO_ACTIVITY' || row.visit_status === 'NO_VISIT').length
+  const responseCount = data.monitoring.reduce((sum, row) => sum + row.submitted_response_count, 0)
+  const zones = [...new Map(eligible.filter((row) => row.zone_id).map((row) => [row.zone_id as string, row.zone_name || 'Zona sem nome'])).entries()]
+    .map(([id, name]) => {
+      const lots = eligible.filter((row) => row.zone_id === id)
+      const monitoring = new Map(data.monitoring.filter((row) => row.zone_id === id).map((row) => [row.lot_id, row]))
+      return { id, name, lots: lots.length, noHousehold: lots.filter((row) => row.household_count === 0).length, noFamily: lots.reduce((sum, row) => sum + row.household_without_family_count, 0), responses: lots.reduce((sum, row) => sum + (monitoring.get(row.lot_id)?.submitted_response_count || 0), 0) }
+    }).sort((a, b) => b.noHousehold + b.noFamily - (a.noHousehold + a.noFamily))
+  const team = [...new Map(data.monitoring.filter((row) => row.acs_id && row.acs_name).map((row) => [row.acs_id as string, row.acs_name as string])).entries()]
+    .map(([id, name]) => ({ id, name, lots: data.monitoring.filter((row) => row.acs_id === id).length, completed: data.monitoring.filter((row) => row.acs_id === id && row.lot_status === 'COMPLETED').length }))
+    .sort((a, b) => b.completed - a.completed)
+  const canOpen = () => onOpen('territory')
+  if (focus === 'attention') return <section className="manager-overview-page manager-registration-summary" aria-label="Atenção necessária no cadastro territorial">
+    <section className="manager-hero"><div><span>MONITORAMENTO TERRITORIAL</span><h2>Atenção necessária</h2><p>Comece pelos locais sem domicílio e pelos domicílios que ainda não têm família associada.</p></div><AlertCircle size={40} aria-hidden="true" /></section>
+    <section className="manager-panel manager-attention"><header><div><span className="manager-kicker">PENDÊNCIAS DO TERRITÓRIO</span><h3>O que precisa de acompanhamento</h3></div></header>
+      <div className="manager-attention-list">
+        {noHousehold > 0 && <button type="button" className="manager-attention-row urgent" onClick={canOpen}><span><strong>{noHousehold.toLocaleString('pt-BR')} lotes sem domicílio</strong><small>Classifique apenas comércio/área municipal como não residencial; os demais seguem como pendência de cadastro.</small></span><b>Abrir mapa <ArrowRight size={14} /></b></button>}
+        {householdsWithoutFamily > 0 && <button type="button" className="manager-attention-row pending" onClick={canOpen}><span><strong>{householdsWithoutFamily.toLocaleString('pt-BR')} domicílios sem família</strong><small>Há domicílios cadastrados que ainda precisam do vínculo familiar.</small></span><b>Abrir mapa <ArrowRight size={14} /></b></button>}
+        {notVisited > 0 && <button type="button" className="manager-attention-row pending" onClick={canOpen}><span><strong>{notVisited.toLocaleString('pt-BR')} lotes sem visita registrada</strong><small>Veja a distribuição no mapa geral da equipe.</small></span><b>Abrir mapa <ArrowRight size={14} /></b></button>}
+        {!noHousehold && !householdsWithoutFamily && !notVisited && <div className="manager-clear-state"><CheckCircle2 size={22} /><strong>Nenhuma pendência agregada identificada</strong><span>O resumo territorial não apontou lotes sem domicílio, famílias faltantes ou visitas pendentes.</span></div>}
+      </div>
+    </section>
+    <button type="button" className="manager-text-button" onClick={canOpen}>Conferir todas as situações no mapa <ArrowRight size={14} /></button>
+  </section>
+
+  return <section className="manager-overview-page manager-registration-summary" aria-label="Resumo gerencial do território">
+    <section className="manager-hero"><div><span>MONITORAMENTO DA EQUIPE</span><h2>Visão gerencial</h2><p>Acompanhe o cadastro domiciliar, a composição familiar e os registros enviados em todo o município, sem abrir dados pessoais.</p></div><Gauge size={40} aria-hidden="true" /></section>
+    <div className="manager-metric-grid">
+      <article className="manager-metric"><span className="manager-metric-icon slate"><MapPinned size={18} /></span><div><strong>{noHousehold.toLocaleString('pt-BR')}</strong><small>Lotes elegíveis sem domicílio</small></div></article>
+      <article className={`manager-metric${householdsWithoutFamily ? ' warning' : ''}`}><span className="manager-metric-icon amber"><Home size={18} /></span><div><strong>{householdsWithoutFamily.toLocaleString('pt-BR')}</strong><small>Domicílios sem família</small></div></article>
+      <article className="manager-metric"><span className="manager-metric-icon blue"><UsersRound size={18} /></span><div><strong>{familyCount.toLocaleString('pt-BR')}</strong><small>Famílias cadastradas nos lotes elegíveis</small></div></article>
+      <article className="manager-metric"><span className="manager-metric-icon violet"><ClipboardCheck size={18} /></span><div><strong>{responseCount.toLocaleString('pt-BR')}</strong><small>Respostas enviadas (todos os questionários)</small></div></article>
+    </div>
+    <div className="manager-secondary-grid">
+      <section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">TERRITÓRIO</span><h3>Situação por zona</h3></div><button type="button" onClick={canOpen}>Abrir mapa <ArrowRight size={14} /></button></header>{zones.length ? <div className="manager-zone-list">{zones.slice(0, 8).map((zone) => <button type="button" key={zone.id} onClick={() => onOpen('territory', 'ALL', 'all', zone.id)}><span><strong>{zone.name}</strong><small>{zone.lots} lotes · {zone.noHousehold} sem domicílio · {zone.noFamily} sem família · {zone.responses} respostas enviadas</small></span><b>{zone.lots.toLocaleString('pt-BR')}</b></button>)}</div> : <div className="manager-empty">Nenhuma zona oficial ativa encontrada.</div>}</section>
+      <section className="manager-panel manager-team-panel"><header><div><span className="manager-kicker">EQUIPE</span><h3>ACS vinculados ao território</h3></div></header>{team.length ? <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>ACS</th><th>Lotes vinculados</th><th>Lotes com resposta</th></tr></thead><tbody>{team.slice(0, 10).map((row) => <tr key={row.id}><td><strong>{row.name}</strong></td><td>{row.lots}</td><td>{row.completed}</td></tr>)}</tbody></table></div> : <div className="manager-empty">Nenhum vínculo ACS ativo retornado para as zonas.</div>}</section>
+    </div>
+    {excludedCount > 0 && <div className="census-map-exclusion-note"><ShieldCheck size={15} /><span>{excludedCount.toLocaleString('pt-BR')} lote(s) classificados como comércio/área não residencial ou vazios estão fora dos indicadores populacionais.</span></div>}
+    <section className="census-day-last-action manager-coverage-contract"><strong>Cobertura por questionário</strong><span>O RPC agregado atual informa somente o total de respostas enviadas por lote, sem separar questionário e versão. Para evitar percentuais enganosos, esta tela não apresenta cobertura individual por formulário. O próximo contrato de backend necessário é um resumo seguro por lote + questionário + versão.</span></section>
+    <section className="manager-recent"><span className="manager-kicker">ACESSO RÁPIDO</span><strong>O detalhe operacional continua no mapa, sob as permissões territoriais do backend.</strong><button type="button" onClick={canOpen}>Abrir mapa territorial <ArrowRight size={14} /></button></section>
   </section>
 }
