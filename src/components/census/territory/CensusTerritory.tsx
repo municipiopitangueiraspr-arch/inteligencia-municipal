@@ -85,7 +85,7 @@ function formSnapshot(form: QuestionnaireRecord): FormSnapshot {
   return { id: form.id, slug: form.slug, title: form.title, subtitle: form.subtitle, description: form.description, version: form.version, form_schema: form.form_schema }
 }
 
-export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { readOnly?: boolean; onOpenQuestionnaires: () => void }) {
+export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all', onOpenQuestionnaires }: { readOnly?: boolean; initialManagerStatus?: 'all' | CoverageStatus; onOpenQuestionnaires: () => void }) {
   const [mapImport, setMapImport] = useState<MapImport | null>(null)
   const [lots, setLots] = useState<TerritoryLot[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
@@ -97,7 +97,7 @@ export function CensusTerritory({ readOnly = false, onOpenQuestionnaires }: { re
   const [lotSearch, setLotSearch] = useState('')
   const [coverageFormId, setCoverageFormId] = useState('')
   const [questionnaireStatusFilter, setQuestionnaireStatusFilter] = useState<'all' | CoverageStatus>('all')
-  const [managerStatusFilter, setManagerStatusFilter] = useState<'all' | CoverageStatus>('all')
+  const [managerStatusFilter, setManagerStatusFilter] = useState<'all' | CoverageStatus>(initialManagerStatus)
   const [managerVisitFilter, setManagerVisitFilter] = useState<'all' | VisitMapStatus>('all')
   const [managerPeriodFilter, setManagerPeriodFilter] = useState<'all' | '7' | '30' | '90'>('all')
   const [coverageHouseholds, setCoverageHouseholds] = useState<Household[]>([])

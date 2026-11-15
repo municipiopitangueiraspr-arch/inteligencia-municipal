@@ -145,10 +145,6 @@ function questionnaireStatusClass(status: QuestionnaireStatus | null) {
   return 'none'
 }
 
-function indicatorExclusionLabel(reason: 'VACANT' | 'PUBLIC' | null) {
-  return reason === 'VACANT' ? 'Sem domicílio ocupado / lote vazio' : reason === 'PUBLIC' ? 'Área ou imóvel público/municipal' : ''
-}
-
 function MetricCard({
   icon,
   label,
@@ -233,6 +229,15 @@ async function fetchDashboardData(): Promise<DashboardData> {
 
 function dashboardErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível carregar Famílias e visitas.'
+}
+
+function fieldPriority(row: DashboardRow) {
+  if (row.latest_visit_status === 'NO_CONTACT') return 0
+  if (!row.latest_visit_status) return 1
+  if (row.latest_visit_status === 'IN_PROGRESS') return 2
+  if (row.latest_visit_status === 'COMPLETED' && row.latest_questionnaire_status !== 'SUBMITTED') return 3
+  if (row.latest_visit_status === 'CANCELLED') return 4
+  return 5
 }
 
 export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }: { onOpenTerritory: () => void; initialFilter?: OperationalFilter }) {
@@ -396,7 +401,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
             ? row.latest_questionnaire_status !== 'SUBMITTED'
             : row.latest_questionnaire_status === questionnaireFilter)
       return matchesSearch && matchesZone && matchesLotVisit && matchesAcs && matchesHousehold && matchesVisit && matchesQuestionnaire
-    })
+    }).sort((a, b) => fieldPriority(a) - fieldPriority(b) || (a.latest_visit_date || '').localeCompare(b.latest_visit_date || '') || (a.lot_label || a.source_handle).localeCompare(b.lot_label || b.source_handle, 'pt-BR'))
   }, [acsFilter, householdFilter, lotCodes, lotVisitFilter, questionnaireFilter, rows, search, visitFilter, zoneFilter])
 
   const hasFilters = Boolean(search.trim())
@@ -493,7 +498,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
             <span className="fleet-kicker">1 · TERRITÓRIO</span>
             <h3 id="census-family-territory-title">Resumo do território</h3>
           </div>
-          <span className="census-family-unit-note">Lotes do mapa e domicílios são contagens diferentes. {metrics.excludedLots ? `${formatCount(metrics.excludedLots)} lote(s) estão fora dos indicadores.` : ''}</span>
+          <span className="census-family-unit-note">Lotes do mapa e domicílios são contagens diferentes. {metrics.excludedLots ? `${formatCount(metrics.excludedLots)} lote(s) aparecem como área sem atendimento domiciliar.` : ''}</span>
         </div>
         <div className="census-family-metrics">
           <MetricCard icon={<MapPinned size={20} />} label="Lotes no mapa" value={metrics.lots} note="Polígonos válidos na divisão salva" tone="blue" />
@@ -511,7 +516,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
             icon={<Home size={20} />}
             label="Domicílios cadastrados"
             value={metrics.registeredHouseholds}
-            note="Registros ativos em lotes incluídos nos indicadores"
+            note="Registros ativos na sua área de campo"
             tone="teal"
             active={householdFilter === 'REGISTERED'}
             onClick={() => filterByHouseholdType('REGISTERED')}
@@ -520,7 +525,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
           <MetricCard
             icon={<UsersRound size={20} />}
             label="Lotes sem domicílio ativo"
-            note={`de ${formatCount(metrics.eligibleLots)} lotes incluídos nos indicadores`}
+            note={`de ${formatCount(metrics.eligibleLots)} lotes acompanhados`}
             value={metrics.presumedLots}
             tone="slate"
             active={householdFilter === 'PRESUMED'}
@@ -611,7 +616,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
           <div>
             <span className="fleet-kicker">4 · COMPARAÇÃO TERRITORIAL</span>
             <h3 id="census-family-zone-title">Situação da visita mais recente por lote e zona</h3>
-            <small>Cada lote elegível conta uma vez; o total territorial continua incluindo os lotes fora dos indicadores.</small>
+            <small>Cada lote aparece uma vez para ajudar a organizar a rotina de campo.</small>
           </div>
           <MapPinned size={20} aria-hidden="true" />
         </div>
@@ -651,7 +656,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
                   {LOT_STATUS_LABELS[status]} <b>{formatCount(values[status])}</b>
                 </span>)}
               </span>
-              {zone.excluded_lot_count > 0 && <small className="census-family-exclusion-note">{formatCount(zone.excluded_lot_count)} de {formatCount(zone.territory_lot_count)} lote(s) territoriais fora dos indicadores</small>}
+              {zone.excluded_lot_count > 0 && <small className="census-family-exclusion-note">{formatCount(zone.excluded_lot_count)} de {formatCount(zone.territory_lot_count)} lote(s) territoriais fora da rotina domiciliar</small>}
               <span className="census-family-zone-card-action">Ver domicílios e lotes desta zona</span>
             </button>
           })}
@@ -782,8 +787,7 @@ export function CensusFamiliesVisits({ onOpenTerritory, initialFilter = 'ALL' }:
                   <td data-label="Lote / domicílio">
                     <div className="census-family-record">
                       <strong>{row.is_presumed ? 'Novo domicílio' : row.household_label || 'Domicílio sem identificação'}</strong>
-                      {row.indicator_exclusion_reason && <span className="census-family-excluded-badge">Fora dos indicadores · {indicatorExclusionLabel(row.indicator_exclusion_reason)}</span>}
-                      <span>{row.is_presumed ? 'Ainda não cadastrado pelo ACS' : 'Referência informada pelo ACS'}</span>
+                      <span>{row.is_presumed ? 'Ainda não cadastrado' : 'Referência informada pelo ACS'}</span>
                       <small>{row.is_presumed
                         ? 'Sem cadastro ativo neste lote'
                         : row.active_households_in_lot > 1

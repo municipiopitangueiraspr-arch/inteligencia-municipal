@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import { AlertCircle, ArrowRight, BarChart3, CalendarClock, CheckCircle2, ClipboardCheck, Gauge, Home, LoaderCircle, MapPinned, UsersRound } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, ClipboardCheck, Gauge, LoaderCircle, MapPinned, UsersRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import './CensusOverview.css'
 
 type Zone = { id: string; name: string; color: string }
-type Lot = { id: string; zone_id: string | null; indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null }
+type Lot = { id: string; zone_id: string | null; street_name?: string | null; neighborhood_name?: string | null; block_reference?: string | null; indicator_exclusion_reason: 'VACANT' | 'PUBLIC' | null }
 type Household = { id: string; lot_id: string; label: string; created_at: string }
 type Visit = { id: string; household_id: string; acs_id: string | null; visit_date: string; status: string; created_at: string; completed_at: string | null }
 type Response = { id: string; visit_id: string; status: string; created_at: string; submitted_at: string | null }
@@ -13,7 +12,7 @@ type Acs = { id: string; full_name: string }
 type OverviewData = { lots: Lot[]; households: Household[]; visits: Visit[]; responses: Response[]; zones: Zone[]; acs: Acs[]; importReady: boolean }
 type Forecast = { key: string; label: string; daysRemaining: number | null }
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
-type NextAction = { id: string; title: string; detail: string; cta: string; filter: OperationalFilter; tone: 'urgent' | 'pending' | 'neutral' }
+type NextAction = { id: string; title: string; detail: string; address: string; zone: string; lastAction: string; nextStep: string; cta: string; filter: OperationalFilter; tone: 'urgent' | 'pending' | 'neutral' }
 type ManagerZoneStat = Zone & { lots: number; territoryLots: number; excludedLots: number; done: number; coverage: number }
 type ManagerMetrics = { lots: number; territoryLots: number; excludedLots: number; confirmed: number; visited: number; submitted: number; presumed: number; pending: number; withoutZone: number; zones: number; acs: number; draftResponses: number; forecasts: Forecast[] }
 
@@ -70,13 +69,7 @@ function daysToCompletion(timestamps: string[], remaining: number, now = Date.no
   return Math.ceil(remaining / dailyRate)
 }
 
-function estimatedDate(days: number) {
-  const target = new Date()
-  target.setDate(target.getDate() + days)
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'America/Sao_Paulo' }).format(target)
-}
-
-export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
+export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered') => void }) {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -93,7 +86,7 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
     try {
       const [imports, lots, households, visits, responses, zones, acs] = await Promise.all([
         db.from('census_territory_map_imports').select('id').limit(1),
-        pages<Lot>((from, to) => db.from('census_territory_map_lots').select('id,zone_id,indicator_exclusion_reason').order('source_handle').order('id').range(from, to)),
+        pages<Lot>((from, to) => db.from('census_territory_map_lots').select('id,zone_id,street_name,neighborhood_name,block_reference,indicator_exclusion_reason').order('source_handle').order('id').range(from, to)),
         pages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,created_at').eq('active', true).range(from, to)),
         pages<Visit>((from, to) => db.from('census_visits').select('id,household_id,acs_id,visit_date,status,created_at,completed_at').order('created_at', { ascending: false }).range(from, to)),
         pages<Response>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,status,created_at,submitted_at').order('created_at', { ascending: false }).range(from, to)),
@@ -209,21 +202,40 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
     if (!data) return []
     const visitsByHousehold = new Map<string, Visit[]>()
     for (const visit of data.visits) visitsByHousehold.set(visit.household_id, [...(visitsByHousehold.get(visit.household_id) || []), visit])
-    const responsesByVisit = new Map<string, Response[]>()
-    for (const response of data.responses) responsesByVisit.set(response.visit_id, [...(responsesByVisit.get(response.visit_id) || []), response])
+    const responseRows = data.responses
+    function responseList(visitId: string) { return responseRows.filter((response) => response.visit_id === visitId) }
     const actions: NextAction[] = []
     for (const household of data.households) {
+      const lot = data.lots.find((item) => item.id === household.lot_id)
+      const zone = data.zones.find((item) => item.id === lot?.zone_id)
       const visits = (visitsByHousehold.get(household.id) || []).sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
       const latest = visits[0]
-      const hasDraft = visits.some((visit) => (responsesByVisit.get(visit.id) || []).some((response) => response.status === 'DRAFT'))
-      if (hasDraft) actions.push({ id: `draft-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'Questionário salvo como rascunho e pronto para continuar.', cta: 'Retomar questionário', filter: 'DRAFT', tone: 'pending' })
-      else if (!latest || latest.status === 'NO_CONTACT') actions.push({ id: `visit-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: latest?.status === 'NO_CONTACT' ? 'Não houve contato na última tentativa.' : 'Ainda não há visita registrada para este domicílio.', cta: latest?.status === 'NO_CONTACT' ? 'Tentar novamente' : 'Iniciar visita', filter: latest?.status === 'NO_CONTACT' ? 'NO_CONTACT' : 'NO_VISIT', tone: 'urgent' })
-      else if (latest.status === 'COMPLETED' && !visits.some((visit) => (responsesByVisit.get(visit.id) || []).some((response) => response.status === 'SUBMITTED'))) actions.push({ id: `form-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'A visita foi concluída, mas o questionário ainda não foi enviado.', cta: 'Aplicar questionário', filter: 'QUESTIONNAIRE', tone: 'pending' })
+      const hasDraft = visits.some((visit) => responseList(visit.id).some((response) => response.status === 'DRAFT'))
+      const address = [lot?.street_name, lot?.neighborhood_name, lot?.block_reference ? `Quadra ${lot.block_reference}` : null].filter(Boolean).join(' · ') || 'Endereço territorial não informado'
+      const zoneLabel = zone?.name || 'Zona não definida'
+      const lastAction = latest ? `${latest.status === 'NO_CONTACT' ? 'Tentativa sem contato' : latest.status === 'COMPLETED' ? 'Visita concluída' : 'Visita em andamento'} em ${fmtDate(latest.created_at)}` : 'Nenhuma visita registrada'
+      if (hasDraft) actions.push({ id: `draft-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'Há um questionário salvo e pronto para continuar.', address, zone: zoneLabel, lastAction, nextStep: 'Retomar e enviar o questionário', cta: 'Retomar questionário', filter: 'DRAFT', tone: 'pending' })
+      else if (!latest || latest.status === 'NO_CONTACT') actions.push({ id: `visit-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: latest?.status === 'NO_CONTACT' ? 'A última tentativa terminou sem contato.' : 'Ainda não há visita registrada neste domicílio.', address, zone: zoneLabel, lastAction, nextStep: latest?.status === 'NO_CONTACT' ? 'Fazer nova tentativa de contato' : 'Realizar a primeira visita', cta: latest?.status === 'NO_CONTACT' ? 'Tentar novamente' : 'Iniciar visita', filter: latest?.status === 'NO_CONTACT' ? 'NO_CONTACT' : 'NO_VISIT', tone: 'urgent' })
+      else if (latest.status === 'COMPLETED' && !visits.some((visit) => responseList(visit.id).some((response) => response.status === 'SUBMITTED'))) actions.push({ id: `form-${household.id}`, title: household.label || 'Domicílio sem identificação', detail: 'A visita terminou, mas o questionário ainda não foi enviado.', address, zone: zoneLabel, lastAction, nextStep: 'Aplicar e enviar o questionário', cta: 'Aplicar questionário', filter: 'QUESTIONNAIRE', tone: 'pending' })
       if (actions.length >= 6) break
     }
-    if (!actions.length && data.households.length) actions.push({ id: 'all-done', title: 'Nenhuma pendência prioritária', detail: 'Os domicílios cadastrados não possuem uma próxima ação urgente.', cta: 'Ver meus domicílios', filter: 'ALL', tone: 'neutral' })
+    if (!actions.length && data.households.length) actions.push({ id: 'all-done', title: 'Nenhuma pendência de campo', detail: 'Os domicílios cadastrados não possuem uma próxima atividade identificada.', address: 'Território sob sua responsabilidade', zone: 'Todas as zonas', lastAction: 'Registros atualizados', nextStep: 'Continuar acompanhamento', cta: 'Ver meus domicílios', filter: 'ALL', tone: 'neutral' })
     return actions
   }, [data])
+
+  const fieldSummary = useMemo(() => {
+    if (!data) return { noContact: 0, visitPending: 0, questionnairePending: 0 }
+    const visitsByHousehold = new Map<string, Visit[]>()
+    data.visits.forEach((visit) => visitsByHousehold.set(visit.household_id, [...(visitsByHousehold.get(visit.household_id) || []), visit]))
+    const noContact = data.households.filter((household) => visitsByHousehold.get(household.id)?.[0]?.status === 'NO_CONTACT').length
+    const visitPending = data.households.filter((household) => !visitsByHousehold.get(household.id)?.length).length
+    const questionnairePending = data.households.filter((household) => {
+      const visits = visitsByHousehold.get(household.id) || []
+      return visits.some((visit) => visit.status === 'COMPLETED') && !visits.some((visit) => data.responses.some((response) => response.visit_id === visit.id && response.status === 'SUBMITTED'))
+    }).length
+    return { noContact, visitPending, questionnairePending }
+  }, [data])
+
 
   return (
     <section className="fleet-section fleet-page-section census-overview-page">
@@ -235,128 +247,32 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
       ) : (
         <>
           <section className="census-day-hero" aria-labelledby="censusDayTitle">
-            <div><span className="fleet-kicker">ROTINA DO ACS</span><h2 id="censusDayTitle">Meu dia</h2><p>Veja o que precisa de atenção e continue a próxima atividade sem procurar no sistema.</p></div>
-            <button type="button" className="census-day-continue" onClick={() => onOpen(metrics.pending ? 'families' : metrics.draftResponses ? 'forms' : 'territory')}><ArrowRight size={17} />Continuar atividade</button>
+            <div><span className="fleet-kicker">ROTINA DO ACS</span><h2 id="censusDayTitle">Meu dia em campo</h2><p>Comece pela próxima atividade. O sistema mostra o endereço, a zona e o motivo — sem indicadores gerenciais.</p></div>
+            <button type="button" className="census-day-continue" onClick={() => onOpen(nextActions[0]?.filter === 'QUESTIONNAIRE' || nextActions[0]?.filter === 'DRAFT' ? 'families' : 'families', nextActions[0]?.filter || 'ALL')}><ArrowRight size={17} />Continuar próxima atividade</button>
           </section>
           <div className="census-day-task-grid">
-            <button type="button" className="census-day-task pending" onClick={() => onOpen('families')}><span><UsersRound size={19} /></span><strong>{metrics.pending.toLocaleString('pt-BR')}</strong><small>Visitas pendentes</small></button>
-            <button type="button" className="census-day-task questionnaire" onClick={() => onOpen('forms')}><span><ClipboardCheck size={19} /></span><strong>{Math.max(metrics.lots - metrics.submitted, 0).toLocaleString('pt-BR')}</strong><small>Questionários pendentes</small></button>
-            <button type="button" className="census-day-task homes" onClick={() => onOpen('territory')}><span><Home size={19} /></span><strong>{metrics.presumed.toLocaleString('pt-BR')}</strong><small>Domicílios sem identificação</small></button>
+            <button type="button" className="census-day-task pending" onClick={() => onOpen('families', 'NO_CONTACT')}><span><AlertCircle size={19} /></span><strong>{fieldSummary.noContact.toLocaleString('pt-BR')}</strong><small>Sem contato</small><em>Nova tentativa necessária</em></button>
+            <button type="button" className="census-day-task questionnaire" onClick={() => onOpen('families', 'NO_VISIT')}><span><MapPinned size={19} /></span><strong>{fieldSummary.visitPending.toLocaleString('pt-BR')}</strong><small>Visita pendente</small><em>Primeira visita ainda não registrada</em></button>
+            <button type="button" className="census-day-task homes" onClick={() => onOpen('families', 'QUESTIONNAIRE')}><span><ClipboardCheck size={19} /></span><strong>{fieldSummary.questionnairePending.toLocaleString('pt-BR')}</strong><small>Questionário pendente</small><em>Visita concluída, envio pendente</em></button>
           </div>
           <section className="census-day-actions" aria-labelledby="censusNextActionsTitle">
-            <div className="census-overview-title"><div><span className="fleet-kicker">PRÓXIMOS PASSOS</span><h3 id="censusNextActionsTitle">Comece por aqui</h3></div><ArrowRight size={19} /></div>
+            <div className="census-overview-title"><div><span className="fleet-kicker">PRÓXIMA ATIVIDADE</span><h3 id="censusNextActionsTitle">Comece por aqui</h3></div><ArrowRight size={19} /></div>
             <div className="census-day-action-list">
-              {nextActions.length ? nextActions.map((action) => <button type="button" key={action.id} className={`census-day-action ${action.tone}`} onClick={() => onOpen('families', action.filter)}><span><strong>{action.title}</strong><small>{action.detail}</small></span><b>{action.cta}<ArrowRight size={15} /></b></button>) : <span className="census-day-action-empty">Nenhum domicílio cadastrado ainda. Abra a lista para iniciar o cadastro.</span>}
+              {nextActions.length ? nextActions.map((action) => <button type="button" key={action.id} className={`census-day-action ${action.tone}`} onClick={() => onOpen('families', action.filter)}><span><strong>{action.title}</strong><small>{action.address} · {action.zone}</small><small>Última ação: {action.lastAction}</small><small>Próximo passo: {action.nextStep}</small></span><b>{action.cta}<ArrowRight size={15} /></b></button>) : <span className="census-day-action-empty">Nenhum domicílio cadastrado ainda. Abra Meus domicílios para iniciar.</span>}
             </div>
           </section>
-          <div className="census-overview-progress-layout">
-            <section className="fleet-panel census-overview-funnel census-overview-hero">
-              <div className="census-overview-title">
-                <div>
-                  <span className="fleet-kicker">SAÚDE DA FAMÍLIA/ACS</span>
-                  <h3>Até onde o trabalho já avançou?</h3>
-                  <p className="census-overview-intro">Cada etapa mostra quantos lotes já passaram pelo processo, do mapa até o questionário enviado.</p>
-                </div>
-                <BarChart3 size={21} />
-              </div>
-              {metrics.lots > 0 ? <div className="census-overview-funnel-stages">
-                <Funnel label="Lotes incluídos nos indicadores" value={metrics.lots} max={metrics.lots} color="var(--acs-chart-territory)" />
-                <Funnel label="Lotes com domicílio confirmado" value={metrics.confirmed} max={metrics.lots} color="var(--acs-chart-completed)" />
-                <Funnel label="Lotes com visita concluída" value={metrics.visited} max={metrics.lots} color="var(--acs-chart-completed)" />
-                <Funnel label="Lotes com questionário enviado" value={metrics.submitted} max={metrics.lots} color="var(--acs-chart-completed)" />
-              </div> : <div className="census-overview-chart-empty" role="status">
-                <strong>{metrics.territoryLots ? 'Nenhum lote elegível para os indicadores' : 'Ainda não há lotes neste mapa'}</strong>
-                <span>{metrics.territoryLots ? 'Os lotes permanecem no mapa, mas foram excluídos da base de cálculo.' : 'Este resumo usa os lotes válidos do mapa territorial publicado.'}</span>
-              </div>}
-              <div className="census-overview-funnel-note"><Home size={15} /> {metrics.presumed.toLocaleString('pt-BR')} lote(s) elegíveis ainda usam a estimativa inicial de um domicílio por lote.</div>
-              {metrics.excludedLots > 0 && <div className="census-overview-funnel-note"><MapPinned size={15} /> O território continua com {metrics.territoryLots.toLocaleString('pt-BR')} lotes; {metrics.excludedLots.toLocaleString('pt-BR')} ficam fora dos indicadores atuais e históricos.</div>}
-            </section>
-
-            <section className="fleet-panel census-overview-forecast" aria-labelledby="censusForecastTitle">
-              <div className="census-overview-title">
-                <div>
-                  <span className="fleet-kicker">PROJEÇÃO PELO RITMO RECENTE</span>
-                  <h3 id="censusForecastTitle">Previsão de conclusão</h3>
-                </div>
-                <CalendarClock size={21} aria-hidden="true" />
-              </div>
-              <div className="census-overview-forecast-list">
-                {metrics.forecasts.map((forecast) => (
-                  <div className="census-overview-forecast-row" key={forecast.key}>
-                    <span>{forecast.label}</span>
-                    {forecast.daysRemaining === null ? (
-                      <strong className="census-overview-forecast-unavailable">Ainda sem previsão</strong>
-                    ) : forecast.daysRemaining === 0 ? (
-                      <strong className="census-overview-forecast-complete">Etapa concluída</strong>
-                    ) : (
-                      <>
-                        <strong>Em cerca de {forecast.daysRemaining.toLocaleString('pt-BR')} {forecast.daysRemaining === 1 ? 'dia' : 'dias'}</strong>
-                        <small>Se mantido o ritmo recente: {estimatedDate(forecast.daysRemaining)}</small>
-                      </>
-                    )}
-
-                  </div>
-                ))}
-              </div>
-              <p className="census-overview-forecast-note">Estimativa baseada no ritmo dos registros no Supabase; exige atividade em pelo menos 3 dias distintos ao longo de uma semana, nos últimos 30 dias. Não é prazo garantido.</p>
-            </section>
-          </div>
-
-          <div className="census-overview-context">
-            <OverviewMetric icon={<MapPinned />} label="Zonas organizadas" value={metrics.zones} tone="blue" />
-            <OverviewMetric icon={<UsersRound />} label="Agentes ativos" value={metrics.acs} tone="green" />
-            <div className="census-overview-context-copy">
-              <strong>O que precisa de atenção agora?</strong>
-              <span>{metrics.withoutZone ? `${metrics.withoutZone.toLocaleString('pt-BR')} lote(s) ainda estão sem zona.` : metrics.pending ? `${metrics.pending.toLocaleString('pt-BR')} lote(s) ainda não têm visita concluída.` : 'Todos os lotes já passaram pelas etapas principais.'}</span>
-              <button type="button" onClick={() => onOpen(metrics.withoutZone ? 'dwg' : 'families')}>{metrics.withoutZone ? 'Organizar mapa' : 'Ver visitas'} <ArrowRight size={14} /></button>
-            </div>
-          </div>
-
-          <div className="census-overview-lower-grid">
-            <section className="fleet-panel census-overview-zones">
-              <div className="census-overview-title">
-                <div><span className="fleet-kicker">POR REGIÃO</span><h3>Como está cada zona?</h3></div>
-                <button type="button" className="census-text-action" onClick={() => onOpen('territory')}>Abrir mapa <ArrowRight size={14} /></button>
-              </div>
-              {zoneStats.map((zone) => (
-                  <div className="census-overview-zone" key={zone.id}>
-                    <div><span><i style={{ background: zone.color }} />{zone.name}</span><b>{zone.coverage}% com visita concluída</b></div>
-                  <div className="census-overview-track"><i style={{ width: `${zone.coverage}%`, background: 'var(--acs-chart-completed)' }} /></div>
-                  <small>{zone.done} de {zone.lots} lote(s) incluídos com visita concluída{zone.excludedLots ? ` · ${zone.excludedLots} fora dos indicadores` : ''}</small>
-                </div>
-              ))}
-            </section>
-            <section className="fleet-panel census-overview-activity">
-              <div className="census-overview-title">
-                <div><span className="fleet-kicker">ÚLTIMOS REGISTROS</span><h3>O que foi feito recentemente?</h3></div>
-                <UsersRound size={19} />
-              </div>
-              {recent.length ? recent.map((visit) => (
-                <div className="census-overview-activity-row" key={visit.id}>
-                  <span className={`census-overview-activity-dot ${visit.status.toLowerCase()}`} />
-                  <div><strong>{visit.household}</strong><small>{visit.acs} · {fmtDate(visit.created_at)}</small></div>
-                  <b className={`census-overview-activity-status ${visit.status.toLowerCase()}`}>{visit.status === 'COMPLETED' ? 'Concluída' : visit.status === 'NO_CONTACT' ? 'Sem contato' : visit.status === 'IN_PROGRESS' ? 'Em andamento' : 'Cancelada'}</b>
-                </div>
-              )) : <div className="census-overview-empty"><strong>Ainda não há visitas registradas</strong><span>Este painel apresenta os eventos recentes de visita.</span></div>}
-            </section>
-          </div>
-
-          <div className="census-overview-quick-actions">
-            <button type="button" onClick={() => onOpen('territory')}><MapPinned /> Abrir mapa territorial</button>
-            <button type="button" onClick={() => onOpen('families')}><Home /> Ver domicílios e visitas</button>
-            <button type="button" onClick={() => onOpen('forms')}><ClipboardCheck /> Ver questionários</button>
-          </div>
+          <section className="census-day-last-action" aria-label="Orientação da rotina"><strong>Como priorizar</strong><span>A lista é ordenada pela necessidade operacional: primeiro nova tentativa de contato, depois visita ainda não realizada e, por fim, questionário pendente. Isso é uma ordem de trabalho, não uma prioridade clínica.</span></section>
         </>
       ) : null}
     </section>
   )
 }
 
-function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview', onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter) => void }) {
+function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview', onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered') => void }) {
   const coverage = metrics.lots ? Math.round((metrics.visited / metrics.lots) * 100) : 0
   const attention = [
-    metrics.pending > 0 ? { id: 'pending', title: `${metrics.pending.toLocaleString('pt-BR')} visitas pendentes`, detail: 'Existem lotes elegíveis sem visita concluída.', action: 'Ver visitas', onClick: () => onOpen('territory'), tone: 'urgent' } : null,
-    metrics.draftResponses > 0 ? { id: 'drafts', title: `${metrics.draftResponses.toLocaleString('pt-BR')} questionários em rascunho`, detail: 'Respostas iniciadas ainda precisam ser concluídas.', action: 'Revisar questionários', onClick: () => onOpen('territory'), tone: 'pending' } : null,
+    metrics.pending > 0 ? { id: 'pending', title: `${metrics.pending.toLocaleString('pt-BR')} visitas pendentes`, detail: 'Existem lotes elegíveis sem visita concluída.', action: 'Ver visitas', onClick: () => onOpen('territory', 'ALL', 'no_visit'), tone: 'urgent' } : null,
+    metrics.draftResponses > 0 ? { id: 'drafts', title: `${metrics.draftResponses.toLocaleString('pt-BR')} questionários em rascunho`, detail: 'Respostas iniciadas ainda precisam ser concluídas.', action: 'Revisar questionários', onClick: () => onOpen('territory', 'ALL', 'draft'), tone: 'pending' } : null,
     metrics.withoutZone > 0 ? { id: 'zones', title: `${metrics.withoutZone.toLocaleString('pt-BR')} lotes sem zona`, detail: 'O território precisa ser organizado para melhorar o acompanhamento.', action: 'Organizar zonas', onClick: () => onOpen('zones'), tone: 'pending' } : null,
     ...zoneStats.filter((zone) => zone.lots > 0 && zone.coverage < 50).slice(0, 2).map((zone) => ({ id: zone.id, title: `${zone.name} com cobertura de ${zone.coverage}%`, detail: `${zone.done} de ${zone.lots} lotes com visita concluída.`, action: 'Abrir território', onClick: () => onOpen('territory'), tone: 'urgent' })),
   ].filter(Boolean).slice(0, 5) as { id: string; title: string; detail: string; action: string; onClick: () => void; tone: string }[]
@@ -391,13 +307,4 @@ function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview',
     </div>
     <section className="manager-recent"><span className="manager-kicker">ATIVIDADE RECENTE</span><strong>{recent.length ? `${recent.length} registros recentes carregados` : 'Nenhuma atividade recente registrada'}</strong><button type="button" onClick={() => onOpen('territory')}>Ver histórico de visitas <ArrowRight size={14} /></button></section>
   </section>
-}
-
-function OverviewMetric({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string | number; tone: string }) {
-  return <article className={`census-overview-metric ${tone}`}><span>{icon}</span><div><strong>{typeof value === 'number' ? value.toLocaleString('pt-BR') : value}</strong><small>{label}</small></div></article>
-}
-
-function Funnel({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const width = max ? Math.max((value / max) * 100, value ? 4 : 0) : 0
-  return <div className="census-overview-funnel-row" aria-label={`${label}: ${value.toLocaleString('pt-BR')} de ${max.toLocaleString('pt-BR')} lotes`}><div><span>{label}</span><b>{value.toLocaleString('pt-BR')}<small> de {max.toLocaleString('pt-BR')} lotes</small></b></div><div className="census-overview-funnel-track"><i style={{ width: `${width}%`, background: color }} /></div></div>
 }
