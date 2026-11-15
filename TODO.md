@@ -346,7 +346,7 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 ## Governança de contas e acessos por módulo (implementada e publicada)
 - [x] O Admin do Sistema mantém o controle global: convite/criação de contas, ativação e reativação de contas, atribuições de papel/unidade, concessões a todos os módulos, estrutura organizacional e auditoria.
 - [x] Um Gestor de Saúde com papel e concessão `census` ativos vê “Usuários e acessos da Saúde” e pode conceder, alterar ou revogar somente acessos de Saúde a contas municipais existentes.
-- [x] A gestão de Saúde não cria/convoca contas, não pode alterar nem conceder papéis administrativos/de gestor, não pode inativar a conta inteira e não pode conceder acesso a módulos externos à Saúde.
+- [x] A gestão de Saúde pode administrar contas existentes dentro do escopo, mas não pode alterar/conceder papéis administrativos/de gestor, inativar uma conta inteira ou conceder módulos externos. Convites iniciados pelo Gestor seguem o novo fluxo de aprovação abaixo.
 - [x] Unidades disponíveis ao Gestor de Saúde se limitam à sua unidade organizacional e descendentes; o backend rejeita operações fora do escopo.
 - [x] A Governança global permite ao Admin atribuir papéis ativos de domínio e o backend valida papel×módulo; papéis ACS/ACE/saúde ficam restritos a `census` e papéis genéricos usam apenas os módulos marcados.
 - [x] A gestão local do módulo Saúde oferece apenas ACS e Supervisor de Saúde, que já têm fluxo operacional; papéis de gestor e futuros fluxos clínicos/ACE permanecem no Admin global até sua liberação.
@@ -355,3 +355,13 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Integrado ao `main` no commit `670ed8e`; o workflow Pages `43757660896` passou, e a página pública e o bundle atualizado responderam HTTP 200. Nenhum convite ou usuário sintético foi criado.
 
 Observação de teste: o Supabase não tem atribuição ativa `HEALTH_MANAGER`/`UNIT_MANAGER`; o caminho de gestor precisa do primeiro teste por uma conta que o Admin do Sistema associe à Saúde. Nenhuma conta ou convite foi criado nesta implementação.
+
+## Convite pela Saúde com aprovação posterior do Admin (implementado; publicação/teste remoto pendentes)
+- [x] Na tela `Usuários e acessos da Saúde`, o Gestor pode iniciar um convite por nome e e-mail, escolher apenas ACS ou Supervisor de Saúde e uma unidade do próprio escopo, e enviar o convite por e-mail sem criar uma segunda identidade por módulo.
+- [x] O e-mail é enviado imediatamente, mas um trigger no banco mantém a conta inativa e sem atribuições/concessões até aprovação global. O Gestor acompanha o estado; endereços já cadastrados não geram convites duplicados.
+- [x] A Governança Global tem uma tela `Convites pendentes` exclusiva do Admin, mostrando solicitante, pessoa, papel, unidade, módulo e data, com ações distintas de aprovar ou rejeitar.
+- [x] Aprovar, em uma única operação, ativa a conta e concede somente o acesso solicitado após revalidar papel, módulo, unidade, escopo e estado do pedido. Rejeitar registra auditoria e deixa a conta sem acesso.
+- [x] Uma pessoa que tentar entrar antes da decisão vê estado específico de aguardo; uma rejeição não é apresentada como falha técnica nem como acesso liberado.
+- [x] RPCs e Edge Function autorizam o pedido pelo escopo do Gestor, fecham leitura/gravação direta das tabelas e registram envio, aprovação e rejeição na auditoria. Migration aplicada e Edge Function v4 publicada; nenhum convite real foi enviado.
+- [ ] Publicar frontend em `main`/GitHub Pages e confirmar o workflow bem-sucedido.
+- [ ] Validar visualmente a tela Saúde, a fila Admin, aprovação/rejeição e primeiro acesso com conta de Gestor de Saúde autorizada. Essa conta ainda não existe no Supabase de teste; criar/associar uma requer decisão explícita do Admin, e não foi criada conta sintética.

@@ -21,7 +21,7 @@ export type MunicipalFoundationContext = {
 }
 
 export type MunicipalAccessContextValue = {
-  status: 'ready' | 'inactive' | 'pending-assignment' | 'error'
+  status: 'ready' | 'inactive' | 'pending-assignment' | 'pending-approval' | 'invite-rejected' | 'error'
   user: { id: number; authUserId: string; name: string; email: string; avatarUrl: string | null; firstAccessPending: boolean } | null
   isAdministrator: boolean
   assignments: MunicipalAssignment[]
@@ -79,7 +79,7 @@ export async function resolveMunicipalAccess(): Promise<MunicipalAccessContextVa
       id: String(assignment.id || ''), roleId: String(assignment.role_id || ''), municipalityId: String(assignment.municipality_id || ''), establishmentId: assignment.establishment_id ? String(assignment.establishment_id) : null, teamId: assignment.team_id ? String(assignment.team_id) : null, microareaId: assignment.microarea_id ? String(assignment.microarea_id) : null, validFrom: String(assignment.valid_from || ''), validUntil: assignment.valid_until ? String(assignment.valid_until) : null,
     })),
   }
-  const status = raw.status === 'inactive' || raw.status === 'pending-assignment' ? raw.status : user ? 'ready' : 'pending-assignment'
+  const status = raw.status === 'inactive' || raw.status === 'pending-assignment' || raw.status === 'pending-approval' || raw.status === 'invite-rejected' ? raw.status : user ? 'ready' : 'pending-assignment'
   return {
     status,
     user: user ? { id: Number(user.id), authUserId: String(user.auth_user_id || ''), name: String(user.name || ''), email: String(user.email || ''), avatarUrl: user.avatar_url ? String(user.avatar_url) : null, firstAccessPending: user.first_access_pending === true } : null,

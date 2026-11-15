@@ -194,7 +194,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} onOpenPopulation={() => selectView('population')} />}
       {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'registry' && access.role === 'manager' && isAdministrator && <AcsRegistryManagement />}
-      {view === 'access' && canManageModuleAccess && <CensusModuleAccess />}
+      {view === 'access' && canManageModuleAccess && <CensusModuleAccess isAdministrator={accessContext.isAdministrator} />}
       {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
       {view === 'forms' && access.role === 'manager' && isAdministrator && <QuestionnairesManagement />}
 

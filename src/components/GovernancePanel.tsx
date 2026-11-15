@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Building2,
   Check,
+  Clock3,
   CircleAlert,
   FilePlus2,
   History,
@@ -91,6 +92,22 @@ type GovernanceAudit = {
   details: Record<string, unknown> | null
 }
 
+type InviteReviewRequest = {
+  id: string
+  invitee_name: string
+  invitee_email: string
+  requested_by_name: string
+  requested_by_email: string
+  module_id: string
+  module_label: string
+  role_id: string
+  role_label: string
+  org_unit_id: string
+  org_unit_name: string
+  requested_at: string
+  invitation_sent_at: string | null
+}
+
 type Municipality = {
   id: string
   code: string
@@ -159,7 +176,7 @@ type OrgUnitDraft = {
   is_active: boolean
 }
 
-type PanelTab = 'municipality' | 'organization' | 'secretariats' | 'users' | 'modules' | 'audit'
+type PanelTab = 'municipality' | 'organization' | 'secretariats' | 'users' | 'invite-requests' | 'modules' | 'audit'
 
 type OrderedOrgUnit = OrgUnit & { level: number }
 
@@ -217,6 +234,10 @@ function humanAuditAction(action: string) {
     ASSIGNMENT_DELETE: 'Acesso removido',
     MODULE_ACCESS_SAVE: 'Acesso limitado a um módulo atualizado',
     MODULE_ACCESS_REVOKE: 'Acesso a um módulo revogado',
+    INVITE_REQUEST_CREATED: 'Solicitação de convite criada por gestor',
+    INVITE_REQUEST_SENT: 'Convite enviado; aguarda aprovação global',
+    INVITE_REQUEST_APPROVED: 'Solicitação de convite aprovada e acesso concedido',
+    INVITE_REQUEST_REJECTED: 'Solicitação de convite rejeitada',
     MUNICIPALITY_SAVE: 'Dados do município atualizados',
   }
   return labels[action] || action.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase())
@@ -239,6 +260,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [users, setUsers] = useState<GovernanceUser[]>([])
+  const [inviteRequests, setInviteRequests] = useState<InviteReviewRequest[]>([])
   const [roles, setRoles] = useState<GovernanceRole[]>([])
   const [audit, setAudit] = useState<GovernanceAudit[]>([])
   const [auditSearch, setAuditSearch] = useState('')
@@ -270,7 +292,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     }
     setAuthorized(true)
 
-    const [municipalityResult, secretariatResult, moduleResult, userResult, orgResult, roleResult, auditResult] = await Promise.all([
+    const [municipalityResult, secretariatResult, moduleResult, userResult, orgResult, roleResult, auditResult, inviteRequestResult] = await Promise.all([
       supabase.from('municipalities').select('id,code,ibge_code,name,state_code,timezone,active').order('name', { ascending: true }),
       supabase.from('municipal_secretariats').select('id,name,description,icon_name,sort_order,is_active').order('sort_order', { ascending: true }),
       supabase.from('municipal_modules').select('id,label,description,icon_name,is_ready,status_label,sort_order').order('sort_order', { ascending: true }),
@@ -278,8 +300,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
       supabase.rpc('municipal_governance_list_org_units'),
       supabase.rpc('municipal_governance_list_roles'),
       supabase.rpc('municipal_governance_list_audit', { p_search: auditSearch || null }),
+      supabase.rpc('municipal_governance_list_pending_invite_requests'),
     ])
-    const failed = municipalityResult.error || secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error || auditResult.error
+    const failed = municipalityResult.error || secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error || auditResult.error || inviteRequestResult.error
     if (failed) {
       setLoadError('Não foi possível carregar os cadastros de Governança. Verifique se a estrutura do Supabase está atualizada.')
       setLoading(false)
@@ -293,6 +316,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     setOrgUnits((orgResult.data || []) as unknown as OrgUnit[])
     setRoles((roleResult.data || []) as unknown as GovernanceRole[])
     setAudit((auditResult.data || []) as unknown as GovernanceAudit[])
+    setInviteRequests((inviteRequestResult.data || []) as unknown as InviteReviewRequest[])
     setLoading(false)
   }, [auditSearch])
 
@@ -527,6 +551,27 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     await loadPanel(false)
   }
 
+  const reviewInviteRequest = async (request: InviteReviewRequest, decision: 'APPROVE' | 'REJECT') => {
+    if (!supabase) return
+    const question = decision === 'APPROVE'
+      ? `Aprovar ${request.invitee_name} (${request.invitee_email})? Isso ativará a conta e concederá somente ${request.role_label} em ${request.module_label} · ${request.org_unit_name}.`
+      : `Rejeitar o pedido de ${request.invitee_name} (${request.invitee_email})? O e-mail já foi enviado; a conta permanecerá inativa e sem acesso.`
+    if (!window.confirm(question)) return
+    setSaving(true)
+    setMessage(null)
+    const { error } = await supabase.rpc('municipal_governance_review_invite_request', {
+      p_request_id: request.id,
+      p_decision: decision,
+    })
+    setSaving(false)
+    if (error) {
+      setMessage({ type: 'error', text: errorText(error) })
+      return
+    }
+    setMessage({ type: 'success', text: decision === 'APPROVE' ? 'Convite aprovado; a conta foi ativada com o acesso solicitado.' : 'Convite rejeitado; a conta permanece sem acesso.' })
+    await loadPanel(false)
+  }
+
   const saveAssignment = async (draft: AssignmentForm) => {
     if (!supabase || !assignmentUser) return
     setSaving(true)
@@ -557,7 +602,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
   const orderedOrgUnits = orderOrgUnits(orgUnits)
-  const activeTabLabel = activeTab === 'municipality' ? 'Dados institucionais' : activeTab === 'organization' ? 'Estrutura organizacional' : activeTab === 'secretariats' ? 'Secretarias' : activeTab === 'users' ? 'Usuários e acessos' : activeTab === 'modules' ? 'Catálogo de módulos' : 'Histórico de alterações'
+  const activeTabLabel = activeTab === 'municipality' ? 'Dados institucionais' : activeTab === 'organization' ? 'Estrutura organizacional' : activeTab === 'secretariats' ? 'Secretarias' : activeTab === 'users' ? 'Usuários e acessos' : activeTab === 'invite-requests' ? 'Convites pendentes' : activeTab === 'modules' ? 'Catálogo de módulos' : 'Histórico de alterações'
 
   return (
     <div className="fleet-shell governance-fleet-shell">
@@ -572,6 +617,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
           <button className={`fleet-nav-item${activeTab === 'organization' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('organization')}><ListTree size={17} />Estrutura<span className="fleet-nav-count">{orgUnits.length}</span></button>
           <button className={`fleet-nav-item${activeTab === 'secretariats' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span className="fleet-nav-count">{activeSecretariatCount}</span></button>
           <button className={`fleet-nav-item${activeTab === 'users' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span className="fleet-nav-count">{users.length}</span></button>
+          <button className={`fleet-nav-item${activeTab === 'invite-requests' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('invite-requests')}><Clock3 size={17} />Convites pendentes<span className="fleet-nav-count">{inviteRequests.length}</span></button>
           <button className={`fleet-nav-item${activeTab === 'modules' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('modules')}><LayoutGrid size={17} />Módulos<span className="fleet-nav-count">{modules.length}</span></button>
           <button className={`fleet-nav-item${activeTab === 'audit' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('audit')}><History size={17} />Histórico<span className="fleet-nav-count">{audit.length}</span></button>
           <button type="button" className="fleet-nav-item fleet-mobile-logout" onClick={onLogout}><LogOut size={17} />Sair</button>
@@ -687,6 +733,36 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                             <button className="governance-text-button" type="button" onClick={() => void setUserActive(user)} disabled={saving}>{user.ativo ? 'Inativar' : 'Reativar'}</button>
                             <button className="governance-text-button" type="button" onClick={() => openAssignmentManager(user)}>Atribuições</button>
                             <button className="governance-edit-button" type="button" aria-label={`Editar perfil e vínculos de ${user.name || user.email}`} onClick={() => openEditUser(user)}><Pencil size={16} /><span>Editar</span></button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {activeTab === 'invite-requests' && (
+                <section className="governance-section" aria-labelledby="inviteRequestsHeading">
+                  <div className="governance-section-heading">
+                    <div><h2 id="inviteRequestsHeading">Convites pendentes</h2><p>Revise solicitações de gestores. O convite por e-mail já foi enviado, mas a conta continua bloqueada até esta decisão.</p></div>
+                  </div>
+                  {inviteRequests.length === 0 ? (
+                    <div className="governance-empty"><Clock3 size={22} /><strong>Nenhum convite aguardando aprovação.</strong></div>
+                  ) : (
+                    <div className="governance-invite-request-list">
+                      {inviteRequests.map((request) => (
+                        <article className="governance-invite-request" key={request.id}>
+                          <div className="governance-invite-request-icon"><MailPlus size={19} /></div>
+                          <div className="governance-invite-request-main">
+                            <strong>{request.invitee_name}</strong>
+                            <span>{request.invitee_email}</span>
+                            <p>{request.role_label} · {request.module_label} · {request.org_unit_name}</p>
+                            <small>Solicitado por {request.requested_by_name || request.requested_by_email} · {new Date(request.requested_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}{request.invitation_sent_at ? ` · e-mail enviado ${new Date(request.invitation_sent_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}</small>
+                          </div>
+                          <span className="governance-invite-request-pending"><Clock3 size={14} />Aguardando decisão</span>
+                          <div className="governance-invite-request-actions">
+                            <button type="button" className="governance-primary-button" onClick={() => void reviewInviteRequest(request, 'APPROVE')} disabled={saving}><Check size={15} />Aprovar e conceder</button>
+                            <button type="button" className="governance-invite-reject" onClick={() => void reviewInviteRequest(request, 'REJECT')} disabled={saving}><X size={15} />Rejeitar</button>
                           </div>
                         </article>
                       ))}

@@ -190,11 +190,11 @@ A migration `20261115184000_professional_acs_runtime_alignment.sql` também foi 
 ## Plano — Governança municipal de usuários e acessos por módulo
 
 ### Objetivo e limites
-Concluir a gestão central de usuários, papéis, módulos e escopos organizacionais para permitir a expansão futura a outros módulos sem misturar acesso à plataforma com identidade profissional. O Admin do Sistema administra convites e a Governança global; o Gestor de Saúde administra somente contas existentes no módulo Saúde e nas unidades que lhe forem autorizadas. A concessão de módulo não cria cadastro profissional, equipe, microárea ou identidade de ACS.
+Concluir a gestão central de usuários, papéis, módulos e escopos organizacionais para permitir a expansão futura a outros módulos sem misturar acesso à plataforma com identidade profissional. O Admin do Sistema administra a Governança global e aprova/rejeita convites iniciados por gestores; o Gestor de Saúde administra contas existentes e pode convidar por e-mail dentro da Secretaria/unidades autorizadas, mas o novo acesso permanece bloqueado até aprovação do Admin. A concessão de módulo não cria cadastro profissional, equipe, microárea ou identidade de ACS.
 
 ### Decisões implementadas
 - Restringir cada atribuição aos módulos compatíveis com seu papel, validando a regra no backend durante listagem, gravação e pré-validação do convite.
-- Manter o Admin global como único emissor de convites. O Gestor local não convida, não edita outros módulos e só opera dentro da unidade e das descendentes autorizadas.
+- Manter o Admin global com convites diretos; permitir que o Gestor de Saúde envie convites centralizados por e-mail, com a solicitação e o acesso pendentes de aprovação global. O Gestor local não edita outros módulos e só opera dentro da unidade e das descendentes autorizadas.
 - Mostrar na tela local de Saúde somente os papéis com fluxo operacional liberado hoje: ACS e Supervisor de Saúde. Papéis de gestão ainda não testados e papéis de futuros fluxos clínicos/ACE não podem ser concedidos nessa tela até esses fluxos serem liberados.
 - Registrar alterações de atribuição e módulo na auditoria, com RPCs de acesso autenticado e autorização verificada no servidor.
 
@@ -203,4 +203,20 @@ A migration `20261115190000_module_scoped_access_governance.sql` implementou a m
 
 O frontend do módulo Saúde e a Governança global foram integrados localmente. A Edge Function `invite-municipal-user` está na versão 3, com verificação JWT e validação de papel/módulo antes do convite. Ainda não existe conta de Gestor de Saúde de teste associada no Supabase; por isso, o escopo visual de um Gestor não foi validado remotamente. Nenhuma conta ou convite de teste foi criado. O commit `670ed8e` foi enviado para `main`; o workflow Pages `43757660896` concluiu com sucesso, e a página pública `https://municipiopitangueiraspr-arch.github.io/inteligencia-municipal/` e o bundle atualizado retornaram HTTP 200. O teste remoto de Gestor ainda depende da associação explícita de uma conta de teste.
 
-Validação final local: build de produção e os quatro testes estruturais (Governança, território, mapa e questionários) passaram. Oxlint retornou zero erros e 20 avisos não bloqueantes. O build mantém o aviso de bundle principal acima de 500 kB após minificação.
+Validação final local: build de produção e os quatro testes estruturais (Governança, território, mapa e questionários) passaram. Oxlint retornou zero erros e 11 avisos não bloqueantes. O build mantém o aviso de bundle principal acima de 500 kB após minificação.
+
+## Convite pelo Gestor com aprovação posterior do Admin
+
+### Fluxo implementado
+- A tela `Usuários e acessos da Saúde` permite ao Gestor convidar uma pessoa por nome/e-mail, selecionando apenas papel liberado e unidade dentro do escopo; a identidade permanece central, sem criar conta separada por módulo.
+- O convite por e-mail é enviado no ato. Um trigger no banco mantém a conta inativa enquanto o pedido está enviando/aguardando; não há atribuição nem módulo concedido até a aprovação. O Gestor acompanha o estado e e-mails já vinculados a contas não geram identidades duplicadas.
+- A Governança Global tem a tela `Convites pendentes`, com solicitante, pessoa, papel, unidade, módulo e data. O Admin aprova ou rejeita cada pedido.
+- Aprovar é atômico: revalida papel, compatibilidade, unidade e estado; cria exatamente o vínculo solicitado e ativa a conta na mesma transação. Rejeitar registra auditoria e mantém a conta inativa, sem acesso.
+- Estados de primeiro acesso diferenciam aguardando aprovação, rejeitado, inativo e sem atribuição; a verificação de pendência precede a configuração de senha.
+- Solicitação, listagem, falha de envio, aprovação e rejeição usam RPCs autorizados e tabelas com RLS e privilégios diretos fechados. A listagem do Gestor é limitada ao escopo; a fila pendente global é exclusiva do Admin.
+- Permanecem os limites atuais: concessões locais apenas ACS e Supervisor de Saúde; papel ACS não substitui cadastro profissional/equipe/microárea. Nenhum convite de teste ou dado pessoal novo foi criado.
+
+### Resultado da implementação (15/11/2026)
+Migration `20261115203800_manager_invite_approval_workflow.sql` aplicada ao Supabase de teste. Verificados a presença das oito RPCs, RLS habilitada nas duas tabelas de pedido, trigger de bloqueio ativo e concessões `EXECUTE` compatíveis com cada papel. A Edge Function `invite-municipal-user` está na versão 4 com verificação JWT ativada. Não foi enviado convite real; a validação visual/funcional remota com uma conta de Gestor segue pendente por não existir conta de teste associada.
+
+Build de produção e os quatro testes estruturais passaram; Oxlint reportou 0 erros e 11 avisos não bloqueantes. Publicação do frontend e verificação do workflow Pages deste incremento ainda pendentes.

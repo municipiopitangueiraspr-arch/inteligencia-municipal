@@ -182,14 +182,19 @@ function App() {
   }
 
   if (sessionChecking) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#344054', background: '#f6f8fb' }}>Verificando sessão segura…</div>
+  if (signedIn && !isSupplierAccount && !supplierMode) {
+    if (accessError) return <AccessBlocked title="Não foi possível validar o acesso" message={accessError} onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'inactive') return <AccessBlocked title="Conta municipal desativada" message="Sua conta está autenticada, mas não está ativa na Governança Municipal. Procure um administrador." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'pending-approval') return <AccessBlocked title="Aguardando aprovação do Admin" message="O convite foi enviado. Sua conta e os módulos solicitados ficarão bloqueados até o Admin do Sistema aprovar o acesso." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'invite-rejected') return <AccessBlocked title="Acesso não aprovado" message="O Admin do Sistema não aprovou este pedido. Nenhum acesso aos módulos foi concedido; procure o Gestor de Saúde ou o Admin para orientações." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'pending-assignment') return <AccessBlocked title="Aguardando atribuição municipal" message="Sua conta existe, mas ainda não possui uma atribuição ativa na estrutura municipal." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (!municipalContext) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#344054', background: '#f6f8fb' }}>Carregando seu ambiente municipal…</div>
+  }
   if (signedIn && requiresPasswordSetup) return <FirstAccessPasswordSetup isSupplier={isSupplierAccount} onComplete={() => setRequiresPasswordSetup(false)} onLogout={() => void logout()} />
   if (signedIn && supplierMode && supplierContext) return <SupplierPortal station={supplierContext.station} role={supplierContext.role} userEmail={email} userDisplayName={displayName || email} initialVehicleId={supplierContext.vehicleId} accessReason={supplierContext.accessReason} onLogout={() => void logout()} />
   if (signedIn && supplierMode) return <SupplierAccessRequest authenticatedEmail={email} onBack={() => void logout()} />
   if (signedIn && !isSupplierAccount) {
-    if (accessError) return <AccessBlocked title="Não foi possível validar o acesso" message={accessError} onRetry={() => window.location.reload()} onLogout={() => void logout()} />
-    if (municipalContext?.status === 'inactive') return <AccessBlocked title="Conta municipal desativada" message="Sua conta está autenticada, mas não está ativa na Governança Municipal. Procure um administrador." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
-    if (municipalContext?.status === 'pending-assignment') return <AccessBlocked title="Aguardando atribuição municipal" message="Sua conta existe, mas ainda não possui uma atribuição ativa na estrutura municipal." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
-    if (!municipalContext) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#344054', background: '#f6f8fb' }}>Carregando seu ambiente municipal…</div>
+    if (!municipalContext) return null
     return <MunicipalAccessProvider user={null} initialContext={municipalContext}>
       {activeArea === 'fleet' && municipalContext.moduleIds.includes('fleet') ? <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
       {activeArea === 'census' && municipalContext.moduleIds.includes('census') ? <CensusModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
