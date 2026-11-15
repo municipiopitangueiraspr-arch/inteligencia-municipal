@@ -340,10 +340,10 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] Build TypeScript/Vite e testes de território, mapa e questionário passaram. Oxlint nos arquivos alterados teve 0 erros e 18 avisos não bloqueantes.
 - [ ] Cobertura gerencial agregada por questionário (um status para cada lote × questionário ativo) ainda requer RPC seguro próprio; o resumo atual mostra a situação cadastral e a atividade agregada, não a cobertura individual de cada formulário.
 - [ ] Validar visualmente com um mapa publicado e testar o fluxo com contas de ACS/gestor. O banco de teste consultado não contém mapa territorial publicado.
-- Offline e sincronização continuam deliberadamente adiados até o fechamento funcional e a liberação do teste de campo; esta entrega não foi enviada ao GitHub Pages.
+- Offline e sincronização continuam deliberadamente adiados até o fechamento funcional e a liberação do teste de campo. A entrega ACS/Governança foi publicada conforme registrado abaixo.
 
 
-## Governança de contas e acessos por módulo (implementada; publicação pendente)
+## Governança de contas e acessos por módulo (implementada e publicada)
 - [x] O Admin do Sistema mantém o controle global: convite/criação de contas, ativação e reativação de contas, atribuições de papel/unidade, concessões a todos os módulos, estrutura organizacional e auditoria.
 - [x] Um Gestor de Saúde com papel e concessão `census` ativos vê “Usuários e acessos da Saúde” e pode conceder, alterar ou revogar somente acessos de Saúde a contas municipais existentes.
 - [x] A gestão de Saúde não cria/convoca contas, não pode alterar nem conceder papéis administrativos/de gestor, não pode inativar a conta inteira e não pode conceder acesso a módulos externos à Saúde.
@@ -351,7 +351,7 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] A Governança global permite ao Admin atribuir papéis ativos de domínio e o backend valida papel×módulo; papéis ACS/ACE/saúde ficam restritos a `census` e papéis genéricos usam apenas os módulos marcados.
 - [x] A gestão local do módulo Saúde oferece apenas ACS e Supervisor de Saúde, que já têm fluxo operacional; papéis de gestor e futuros fluxos clínicos/ACE permanecem no Admin global até sua liberação.
 - [x] O papel `ACS` habilita entrada no módulo, mas não cria identidade profissional, categoria, equipe nem microárea; o cadastro continua separado em Administração da Saúde.
-- [x] Listagens e alterações de acesso usam RPCs autenticados, preservam outros módulos e registram auditoria. A migração encontrou 0 atribuições históricas incompatíveis; o smoke test administrativo retornou 8 papéis concedíveis, 72 unidades e 8 contas, sem retornar nomes/e-mails ao teste.
-- [ ] Integrar ao `main` remoto, publicar no GitHub Pages e confirmar o commit/workflow. Não enviar convites nem criar usuários sintéticos.
+- [x] Listagens e alterações de acesso usam RPCs autenticados, preservam outros módulos e registram auditoria. A migração encontrou 0 atribuições históricas incompatíveis; a validação final retornou 2 papéis locais concedíveis (ACS/Supervisor), 72 unidades e 8 contas, sem retornar nomes/e-mails ao teste.
+- [x] Integrado ao `main` no commit `670ed8e`; o workflow Pages `43757660896` passou, e a página pública e o bundle atualizado responderam HTTP 200. Nenhum convite ou usuário sintético foi criado.
 
 Observação de teste: o Supabase não tem atribuição ativa `HEALTH_MANAGER`/`UNIT_MANAGER`; o caminho de gestor precisa do primeiro teste por uma conta que o Admin do Sistema associe à Saúde. Nenhuma conta ou convite foi criado nesta implementação.
