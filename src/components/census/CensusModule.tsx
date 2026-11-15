@@ -11,6 +11,7 @@ import { QuestionnairesManagement } from './questionnaires/QuestionnairesManagem
 import { CensusTerritory } from './territory/CensusTerritory'
 import { AcsFieldWorkflow } from './AcsFieldWorkflow'
 import { AcsRegistryManagement } from './AcsRegistryManagement'
+import { PopulationManagement } from './PopulationManagement'
 import '../FleetModule.css'
 import './CensusModule.css'
 import './CensusDWG.css'
@@ -56,7 +57,7 @@ type MapImport = {
   division_saved_at: string | null
   is_current?: boolean
 }
-type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones' | 'agenda' | 'registry'
+type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones' | 'agenda' | 'registry' | 'population'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type ManagerStatusFilter = 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered'
@@ -75,6 +76,7 @@ const adminNavItems: { id: CensusSection; label: string; icon: typeof LayoutDash
   { id: 'forms', label: 'Questionários', icon: FileText },
   { id: 'zones', label: 'Zonas e ACS', icon: ClipboardList },
   { id: 'registry', label: 'Administração da Saúde', icon: SlidersHorizontal },
+  { id: 'population', label: 'Cadastro populacional', icon: UsersRound },
   { id: 'dwg', label: 'Preparar mapa', icon: FolderOpen },
 ]
 const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashboard }[] = [
@@ -82,6 +84,7 @@ const acsNavItems: { id: CensusSection; label: string; icon: typeof LayoutDashbo
   { id: 'agenda', label: 'Agenda e FVD', icon: ClipboardList },
   { id: 'territory', label: 'Meus domicílios', icon: MapPinned },
   { id: 'families', label: 'Minhas visitas', icon: UsersRound },
+  { id: 'population', label: 'Cadastro populacional', icon: UsersRound },
 ]
 async function chunks<T>(values: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
   for (let index = 0; index < values.length; index += size) await callback(values.slice(index, index + size))
@@ -165,6 +168,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'agenda' && access.role === 'acs' && <AcsFieldWorkflow accessContext={accessContext} onOpenTerritory={() => selectView('territory')} />}
       {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
+      {view === 'population' && <PopulationManagement readOnly={access.role === 'manager' && !isAdministrator} />}
       {isAdministrator && ['zones', 'dwg', 'forms'].includes(view) && <div className="census-admin-context-banner"><strong>Modo administrador · configuração</strong><span>As alterações nesta tela afetam o mapa, os questionários e os vínculos usados pela equipe de campo e pela gestão. Revise antes de salvar.</span></div>}
       {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
       {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
