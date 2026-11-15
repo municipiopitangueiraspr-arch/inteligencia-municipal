@@ -1152,6 +1152,7 @@
 .governance-fleet-shell textarea:focus-visible { outline: 3px solid #d5a74a; outline-offset: 2px; }
 .governance-role-description { display: block; margin-top: 5px; color: #8497a0; font-size: 11px; }
 @media (max-width: 1100px) {
+  .governance-fleet-shell { display: block; }
   .governance-fleet-shell .fleet-sidebar { position: static; width: 100%; min-height: 0; padding: 13px 28px; }
   .governance-fleet-shell .fleet-sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
   .governance-fleet-shell .fleet-brand { padding: 0; border: 0; }
