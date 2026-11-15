@@ -170,7 +170,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
       {view === 'population' && <PopulationManagement readOnly={access.role === 'manager' && !isAdministrator} />}
       {isAdministrator && ['zones', 'dwg', 'forms'].includes(view) && <div className="census-admin-context-banner"><strong>Modo administrador · configuração</strong><span>As alterações nesta tela afetam o mapa, os questionários e os vínculos usados pela equipe de campo e pela gestão. Revise antes de salvar.</span></div>}
-      {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
+      {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} onOpenPopulation={() => selectView('population')} />}
       {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'registry' && access.role === 'manager' && isAdministrator && <AcsRegistryManagement />}
       {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
