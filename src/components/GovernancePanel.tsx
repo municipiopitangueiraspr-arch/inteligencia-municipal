@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   ListTree,
   LogOut,
+  MapPin,
   MailPlus,
   Pencil,
   ShieldCheck,
@@ -88,6 +89,18 @@ type GovernanceAudit = {
   details: Record<string, unknown> | null
 }
 
+type Municipality = {
+  id: string
+  code: string
+  ibge_code: string | null
+  name: string
+  state_code: string
+  timezone: string
+  active: boolean
+}
+
+type MunicipalityDraft = Omit<Municipality, 'id'> & { id: string | null }
+
 type SecretariatDraft = {
   id: string | null
   name: string
@@ -144,7 +157,7 @@ type OrgUnitDraft = {
   is_active: boolean
 }
 
-type PanelTab = 'organization' | 'secretariats' | 'users' | 'modules' | 'audit'
+type PanelTab = 'municipality' | 'organization' | 'secretariats' | 'users' | 'modules' | 'audit'
 
 type OrderedOrgUnit = OrgUnit & { level: number }
 
@@ -191,12 +204,34 @@ function profileLabel(value: string | null) {
   return MUNICIPAL_PROFILES.find((profile) => profile.value === value)?.label || 'Perfil não definido'
 }
 
+function humanAuditAction(action: string) {
+  const labels: Record<string, string> = {
+    ORG_UNIT_SAVE: 'Unidade organizacional cadastrada ou atualizada',
+    SECRETARIAT_SAVE: 'Secretaria cadastrada ou atualizada',
+    MODULE_SAVE: 'Módulo cadastrado ou atualizado',
+    USER_INVITE: 'Convite de usuário enviado',
+    USER_ACTIVE: 'Situação do usuário alterada',
+    ASSIGNMENT_SAVE: 'Acesso e responsabilidade atualizados',
+    ASSIGNMENT_DELETE: 'Acesso removido',
+    MUNICIPALITY_SAVE: 'Dados do município atualizados',
+  }
+  return labels[action] || action.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function humanAuditDetails(details: Record<string, unknown> | null) {
+  if (!details) return 'Sem detalhes adicionais.'
+  const fields: Record<string, string> = { name: 'nome', email: 'e-mail', code: 'código', ibge_code: 'código IBGE', active: 'situação' }
+  const visible = Object.entries(details).filter(([key]) => fields[key]).map(([key, value]) => `${fields[key]}: ${typeof value === 'boolean' ? (value ? 'ativo' : 'inativo') : String(value)}`)
+  return visible.length ? visible.join(' · ') : 'A alteração foi registrada no histórico.'
+}
+
 export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanelProps) {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<PanelTab>('secretariats')
+  const [activeTab, setActiveTab] = useState<PanelTab>('municipality')
+  const [municipalities, setMunicipalities] = useState<Municipality[]>([])
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [users, setUsers] = useState<GovernanceUser[]>([])
@@ -210,6 +245,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   const [userDraft, setUserDraft] = useState<UserDraft | null>(null)
   const [assignmentUser, setAssignmentUser] = useState<GovernanceUser | null>(null)
   const [assignmentDraft, setAssignmentDraft] = useState<AssignmentForm | null>(null)
+  const [municipalityDraft, setMunicipalityDraft] = useState<MunicipalityDraft | null>(null)
   const [saving, setSaving] = useState(false)
 
   const loadPanel = useCallback(async (showLoading: boolean) => {
@@ -230,7 +266,8 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
     }
     setAuthorized(true)
 
-    const [secretariatResult, moduleResult, userResult, orgResult, roleResult, auditResult] = await Promise.all([
+    const [municipalityResult, secretariatResult, moduleResult, userResult, orgResult, roleResult, auditResult] = await Promise.all([
+      supabase.from('municipalities').select('id,code,ibge_code,name,state_code,timezone,active').order('name', { ascending: true }),
       supabase.from('municipal_secretariats').select('id,name,description,icon_name,sort_order,is_active').order('sort_order', { ascending: true }),
       supabase.from('municipal_modules').select('id,label,description,icon_name,is_ready,status_label,sort_order').order('sort_order', { ascending: true }),
       supabase.rpc('municipal_governance_list_users_v2'),
@@ -238,13 +275,14 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
       supabase.rpc('municipal_governance_list_roles'),
       supabase.rpc('municipal_governance_list_audit', { p_search: auditSearch || null }),
     ])
-    const failed = secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error || auditResult.error
+    const failed = municipalityResult.error || secretariatResult.error || moduleResult.error || userResult.error || orgResult.error || roleResult.error || auditResult.error
     if (failed) {
       setLoadError('Não foi possível carregar os cadastros de Governança. Verifique se a estrutura do Supabase está atualizada.')
       setLoading(false)
       return
     }
 
+    setMunicipalities((municipalityResult.data || []) as Municipality[])
     setSecretariats((secretariatResult.data || []) as unknown as MunicipalSecretariat[])
     setModules((moduleResult.data || []) as unknown as MunicipalModule[])
     setUsers((userResult.data || []) as unknown as GovernanceUser[])
@@ -255,6 +293,38 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
   }, [auditSearch])
 
   useEffect(() => { void loadPanel(false) }, [loadPanel])
+
+  const saveMunicipality = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!supabase || !municipalityDraft) return
+    const name = municipalityDraft.name.trim()
+    const code = slugify(municipalityDraft.code || name)
+    const stateCode = municipalityDraft.state_code.trim().toUpperCase()
+    const ibgeCode = municipalityDraft.ibge_code?.trim() || null
+    if (!name || !code || !/^[A-Z]{2}$/.test(stateCode) || (ibgeCode && !/^\d{7}$/.test(ibgeCode))) {
+      setMessage({ type: 'error', text: 'Confira nome, identificador, UF com duas letras e código IBGE com sete números.' })
+      return
+    }
+    setSaving(true)
+    setMessage(null)
+    const result = await supabase.rpc('municipal_governance_save_municipality', {
+      p_id: municipalityDraft.id,
+      p_code: code,
+      p_ibge_code: ibgeCode,
+      p_name: name,
+      p_state_code: stateCode,
+      p_timezone: municipalityDraft.timezone,
+      p_active: municipalityDraft.active,
+    })
+    setSaving(false)
+    if (result.error) {
+      setMessage({ type: 'error', text: result.error.code === '23505' ? 'Já existe um município com esse identificador ou código IBGE.' : 'Não foi possível salvar os dados do município. Confira as informações e tente novamente.' })
+      return
+    }
+    setMunicipalityDraft(null)
+    setMessage({ type: 'success', text: municipalityDraft.id ? 'Dados do município atualizados.' : 'Município cadastrado.' })
+    await loadPanel(false)
+  }
 
   const saveSecretariat = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -483,7 +553,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
   const activeSecretariatCount = secretariats.filter((item) => item.is_active).length
   const orderedOrgUnits = orderOrgUnits(orgUnits)
-  const activeTabLabel = activeTab === 'organization' ? 'Estrutura organizacional' : activeTab === 'secretariats' ? 'Secretarias' : activeTab === 'users' ? 'Usuários e acessos' : activeTab === 'modules' ? 'Catálogo de módulos' : 'Histórico de acessos'
+  const activeTabLabel = activeTab === 'municipality' ? 'Dados institucionais' : activeTab === 'organization' ? 'Estrutura organizacional' : activeTab === 'secretariats' ? 'Secretarias' : activeTab === 'users' ? 'Usuários e acessos' : activeTab === 'modules' ? 'Catálogo de módulos' : 'Histórico de alterações'
 
   return (
     <div className="fleet-shell governance-fleet-shell">
@@ -492,8 +562,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
           <button className="fleet-back" type="button" onClick={onBack}><ArrowLeft size={16} /> Voltar ao painel</button>
           <div className="fleet-brand"><span className="fleet-brand-icon"><ShieldCheck size={20} /></span><div><strong>Governança municipal</strong><small>Inteligência Municipal</small></div></div>
         </div>
-        <div className="fleet-section-label">ADMINISTRAÇÃO DO SISTEMA</div>
-        <nav className="fleet-nav" aria-label="Navegação da Governança">
+          <div className="fleet-section-label">ADMINISTRAÇÃO DO SISTEMA</div>
+          <nav className="fleet-nav" aria-label="Navegação da Governança">
+          <button className={`fleet-nav-item${activeTab === 'municipality' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('municipality')}><MapPin size={17} />Município<span className="fleet-nav-count">{municipalities.length}</span></button>
           <button className={`fleet-nav-item${activeTab === 'organization' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('organization')}><ListTree size={17} />Estrutura<span className="fleet-nav-count">{orgUnits.length}</span></button>
           <button className={`fleet-nav-item${activeTab === 'secretariats' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('secretariats')}><Building2 size={17} />Secretarias<span className="fleet-nav-count">{activeSecretariatCount}</span></button>
           <button className={`fleet-nav-item${activeTab === 'users' ? ' active' : ''}`} type="button" onClick={() => setActiveTab('users')}><Users size={17} />Usuários<span className="fleet-nav-count">{users.length}</span></button>
@@ -532,6 +603,13 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
               </aside>
 
               {message && <div className={`governance-message governance-message--${message.type}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.type === 'success' ? <Check size={17} /> : <CircleAlert size={17} />}{message.text}</div>}
+
+              {activeTab === 'municipality' && (
+                <section className="governance-section" aria-labelledby="municipalityHeading">
+                  <div className="governance-section-heading"><div><h2 id="municipalityHeading">Dados institucionais do município</h2><p>Essas informações identificam a prefeitura e são usadas como base para os módulos de Saúde, Educação, Assistência e demais áreas.</p></div><button className="governance-primary-button" type="button" onClick={() => setMunicipalityDraft({ id: null, code: '', ibge_code: '', name: '', state_code: 'PR', timezone: 'America/Sao_Paulo', active: true })}><FilePlus2 size={17} />Cadastrar município</button></div>
+                  {municipalities.length === 0 ? <div className="governance-empty">Nenhum município foi cadastrado.</div> : <div className="governance-institution-list">{municipalities.map((municipality) => <article className={`governance-institution-card${municipality.active ? '' : ' is-inactive'}`} key={municipality.id}><div><span className="governance-eyebrow">IDENTIDADE MUNICIPAL</span><h3>{municipality.name} · {municipality.state_code}</h3><p>Identificador: <strong>{municipality.code}</strong> · Código IBGE: <strong>{municipality.ibge_code || 'não informado'}</strong></p><small>Fuso horário: {municipality.timezone} · {municipality.active ? 'Cadastro ativo' : 'Cadastro inativo'}</small></div><button className="governance-edit-button" type="button" onClick={() => setMunicipalityDraft(municipality)}><Pencil size={16} /><span>Editar dados</span></button></article>)}</div>}
+                </section>
+              )}
 
               {activeTab === 'organization' && (
                 <section className="governance-section" aria-labelledby="organizationHeading">
@@ -642,8 +720,8 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                   <form className="governance-audit-search" onSubmit={(event) => { event.preventDefault(); void loadPanel(false) }}>
                     <Search size={17} aria-hidden="true" /><input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} placeholder="Buscar por ação, administrador ou usuário" /><button className="governance-secondary-button" type="submit">Pesquisar</button>
                   </form>
-                  <div className="governance-audit-list">
-                    {audit.length === 0 ? <div className="governance-empty">Nenhuma alteração encontrada.</div> : audit.map((entry) => <article className="governance-audit-row" key={entry.id}><div className="governance-audit-time">{new Date(entry.created_at).toLocaleString('pt-BR')}</div><div className="governance-audit-main"><strong>{entry.action}</strong><span>{entry.target_name || entry.target_email || 'Registro geral'} · por {entry.actor_name || entry.actor_email || 'sistema'}</span></div><code>{entry.details ? JSON.stringify(entry.details) : '{}'}</code></article>)}
+                    <div className="governance-audit-list">
+                    {audit.length === 0 ? <div className="governance-empty">Nenhuma alteração encontrada.</div> : audit.map((entry) => <article className="governance-audit-row" key={entry.id}><div className="governance-audit-time">{new Date(entry.created_at).toLocaleString('pt-BR')}</div><div className="governance-audit-main"><strong>{humanAuditAction(entry.action)}</strong><span>{entry.target_name || entry.target_email || 'Registro geral'} · feito por {entry.actor_name || entry.actor_email || 'sistema'}</span><small>{humanAuditDetails(entry.details)}</small></div></article>)}
                   </div>
                 </section>
               )}
@@ -667,6 +745,9 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
       {moduleDraft && (
         <ModuleDialog draft={moduleDraft} saving={saving} onChange={setModuleDraft} onCancel={() => setModuleDraft(null)} onSubmit={(event) => void saveModule(event)} />
       )}
+      {municipalityDraft && (
+        <MunicipalityDialog draft={municipalityDraft} saving={saving} onChange={setMunicipalityDraft} onCancel={() => setMunicipalityDraft(null)} onSubmit={(event) => void saveMunicipality(event)} />
+      )}
       {userDraft && (
         <UserDialog
           initial={userDraft}
@@ -681,6 +762,10 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
       {assignmentUser && <AssignmentManagerDialog user={assignmentUser} orgUnits={orgUnits} roles={roles} modules={modules} draft={assignmentDraft} saving={saving} onNew={() => setAssignmentDraft({ id: null, org_unit_id: '', role_id: '', module_ids: [], active: true, valid_until: '' })} onEdit={(assignment) => setAssignmentDraft({ id: assignment.id, org_unit_id: assignment.org_unit_id, role_id: assignment.role_id, module_ids: assignment.module_ids, active: assignment.active, valid_until: assignment.valid_until || '' })} onDelete={(assignment) => void deleteAssignment(assignment)} onChange={setAssignmentDraft} onSave={(draft) => void saveAssignment(draft)} onCancel={() => { setAssignmentUser(null); setAssignmentDraft(null) }} />}
     </div>
   )
+}
+
+function MunicipalityDialog({ draft, saving, onChange, onCancel, onSubmit }: { draft: MunicipalityDraft; saving: boolean; onChange: (draft: MunicipalityDraft) => void; onCancel: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <div className="governance-overlay"><section className="governance-dialog" role="dialog" aria-modal="true" aria-labelledby="municipalityDialogTitle"><div className="governance-dialog-heading"><div><span className="governance-eyebrow">IDENTIDADE MUNICIPAL</span><h2 id="municipalityDialogTitle">{draft.id ? 'Editar dados institucionais' : 'Cadastrar município'}</h2></div><button className="governance-close" type="button" aria-label="Fechar" onClick={onCancel}><X size={20} /></button></div><form onSubmit={onSubmit}><div className="governance-form-grid governance-form-grid--two"><label className="governance-field governance-field--full">Nome do município<input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} maxLength={160} required /></label><label className="governance-field">Identificador interno<input value={draft.code} onChange={(event) => onChange({ ...draft, code: event.target.value })} placeholder="ex.: pitangueiras-pr" maxLength={80} required /><small>Usado internamente para relacionar os módulos.</small></label><label className="governance-field">Código IBGE<input value={draft.ibge_code || ''} onChange={(event) => onChange({ ...draft, ibge_code: event.target.value.replace(/\D/g, '').slice(0, 7) })} inputMode="numeric" maxLength={7} placeholder="7 números" /></label><label className="governance-field">UF<select value={draft.state_code} onChange={(event) => onChange({ ...draft, state_code: event.target.value })}>{['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((uf) => <option key={uf}>{uf}</option>)}</select></label><label className="governance-field">Fuso horário<select value={draft.timezone} onChange={(event) => onChange({ ...draft, timezone: event.target.value })}><option>America/Sao_Paulo</option><option>America/Manaus</option><option>America/Belem</option><option>America/Fortaleza</option><option>America/Recife</option><option>America/Rio_Branco</option></select></label><label className="governance-check governance-field--full"><input type="checkbox" checked={draft.active} onChange={(event) => onChange({ ...draft, active: event.target.checked })} /><span><strong>Município ativo</strong><small>Cadastros inativos permanecem no histórico, mas não recebem novos vínculos.</small></span></label></div><div className="governance-dialog-actions"><button className="governance-secondary-button" type="button" onClick={onCancel}>Cancelar</button><button className="governance-primary-button" type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Salvar dados'}</button></div></form></section></div>
 }
 
 function AssignmentManagerDialog({ user, orgUnits, roles, modules, draft, saving, onNew, onEdit, onDelete, onChange, onSave, onCancel }: { user: GovernanceUser; orgUnits: OrgUnit[]; roles: GovernanceRole[]; modules: MunicipalModule[]; draft: AssignmentForm | null; saving: boolean; onNew: () => void; onEdit: (assignment: GovernanceAssignment) => void; onDelete: (assignment: GovernanceAssignment) => void; onChange: (draft: AssignmentForm | null) => void; onSave: (draft: AssignmentForm) => void; onCancel: () => void }) {

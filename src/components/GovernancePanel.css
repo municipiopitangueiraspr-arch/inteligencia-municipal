@@ -336,6 +336,41 @@
   gap: 14px;
 }
 
+.governance-institution-list {
+  display: grid;
+  gap: 14px;
+}
+
+.governance-institution-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #dce8e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.governance-institution-card.is-inactive {
+  background: #fafcfc;
+}
+
+.governance-institution-card h3 {
+  margin: 0;
+  color: #214d56;
+  font: 800 18px 'Manrope', sans-serif;
+}
+
+.governance-institution-card p,
+.governance-institution-card small {
+  display: block;
+  margin: 7px 0 0;
+  color: #6d8388;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .governance-secretariat-card,
 .governance-module-card {
   min-width: 0;
@@ -1108,6 +1143,7 @@
 .governance-audit-main { display: grid; gap: 3px; min-width: 0; }
 .governance-audit-main strong { color: #244e56; font: 800 12px 'Manrope', sans-serif; }
 .governance-audit-main span { overflow: hidden; color: #71858a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.governance-audit-main small { display: block; color: #6d8388; font-size: 11px; line-height: 1.4; }
 .governance-audit-row code { overflow: hidden; color: #5f7b82; font: 10px/1.4 monospace; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 760px) {
