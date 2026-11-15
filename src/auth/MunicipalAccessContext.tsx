@@ -13,6 +13,13 @@ export type MunicipalAssignment = {
   scopes: { type: string; key: string }[]
 }
 
+export type MunicipalFoundationContext = {
+  status: 'ready' | 'pending-assignment'
+  municipality: { id: string; code: string; name: string; stateCode: string; active: boolean } | null
+  professional: { id: string; userId: number; municipalityId: string; fullName: string; cns: string | null; cbo: string | null; professionalCategory: string; active: boolean } | null
+  assignments: { id: string; roleId: string; municipalityId: string; establishmentId: string | null; teamId: string | null; microareaId: string | null; validFrom: string; validUntil: string | null }[]
+}
+
 export type MunicipalAccessContextValue = {
   status: 'ready' | 'inactive' | 'pending-assignment' | 'error'
   user: { id: number; authUserId: string; name: string; email: string; avatarUrl: string | null; firstAccessPending: boolean } | null
@@ -21,6 +28,7 @@ export type MunicipalAccessContextValue = {
   moduleIds: string[]
   permissionIds: string[]
   acs: { id: string; fullName: string; active: boolean } | null
+  foundation: MunicipalFoundationContext | null
   error: string | null
   hasModule: (moduleId: string) => boolean
   hasPermission: (permissionId: string) => boolean
@@ -34,9 +42,14 @@ const AccessContext = createContext<MunicipalAccessContextValue | null>(null)
 
 export async function resolveMunicipalAccess(): Promise<MunicipalAccessContextValue> {
   if (!supabase) throw new Error('O serviço municipal não está configurado.')
-  const { data, error } = await supabase.rpc('municipal_governance_get_my_context')
+  const [{ data, error }, foundationResponse] = await Promise.all([
+    supabase.rpc('municipal_governance_get_my_context'),
+    supabase.rpc('municipal_foundation_get_my_context'),
+  ])
   if (error) throw new Error(error.message)
+  if (foundationResponse.error) throw new Error(foundationResponse.error.message)
   const raw = (data || {}) as Record<string, unknown>
+  const foundationRaw = (foundationResponse.data || {}) as Record<string, unknown>
   const user = raw.user as Record<string, unknown> | null
   const assignments = Array.isArray(raw.assignments) ? raw.assignments as Record<string, unknown>[] : []
   const normalizedAssignments = assignments.map((assignment) => ({
@@ -51,6 +64,21 @@ export async function resolveMunicipalAccess(): Promise<MunicipalAccessContextVa
   const moduleIds = Array.isArray(raw.module_ids) ? raw.module_ids.map(String) : []
   const permissionIds = Array.isArray(raw.permission_ids) ? raw.permission_ids.map(String) : []
   const acs = raw.acs && typeof raw.acs === 'object' ? raw.acs as Record<string, unknown> : null
+  const foundationMunicipality = foundationRaw.municipality && typeof foundationRaw.municipality === 'object' ? foundationRaw.municipality as Record<string, unknown> : null
+  const foundationProfessional = foundationRaw.professional && typeof foundationRaw.professional === 'object' ? foundationRaw.professional as Record<string, unknown> : null
+  const foundationAssignments = Array.isArray(foundationRaw.assignments) ? foundationRaw.assignments as Record<string, unknown>[] : []
+  const foundation: MunicipalFoundationContext = {
+    status: foundationRaw.status === 'ready' ? 'ready' : 'pending-assignment',
+    municipality: foundationMunicipality ? {
+      id: String(foundationMunicipality.id || ''), code: String(foundationMunicipality.code || ''), name: String(foundationMunicipality.name || ''), stateCode: String(foundationMunicipality.state_code || ''), active: foundationMunicipality.active !== false,
+    } : null,
+    professional: foundationProfessional ? {
+      id: String(foundationProfessional.id || ''), userId: Number(foundationProfessional.user_id || 0), municipalityId: String(foundationProfessional.municipality_id || ''), fullName: String(foundationProfessional.full_name || ''), cns: foundationProfessional.cns ? String(foundationProfessional.cns) : null, cbo: foundationProfessional.cbo ? String(foundationProfessional.cbo) : null, professionalCategory: String(foundationProfessional.professional_category || ''), active: foundationProfessional.active !== false,
+    } : null,
+    assignments: foundationAssignments.map((assignment) => ({
+      id: String(assignment.id || ''), roleId: String(assignment.role_id || ''), municipalityId: String(assignment.municipality_id || ''), establishmentId: assignment.establishment_id ? String(assignment.establishment_id) : null, teamId: assignment.team_id ? String(assignment.team_id) : null, microareaId: assignment.microarea_id ? String(assignment.microarea_id) : null, validFrom: String(assignment.valid_from || ''), validUntil: assignment.valid_until ? String(assignment.valid_until) : null,
+    })),
+  }
   const status = raw.status === 'inactive' || raw.status === 'pending-assignment' ? raw.status : user ? 'ready' : 'pending-assignment'
   return {
     status,
@@ -60,6 +88,7 @@ export async function resolveMunicipalAccess(): Promise<MunicipalAccessContextVa
     moduleIds,
     permissionIds,
     acs: acs ? { id: String(acs.id || ''), fullName: String(acs.full_name || ''), active: acs.active !== false } : null,
+    foundation,
     error: null,
     hasModule: (moduleId) => moduleIds.includes(moduleId),
     hasPermission: (permissionId) => permissionIds.includes(permissionId),
@@ -83,7 +112,7 @@ export function MunicipalAccessProvider({ user, children, initialContext }: Prov
   }, [user])
   useEffect(() => { if (user) void reload(); else if (initialContext) setContext(initialContext) }, [initialContext, reload, user])
   const value = useMemo<MunicipalAccessContextValue>(() => context ? { ...context, error, reload } : {
-    status: 'error', user: null, isAdministrator: false, assignments: [], moduleIds: [], permissionIds: [], acs: null, error, hasModule: () => false, hasPermission: () => false, hasRole: () => false, reload,
+    status: 'error', user: null, isAdministrator: false, assignments: [], moduleIds: [], permissionIds: [], acs: null, foundation: null, error, hasModule: () => false, hasPermission: () => false, hasRole: () => false, reload,
   }, [context, error, reload])
   return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>
 }
