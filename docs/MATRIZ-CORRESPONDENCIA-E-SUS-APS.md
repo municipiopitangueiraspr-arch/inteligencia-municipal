@@ -1,9 +1,9 @@
 # Matriz de correspondência — ACS × e-SUS APS
 
-**Versão da matriz:** 1.0.0  
-**Data:** 2026-11-15  
-**Escopo:** módulo ACS, Cadastro Individual, Cadastro Domiciliar e Territorial e Visita Domiciliar e Territorial.  
-**Estado:** preparação para a etapa futura de exportação; não representa homologação, transmissão ou aceitação pelo PEC/SISAB.
+**Versão da matriz:** 1.1.0
+**Data:** 2026-11-15
+**Escopo:** módulo ACS, Cadastro Individual, Cadastro Domiciliar e Territorial e Visita Domiciliar e Territorial.
+**Estado:** preparação para a etapa futura de exportação; não representa homologação, transmissão ou aceitação pelo PEC/SISAB. A versão 1.1 registra as estruturas locais implementadas para fechar lacunas parciais sem inventar códigos oficiais.
 
 ## Como ler a matriz
 
@@ -32,8 +32,8 @@ Os estados usados são:
 | Estado | Campo de origem atual | Código oficial | Obrigatoriedade | Regra condicional | Transformação necessária | Destino da exportação |
 |---|---|---|---|---|---|---|
 | COBERTO | `census_households.id`, `lot_id`, `label` | Identificador local; código e-SUS a confirmar | Obrigatório internamente | UUID deve permanecer estável para reenvio | Gerar identificador externo sem substituir o UUID local | Identificador do domicílio |
-| COBERTO | `address_line`, `address_number`, `address_complement`, `neighborhood`, `postal_code`, `locality` | Campos oficiais de endereço a confirmar | Parte obrigatória conforme tipo de imóvel | Regras variam para imóvel sem número, rural ou coletivo | Normalizar logradouro, número, complemento, CEP e localidade | Cadastro domiciliar/territorial |
-| PARCIAL | `latitude`, `longitude` | Coordenadas oficiais a confirmar | Condicional, quando coletadas | Validar faixa, precisão e origem da coordenada | Converter para formato e precisão aceitos | Localização territorial |
+| A VALIDAR | `address_line`, `address_number`, `address_complement`, `neighborhood`, `postal_code`, `locality`, `address_validation_status` | Campos oficiais de endereço a confirmar | Parte obrigatória conforme tipo de imóvel | CEP é normalizado para 8 dígitos; endereço recebe estado local `UNCONFIRMED`, `PARTIAL` ou `STRUCTURED` | Normalizar logradouro, número, complemento, CEP e localidade; confirmar nomes/códigos no leiaute oficial | Cadastro domiciliar/territorial |
+| A VALIDAR | `latitude`, `longitude` | Coordenadas oficiais a confirmar | Condicional, quando coletadas | Faixas -90/90 e -180/180 são validadas no formulário e no banco | Converter para formato e precisão aceitos; confirmar se o destino aceita coordenadas | Localização territorial |
 | A IMPLEMENTAR | Tipo de imóvel e situação de ocupação | Código oficial a confirmar | Obrigatório conforme cadastro domiciliar | Deve distinguir domicílio, imóvel não domiciliar, vazio e uso coletivo | Criar catálogo versionado e mapeamento oficial | Cadastro domiciliar/territorial |
 | A IMPLEMENTAR | Condições de moradia | Código oficial a confirmar | Obrigatório/condicional conforme ficha oficial | Deve registrar somente os blocos aplicáveis ao imóvel | Criar campos estruturados para água, saneamento, energia, lixo, cômodos e material | Cadastro domiciliar/territorial |
 | A IMPLEMENTAR | Características do território | Código oficial a confirmar | Condicional | Aplicável quando o modelo exigir informação territorial | Criar catálogo e regras por tipo de imóvel | Cadastro domiciliar/territorial |
@@ -45,9 +45,9 @@ Os estados usados são:
 |---|---|---|---|---|---|---|
 | COBERTO | `census_families.id`, `family_reference` | Identificador familiar oficial a confirmar | Obrigatório quando houver família | Deve pertencer a um domicílio vigente | Mapear referência local para identificador aceito pelo destino | Família/domicílio |
 | COBERTO | `census_family_members.family_id`, `citizen_id`, `relationship_code`, `is_responsible` | Parentesco/responsável: código oficial a confirmar | Condicional ao cadastro familiar | Deve existir um responsável conforme regra oficial | Criar catálogo de parentesco e mapeamento | Composição familiar |
-| PARCIAL | `census_citizens.full_name`, `preferred_name` | Campo oficial de nome a confirmar | Obrigatório no cadastro individual | Nome preferencial não substitui nome civil quando o destino exigir ambos | Normalizar nome, preservar valor original e aplicar regra de acentuação definida | Cadastro individual |
-| PARCIAL | `birth_date`, `sex` | Data de nascimento e sexo oficiais; códigos a confirmar | Obrigatório/condicional | Validar data futura, faixa e valores permitidos | Converter sexo municipal para domínio oficial | Cadastro individual |
-| PARCIAL | `cns`, `cpf` | CNS/CPF oficiais | Condicional, quando disponíveis | Nunca gerar identificador; validar dígitos e duplicidade | Validar e enviar apenas valores confirmados ou declarados conforme regra | Identificação do cidadão |
+| A VALIDAR | `census_citizens.full_name`, `preferred_name` | Campo oficial de nome a confirmar | Obrigatório no cadastro individual | Nome é aparado e nome preferencial é preservado separadamente | Normalizar nome, preservar valor original e confirmar regra do destino | Cadastro individual |
+| A VALIDAR | `birth_date`, `sex` | Data de nascimento e sexo oficiais; códigos a confirmar | Obrigatório/condicional | Banco mantém data/sexo estruturados e restringe sexo ao domínio local vigente | Converter sexo municipal para domínio oficial | Cadastro individual |
+| A VALIDAR | `cns`, `cpf`, `cns_validation_status`, `cpf_validation_status` | CNS/CPF oficiais | Condicional, quando disponíveis | CNS exige formato de 15 dígitos; CPF tem dígitos verificadores; nenhum identificador é inventado | Normalizar dígitos e separar declaração local de confirmação oficial | Identificação do cidadão |
 | COBERTO | `identification_status`, `data_source` | Metadado local; código oficial a confirmar | Obrigatório localmente | Provisório não deve ser apresentado como CNS/CPF validado | Mapear situação para estado aceito e preservar origem | Qualidade/auditoria |
 | A IMPLEMENTAR | Raça/cor, nacionalidade, escolaridade, ocupação, filiação e demais dados sociodemográficos | Códigos oficiais a confirmar | Conforme Cadastro Individual vigente | Campos dependem de faixa etária, situação e ficha utilizada | Criar colunas/catálogos versionados e validações condicionais | Cadastro individual |
 | A IMPLEMENTAR | Condições autorreferidas e situações de saúde do cidadão | Códigos oficiais a confirmar | Condicional ao campo/motivo | Não confundir relato do cidadão com diagnóstico profissional | Criar domínio de condição, origem e data de vigência | Cadastro individual/linha de cuidado |
@@ -59,12 +59,12 @@ Os estados usados são:
 | COBERTO | `census_visits.id`, `visit_type='FVD'` | Identificador local; identificador oficial a confirmar | Obrigatório localmente | UUID deve ser idempotente | Gerar envelope externo sem alterar o UUID | Identificador do evento |
 | COBERTO | `visit_date`, `created_at` | Data/hora oficiais a confirmar | Obrigatório | Data não pode ser futura conforme regra do destino | Aplicar timezone municipal e formato oficial | Data da visita |
 | COBERTO | `professional_id`, `acs_id` | CNS/CBO/identificador oficial do profissional | Obrigatório | Profissional deve ser ACS/ACE para MIVDT | Resolver profissional, CNS, CBO e vínculo vigente | Profissional da visita |
-| PARCIAL | `municipality_id`, `establishment_id`, `team_id`, `microarea_id` | Campos oficiais a confirmar | Obrigatório no contexto territorial quando exigido | Devem ser gravados no evento, não apenas inferidos na tela | Persistir snapshot do estabelecimento/equipe/microárea na RPC FVD | Contexto territorial |
+| A VALIDAR | `municipality_id`, `establishment_id`, `team_id`, `microarea_id`, `territory_snapshot` | Campos oficiais a confirmar | Obrigatório no contexto territorial quando exigido | RPC resolve vínculo vigente e grava snapshot com estado `COMPLETE` ou `PARTIAL`; tarefa serve como fallback | Persistir snapshot do estabelecimento/equipe/microárea na FVD e confirmar nomes/códigos no leiaute | Contexto territorial |
 | COBERTO | `family_id`, `citizen_id`, `household_id` | CNS/CPF ou identificador oficial | Condicional conforme motivo da visita | Visita periódica/controle vetorial pode usar responsável familiar; cidadão pode ser ausente | Resolver pessoa/local visitado conforme regra do modelo | Pessoa ou local visitado |
 | COBERTO | `census_visit_reason_links`, `reason_version` | Motivo oficial a confirmar | Obrigatório; pode aceitar múltiplos | Compatibilidade com tipo de visita e desfecho | Criar tabela de mapeamento código municipal × código oficial | Motivo da visita |
 | COBERTO | `outcome_id`, `outcome_version`, `status` | Desfecho oficial a confirmar | Obrigatório | Desfecho diferente de realizada exige justificativa | Mapear estados municipais para domínio oficial e manter justificativa | Desfecho |
 | COBERTO | `notes`, `guidance`, `referral`, `return_date` | Texto/data oficiais a confirmar | Condicional | Encaminhamento e retorno só quando aplicáveis | Separar observação, orientação, encaminhamento e retorno nos campos oficiais | Observação/conduta |
-| PARCIAL | `census_questionnaire_responses.answers` | Campos oficiais dependem da ficha | Condicional ao questionário aplicado | Respostas não podem ser exportadas como um JSON genérico sem mapeamento | Criar mapeamento por `questionnaire_slug` e `version` | Dados complementares da ficha |
+| A VALIDAR | `census_questionnaire_responses.answers`, `census_questionnaire_field_mappings` | Campos oficiais dependem da ficha | Condicional ao questionário aplicado | Respostas continuam versionadas; cada pergunta pode ter domínio, regra, destino e estado de mapeamento próprios | Usar o mapeamento por questionário/versão/pergunta antes de qualquer adaptador | Dados complementares da ficha |
 | A IMPLEMENTAR | Bloqueios de incompatibilidade entre motivo, desfecho e tipo de imóvel | Regras oficiais a confirmar | Obrigatório para qualidade | Ausência/recusa não pode receber campos incompatíveis com visita realizada | Criar motor de validação versionado | Validação antes do payload |
 
 ## 5. Agenda, processamento e integração

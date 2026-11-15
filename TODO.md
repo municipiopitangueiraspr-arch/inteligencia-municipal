@@ -295,3 +295,13 @@ Commit `429ed55` enviado ao branch `main`; o workflow GitHub Pages `42789420051`
 - [x] A lista de atenção mantém o encaminhamento para o mapa e a visão explica o significado dos estados antes dos números.
 - [x] O backend possui a função `census_manager_monitoring_context()` com etapa principal, situação da visita, responsável, última movimentação e motivo da pendência, sem conteúdo de respostas, com execução apenas para usuários autenticados com módulo `census`.
 - [x] Build, testes territoriais e lint concluídos; publicar frontend e backend atualizados para teste remoto.
+
+## Completude das lacunas parciais do ACS × e-SUS APS
+- [x] Normalizar e validar endereço, CEP, latitude e longitude no cadastro domiciliar, mantendo estado local de qualidade e origem da coleta.
+- [x] Capturar e validar CNS/CPF no cadastro de cidadão, sem gerar identificadores e separando declaração local de confirmação oficial.
+- [x] Validar data de nascimento, preservar nome preferencial e usar catálogo versionado para vínculos familiares.
+- [x] Preencher automaticamente o contexto município–estabelecimento–equipe–microárea na FVD, com fallback da tarefa e snapshot territorial versionado.
+- [x] Exibir endereço e contexto da tarefa na agenda operacional do ACS.
+- [x] Criar estrutura versionada de mapeamento por questionário, versão e pergunta, impedindo que respostas JSONB sejam tratadas como payload oficial sem correspondência.
+- [x] Aplicar as migrations no Supabase do projeto `qgkjnzcqjhhqdgxmvtew` e validar o build TypeScript/Vite.
+- [ ] Confirmar códigos e nomes finais contra o leiaute oficial vigente e homologar o adaptador antes de iniciar exportação.
