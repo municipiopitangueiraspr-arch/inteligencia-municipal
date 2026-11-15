@@ -601,9 +601,11 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                           <div className="governance-user-main"><strong>{user.name || 'Nome não informado'}</strong><span>{user.email}</span></div>
                           <span className="governance-profile-badge">{user.assignments[0]?.role_label || profileLabel(user.perfil_legacy || user.perfil_municipal)}</span>
                           <span className="governance-user-summary">{user.assignments.length} atribuição(ões) · {user.assignments.reduce((total, assignment) => total + assignment.module_ids.length, 0)} módulo(s) · {user.ativo ? 'Ativo' : 'Inativo'}</span>
-                          <button className="governance-text-button" type="button" onClick={() => void setUserActive(user)} disabled={saving}>{user.ativo ? 'Inativar' : 'Reativar'}</button>
-                          <button className="governance-text-button" type="button" onClick={() => openAssignmentManager(user)}>Atribuições</button>
-                          <button className="governance-edit-button" type="button" aria-label={`Editar perfil e vínculos de ${user.name || user.email}`} onClick={() => openEditUser(user)}><Pencil size={16} /><span>Editar</span></button>
+                          <div className="governance-user-actions">
+                            <button className="governance-text-button" type="button" onClick={() => void setUserActive(user)} disabled={saving}>{user.ativo ? 'Inativar' : 'Reativar'}</button>
+                            <button className="governance-text-button" type="button" onClick={() => openAssignmentManager(user)}>Atribuições</button>
+                            <button className="governance-edit-button" type="button" aria-label={`Editar perfil e vínculos de ${user.name || user.email}`} onClick={() => openEditUser(user)}><Pencil size={16} /><span>Editar</span></button>
+                          </div>
                         </article>
                       ))}
                     </div>
