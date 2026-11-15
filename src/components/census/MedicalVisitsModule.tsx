@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Activity, AlertCircle, ArrowLeft, CalendarClock, CalendarDays, Check, CheckCircle2, ClipboardList, Clock3, HeartPulse, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Plus, RefreshCw, RotateCcw, Search, Stethoscope, X } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
+import type { MunicipalAccessContextValue } from '../../auth/MunicipalAccessContext'
 import { getMapLotCode } from './territory/lotDisplay'
 import { zoomMapViewAtOffset } from './mapLogic'
 import { useCensusDialogFocus } from './territory/useCensusDialogFocus'
@@ -69,7 +70,7 @@ function visitOrder(a: MedicalVisit, b: MedicalVisit) {
   return `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`)
 }
 
-export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail?: string; onBack: () => void; onLogout: () => void }) {
+export function MedicalVisitsModule({ userEmail, accessContext, onBack, onLogout }: { userEmail?: string; accessContext: MunicipalAccessContextValue; onBack: () => void; onLogout: () => void }) {
   const [section, setSection] = useState<MedicalSection>('overview')
   const [menuOpen, setMenuOpen] = useState(false)
   const [profile, setProfile] = useState({ name: userEmail || 'Usuário autenticado' })
@@ -104,19 +105,8 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
   const confirmationRef = useCensusDialogFocus(Boolean(pendingAction), () => setPendingAction(null))
 
   useEffect(() => {
-    let mounted = true
-    const loadProfile = async () => {
-      if (!supabase) return
-      const { data } = await supabase.auth.getSession()
-      const user = data.session?.user
-      if (!user || !mounted) return
-      const metadata = user.user_metadata || {}
-      const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || user.email || 'Usuário autenticado'
-      if (mounted) setProfile({ name })
-    }
-    void loadProfile()
-    return () => { mounted = false }
-  }, [userEmail])
+    setProfile({ name: accessContext.user?.name || userEmail || accessContext.user?.email || 'Usuário autenticado' })
+  }, [accessContext, userEmail])
 
   const load = useCallback(async () => {
     if (!supabase) {
@@ -126,9 +116,7 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
     const db = supabase
     setLoading(true); setError(''); setNotice(''); setAuthorized(false); setMapImport(null); setLots([]); setZones([]); setVisits([]); setPriorities([]); setSelectedLotId(null)
     try {
-      const { data: isAdmin, error: authError } = await db.rpc('municipal_governance_is_admin')
-      if (authError) throw new Error('Não foi possível confirmar sua autorização administrativa.')
-      if (isAdmin !== true) { setLoading(false); return }
+      if (!accessContext.isAdministrator || !accessContext.hasModule('medical-visits')) { setLoading(false); return }
       const mapResult = await db.from('census_territory_map_imports').select('id,bbox').order('division_saved_at', { ascending: false }).order('updated_at', { ascending: false }).limit(1)
       if (mapResult.error) throw new Error(`Não foi possível abrir o mapa territorial: ${mapResult.error.message}`)
       const current = (mapResult.data?.[0] || null) as MapImport | null
@@ -147,7 +135,7 @@ export function MedicalVisitsModule({ userEmail, onBack, onLogout }: { userEmail
       setAuthorized(false)
       setError(err instanceof Error ? err.message : 'Não foi possível carregar o módulo de visitas médicas.')
     } finally { setLoading(false) }
-  }, [])
+  }, [accessContext])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load() }, 0)

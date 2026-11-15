@@ -11,6 +11,8 @@ import { MedicalVisitsModule } from './components/census/MedicalVisitsModule'
 import { SupplierPortal } from './components/SupplierPortal'
 import { SupplierAccessRequest } from './components/SupplierAccessRequest'
 import type { Station } from './components/FleetResources'
+import { MunicipalAccessProvider, resolveMunicipalAccess } from './auth/MunicipalAccessContext'
+import type { MunicipalAccessContextValue } from './auth/MunicipalAccessContext'
 import './App.css'
 
 const assetBase = import.meta.env.BASE_URL
@@ -53,13 +55,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const [supplierContext, setSupplierContext] = useState<SupplierContext | null>(null)
+  const [municipalContext, setMunicipalContext] = useState<MunicipalAccessContextValue | null>(null)
+  const [accessError, setAccessError] = useState('')
   const [supplierMode, setSupplierMode] = useState(() => new URLSearchParams(window.location.search).get('portal') === 'fornecedor' || window.location.hash === '#portal')
   const [showFirstAccess, setShowFirstAccess] = useState(false)
 
   useEffect(() => {
     if (!supabase) { setSessionChecking(false); return }
     let mounted = true
-    const applySession = (session: Session | null, event = '') => {
+    const applySession = async (session: Session | null, event = '') => {
       if (!mounted || !session) return
       const user = session.user
       const supplierIdentity = isSupplierIdentity(user)
@@ -71,17 +75,33 @@ function App() {
       if (supplierIdentity || supplierRoute) {
         setSupplierMode(true)
         setTimeout(() => { void resolveSupplierAccess().then((context) => { if (mounted) setSupplierContext(context) }) }, 0)
+        if (event === 'PASSWORD_RECOVERY' || user.user_metadata?.cadastro_por_convite === true) setRequiresPasswordSetup(true)
+        setSignedIn(true)
+        return
       }
-      if (event === 'PASSWORD_RECOVERY' || user.user_metadata?.cadastro_por_convite === true) setRequiresPasswordSetup(true)
-      setSignedIn(true)
+      if (event === 'PASSWORD_RECOVERY') setRequiresPasswordSetup(true)
+      try {
+        const context = await resolveMunicipalAccess()
+        if (!mounted) return
+        setMunicipalContext(context)
+        setAccessError('')
+        if (event !== 'PASSWORD_RECOVERY') setRequiresPasswordSetup(context.user?.firstAccessPending === true)
+        setSignedIn(true)
+      } catch (error) {
+        if (!mounted) return
+        setMunicipalContext(null)
+        setAccessError(error instanceof Error ? error.message : 'Não foi possível validar o acesso municipal.')
+        setSignedIn(true)
+      }
     }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
-        setSignedIn(false); setSupplierContext(null); setRequiresPasswordSetup(false); setIsSupplierAccount(false)
-      } else if (session) applySession(session, event)
-      setSessionChecking(false)
+        setSignedIn(false); setSupplierContext(null); setMunicipalContext(null); setRequiresPasswordSetup(false); setIsSupplierAccount(false); setAccessError('')
+        setSessionChecking(false)
+      } else if (session) void applySession(session, event).finally(() => { if (mounted) setSessionChecking(false) })
+      else setSessionChecking(false)
     })
-    void supabase.auth.getSession().then(({ data }) => { if (mounted && data.session) applySession(data.session) }).catch(() => undefined).finally(() => { if (mounted) setSessionChecking(false) })
+    void supabase.auth.getSession().then(({ data }) => { if (mounted && data.session) return applySession(data.session) }).catch(() => undefined).finally(() => { if (mounted) setSessionChecking(false) })
     return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
@@ -119,6 +139,16 @@ function App() {
     if (useSupplierPortal) {
       const context = await resolveSupplierAccess()
       setSupplierContext(context)
+    } else {
+      try {
+        const context = await resolveMunicipalAccess()
+        setMunicipalContext(context)
+        setAccessError('')
+        setRequiresPasswordSetup(context.user?.firstAccessPending === true)
+      } catch (error) {
+        setMunicipalContext(null)
+        setAccessError(error instanceof Error ? error.message : 'Não foi possível validar o acesso municipal.')
+      }
     }
     setLoading(false)
     setSignedIn(true)
@@ -142,6 +172,8 @@ function App() {
     setActiveArea('dashboard')
     setDisplayName('')
     setSupplierContext(null)
+    setMunicipalContext(null)
+    setAccessError('')
     setRequiresPasswordSetup(false)
     setIsSupplierAccount(false)
     setPassword('')
@@ -153,12 +185,18 @@ function App() {
   if (signedIn && requiresPasswordSetup) return <FirstAccessPasswordSetup isSupplier={isSupplierAccount} onComplete={() => setRequiresPasswordSetup(false)} onLogout={() => void logout()} />
   if (signedIn && supplierMode && supplierContext) return <SupplierPortal station={supplierContext.station} role={supplierContext.role} userEmail={email} userDisplayName={displayName || email} initialVehicleId={supplierContext.vehicleId} accessReason={supplierContext.accessReason} onLogout={() => void logout()} />
   if (signedIn && supplierMode) return <SupplierAccessRequest authenticatedEmail={email} onBack={() => void logout()} />
-  if (signedIn) {
-    if (activeArea === 'fleet') return <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    if (activeArea === 'census') return <CensusModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    if (activeArea === 'medical-visits') return <MedicalVisitsModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    if (activeArea === 'governance') return <GovernancePanel userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} />
-    return <Dashboard userEmail={email} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenMedicalVisits={() => setActiveArea('medical-visits')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} />
+  if (signedIn && !isSupplierAccount) {
+    if (accessError) return <AccessBlocked title="Não foi possível validar o acesso" message={accessError} onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'inactive') return <AccessBlocked title="Conta municipal desativada" message="Sua conta está autenticada, mas não está ativa na Governança Municipal. Procure um administrador." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (municipalContext?.status === 'pending-assignment') return <AccessBlocked title="Aguardando atribuição municipal" message="Sua conta existe, mas ainda não possui uma atribuição ativa na estrutura municipal." onRetry={() => window.location.reload()} onLogout={() => void logout()} />
+    if (!municipalContext) return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#344054', background: '#f6f8fb' }}>Carregando seu ambiente municipal…</div>
+    return <MunicipalAccessProvider user={null} initialContext={municipalContext}>
+      {activeArea === 'fleet' && municipalContext.moduleIds.includes('fleet') ? <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'census' && municipalContext.moduleIds.includes('census') ? <CensusModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'medical-visits' && municipalContext.isAdministrator && municipalContext.moduleIds.includes('medical-visits') ? <MedicalVisitsModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'governance' && municipalContext.isAdministrator ? <GovernancePanel userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'dashboard' || (activeArea === 'fleet' && !municipalContext.moduleIds.includes('fleet')) || (activeArea === 'census' && !municipalContext.moduleIds.includes('census')) || (activeArea === 'medical-visits' && (!municipalContext.isAdministrator || !municipalContext.moduleIds.includes('medical-visits'))) || (activeArea === 'governance' && !municipalContext.isAdministrator) ? <Dashboard userEmail={email} accessContext={municipalContext} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenMedicalVisits={() => setActiveArea('medical-visits')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} /> : null}
+    </MunicipalAccessProvider>
   }
   if (showFirstAccess && supplierMode) return <SupplierAccessRequest onBack={() => setShowFirstAccess(false)} />
 
@@ -192,6 +230,10 @@ function App() {
   </main>
 }
 
+function AccessBlocked({ title, message, onRetry, onLogout }: { title: string; message: string; onRetry: () => void; onLogout: () => void }) {
+  return <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#f6f8fb' }}><section style={{ maxWidth: 520, padding: 32, background: '#fff', borderRadius: 18, boxShadow: '0 12px 40px rgba(16,24,40,.08)', textAlign: 'center' }}><ShieldCheck size={32} color="#287c8b" /><h1 style={{ margin: '16px 0 8px' }}>{title}</h1><p style={{ color: '#667085', lineHeight: 1.6 }}>{message}</p><div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 24 }}><button className="fleet-secondary-button" type="button" onClick={onRetry}>Tentar novamente</button><button className="submit-button" type="button" onClick={onLogout}>Sair</button></div></section></main>
+}
+
 function FirstAccessPasswordSetup({ isSupplier, onComplete, onLogout }: { isSupplier: boolean; onComplete: () => void; onLogout: () => void }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -209,6 +251,9 @@ function FirstAccessPasswordSetup({ isSupplier, onComplete, onLogout }: { isSupp
     if (isSupplier) {
       const completed = await supabase.rpc('fleet_supplier_complete_first_access')
       if (completed.error) { setSaving(false); setError('A senha foi alterada, mas a conclusão do primeiro acesso ainda não foi registrada. Confirme se o vínculo com o posto está ativo e tente novamente.'); return }
+    } else {
+      const completed = await supabase.rpc('municipal_governance_complete_first_access')
+      if (completed.error) { setSaving(false); setError('A senha foi alterada, mas o primeiro acesso municipal não foi concluído. Solicite ao administrador uma nova validação.'); return }
     }
     await supabase.auth.updateUser({ data: { cadastro_por_convite: false, senha_configurada: true } })
     setSaving(false)

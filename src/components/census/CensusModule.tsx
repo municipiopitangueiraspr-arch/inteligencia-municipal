@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowLeft, Check, CheckCircle2, ClipboardList, Download, FileText, Filter, FolderOpen, LayoutDashboard, LoaderCircle, LogOut, MapPinned, Menu, Minus, Move, Plus, RotateCcw, Save, Upload, UserPlus, UsersRound, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import type { MunicipalAccessContextValue } from '../../auth/MunicipalAccessContext'
 import { CensusWriteConfirmation } from './CensusWriteConfirmation'
 import { CensusFamiliesVisits } from './CensusFamiliesVisits'
 import { CensusOverview } from './CensusOverview'
@@ -57,7 +58,7 @@ type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type CensusAccess = { role: CensusRole; label: string; description: string; acsId: string | null }
-type CensusModuleProps = { userEmail?: string; onBack: () => void; onLogout: () => void }
+type CensusModuleProps = { userEmail?: string; accessContext: MunicipalAccessContextValue; onBack: () => void; onLogout: () => void }
 type CensusNoticeTone = 'success' | 'error' | 'info'
 const TERRITORY_PAGE_SIZE = 1000
 
@@ -102,7 +103,7 @@ async function fetchPreparationLots(db: NonNullable<typeof supabase>, importId: 
   }
 }
 
-export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps) {
+export function CensusModule({ userEmail, accessContext, onBack, onLogout }: CensusModuleProps) {
   const [view, setView] = useState<CensusSection>('overview')
   const [familyInitialFilter, setFamilyInitialFilter] = useState<OperationalFilter>('ALL')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -121,35 +122,23 @@ export function CensusModule({ userEmail, onBack, onLogout }: CensusModuleProps)
   useEffect(() => {
     let mounted = true
     const loadProfile = async () => {
-      if (!supabase) return
-      const { data } = await supabase.auth.getSession()
-      const authUser = data.session?.user
-      if (!authUser || !mounted) return
-      const metadata = authUser.user_metadata || {}
-      const name = String(metadata.full_name || metadata.name || metadata.display_name || '').trim() || userEmail || authUser.email || 'Usuário autenticado'
-      const photo = String(metadata.avatar_url || metadata.picture || metadata.photo_url || '').trim() || null
-      if (mounted) setProfile({ name, photo })
-      const [{ data: acsRows }, { data: governanceAdmin }] = await Promise.all([
-        supabase.from('census_acs').select('id,full_name').eq('user_id', authUser.id).eq('active', true).limit(1),
-        supabase.rpc('municipal_governance_is_admin'),
-      ])
-      const acs = acsRows?.[0] as { id?: string; full_name?: string } | undefined
-      const profileText = [metadata.perfil, metadata.perfil_municipal, metadata.role, metadata.cargo].map((value) => String(value || '').toUpperCase()).join(' ')
-      const isAcs = Boolean(acs?.id) || /\bACS\b|AGENTE\s+COMUNIT/.test(profileText)
-      const isAdmin = governanceAdmin === true || /\bADMIN(?:ISTRADOR)?\b|SUPERINTENDENTE|CONTROLADOR(?:A)?/.test(profileText)
+      const name = accessContext.user?.name || userEmail || accessContext.user?.email || 'Usuário autenticado'
+      const photo = accessContext.user?.avatarUrl || null
+      const isAcs = accessContext.acs !== null && accessContext.hasRole('ACS')
+      const isAdmin = accessContext.isAdministrator
       if (mounted) {
+        setProfile({ name, photo })
         setIsAdministrator(isAdmin)
         setAccess(isAcs
-          ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: acs?.id || null }
+          ? { role: 'acs', label: 'Operação de campo', description: 'Sua rotina, seus domicílios e as visitas sob sua responsabilidade.', acsId: accessContext.acs?.id || null }
           : { role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
         if (!isAcs) setView('territory')
         setAccessLoading(false)
       }
     }
     void loadProfile()
-    const timeout = window.setTimeout(() => { if (mounted) setAccessLoading(false) }, 4000)
-    return () => { mounted = false; window.clearTimeout(timeout) }
-  }, [userEmail])
+    return () => { mounted = false }
+  }, [accessContext, userEmail])
 
   const selectView = (nextView: CensusSection) => {
     if (access.role === 'acs' && !acsNavItems.some((item) => item.id === nextView)) return

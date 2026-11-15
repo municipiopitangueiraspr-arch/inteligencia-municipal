@@ -13,6 +13,7 @@ import type {
 import { getMunicipalIcon } from '../lib/municipal-catalog'
 import { supabase } from '../lib/supabase'
 import { MatrixHeader } from './MatrixHeader'
+import type { MunicipalAccessContextValue } from '../auth/MunicipalAccessContext'
 import './Dashboard.css'
 const selectedSecretariatStorageKey = 'inteligencia-municipal.selected-secretariat'
 
@@ -23,6 +24,7 @@ type DashboardProps = {
   onOpenMedicalVisits: () => void
   onOpenGovernance: () => void
   onLogout: () => void
+  accessContext: MunicipalAccessContextValue
 }
 
 const moduleToneById: Record<string, string> = {
@@ -34,11 +36,11 @@ const moduleToneById: Record<string, string> = {
   acts: 'official',
 }
 
-export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenGovernance, onLogout }: DashboardProps) {
+export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenGovernance, onLogout }: DashboardProps) {
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [secretariatModules, setSecretariatModules] = useState<MunicipalSecretariatModule[]>([])
-  const [canManageGovernance, setCanManageGovernance] = useState(false)
+  const [canManageGovernance, setCanManageGovernance] = useState(accessContext.isAdministrator)
   const [userName, setUserName] = useState('')
   const [userAvatarUrl, setUserAvatarUrl] = useState('')
   const [moduleSearchQuery, setModuleSearchQuery] = useState('')
@@ -61,7 +63,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
       }
 
       // Associação de catálogo para organizar os cards por secretaria, igualmente visível a todos; não é uma permissão individual.
-      const [secretariatResult, moduleResult, mappingResult, adminResult, userResult] = await Promise.all([
+      const [secretariatResult, moduleResult, mappingResult] = await Promise.all([
         supabase
           .from('municipal_secretariats')
           .select('id,name,description,icon_name,sort_order,is_active')
@@ -75,8 +77,6 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
           .from('municipal_secretariat_modules')
           .select('secretariat_id,module_id,sort_order')
           .order('sort_order', { ascending: true }),
-        supabase.rpc('municipal_governance_is_admin'),
-        supabase.auth.getSession(),
       ])
 
       if (!mounted) return
@@ -88,16 +88,15 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
         setModules((moduleResult.data || []) as unknown as MunicipalModule[])
         setSecretariatModules((mappingResult.data || []) as unknown as MunicipalSecretariatModule[])
       }
-      setCanManageGovernance(!adminResult.error && adminResult.data === true)
-      const metadata = (userResult.data.session?.user?.user_metadata || {}) as Record<string, unknown>
-      setUserName(String(metadata.full_name || metadata.name || metadata.nome_completo || ''))
-      setUserAvatarUrl(String(metadata.avatar_url || metadata.photo_url || ''))
+      setCanManageGovernance(accessContext.isAdministrator)
+      setUserName(accessContext.user?.name || '')
+      setUserAvatarUrl(accessContext.user?.avatarUrl || '')
       setLoading(false)
     }
 
     void loadHall()
     return () => { mounted = false }
-  }, [])
+  }, [accessContext])
 
   const selectSecretariat = (id: string) => {
     setSelectedSecretariatId(id)
@@ -117,7 +116,7 @@ export function Dashboard({ userEmail, onOpenFleet, onOpenCensus, onOpenMedicalV
     ? secretariatModules
       .filter((mapping) => mapping.secretariat_id === selectedSecretariat.id)
       .map((mapping) => modules.find((module) => module.id === mapping.module_id))
-      .filter((module): module is MunicipalModule => Boolean(module) && (module?.id !== 'medical-visits' || canManageGovernance))
+      .filter((module): module is MunicipalModule => Boolean(module) && accessContext.moduleIds.includes(module?.id || '') && (module?.id !== 'medical-visits' || accessContext.hasModule('medical-visits')))
     : []
   const normalizedModuleQuery = moduleSearchQuery.trim().toLocaleLowerCase('pt-BR')
   const visibleModules = availableModules.filter((module) => {
