@@ -1031,7 +1031,25 @@
   opacity: .55;
   cursor: not-allowed;
 }
-
+@media (max-width: 1100px) {
+  .governance-fleet-shell .governance-user-row {
+    grid-template-columns: 38px minmax(0, 1fr) minmax(92px, auto);
+    align-items: start;
+    gap: 8px 12px;
+  }
+  .governance-fleet-shell .governance-user-main { grid-column: 2; }
+  .governance-fleet-shell .governance-profile-badge,
+  .governance-fleet-shell .governance-user-summary { grid-column: 2; }
+  .governance-fleet-shell .governance-user-row .governance-text-button,
+  .governance-fleet-shell .governance-user-row .governance-edit-button {
+    grid-column: 3;
+    grid-row: auto;
+    justify-self: stretch;
+    width: 100%;
+    min-width: 92px;
+    white-space: nowrap;
+  }
+}
 @media (max-width: 940px) {
   .governance-user-row {
     grid-template-columns: 40px minmax(160px, 1fr) auto;
