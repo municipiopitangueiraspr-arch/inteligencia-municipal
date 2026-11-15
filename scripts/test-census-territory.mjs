@@ -259,6 +259,13 @@ try {
   assert.match(censusModuleCode, /showZoneForm &&/, 'Formulário de zona aparece sob demanda em vez de ocupar a tela inteira')
   assert.match(censusModuleCode, /showAssignmentForm &&/, 'Formulário de vínculo aparece sob demanda depois da lista')
   assert.match(censusModuleCss, /census-zones-step-guide[\s\S]*@media\(max-width:600px\)/, 'Etapas e controles se reorganizam em telas de celular')
+  assert.match(overviewCode, /visitas pendentes[\s\S]*pending_visit/, 'Alerta de visitas pendentes abre o recorte de visita não concluída')
+  assert.match(overviewCode, /questionário em rascunho[\s\S]*onOpen\('territory', 'ALL', 'draft'\)/, 'Alerta de rascunhos abre o recorte de rascunho')
+  assert.match(overviewCode, /onOpen\('territory', 'ALL', 'all', zone\.id\)/, 'Alerta por zona transporta a zona exata para o mapa')
+  assert.match(censusModuleCode, /managerInitialZone/, 'Shell transporta a zona inicial do alerta')
+  assert.match(territoryCode, /initialManagerZone[\s\S]*setZoneFilterIds\(\[initialManagerZone\]\)/, 'Mapa aplica a zona inicial recebida')
+  assert.match(territoryCode, /managerStatusFilter === 'pending_visit'/, 'Mapa aplica o recorte composto de visita pendente')
+  assert.match(territoryCode, /readOnly \|\| response\.questionnaire_id === coverageFormId/, 'Visão gerencial consolida rascunhos de todos os questionários ativos')
 
   console.log('PASS: respostas, rótulos CAD, códigos de lote, RLS por zona/lote, atribuição ACS, histórico e migration aditiva.')
 } finally {

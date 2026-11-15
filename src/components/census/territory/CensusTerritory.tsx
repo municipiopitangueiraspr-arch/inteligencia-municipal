@@ -85,7 +85,7 @@ function formSnapshot(form: QuestionnaireRecord): FormSnapshot {
   return { id: form.id, slug: form.slug, title: form.title, subtitle: form.subtitle, description: form.description, version: form.version, form_schema: form.form_schema }
 }
 
-export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all', onOpenQuestionnaires }: { readOnly?: boolean; initialManagerStatus?: 'all' | CoverageStatus; onOpenQuestionnaires: () => void }) {
+export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all', initialManagerZone = '', onOpenQuestionnaires }: { readOnly?: boolean; initialManagerStatus?: 'all' | 'pending_visit' | CoverageStatus; initialManagerZone?: string; onOpenQuestionnaires: () => void }) {
   const [mapImport, setMapImport] = useState<MapImport | null>(null)
   const [lots, setLots] = useState<TerritoryLot[]>([])
   const [zones, setZones] = useState<CensusZone[]>([])
@@ -97,7 +97,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const [lotSearch, setLotSearch] = useState('')
   const [coverageFormId, setCoverageFormId] = useState('')
   const [questionnaireStatusFilter, setQuestionnaireStatusFilter] = useState<'all' | CoverageStatus>('all')
-  const [managerStatusFilter, setManagerStatusFilter] = useState<'all' | CoverageStatus>(initialManagerStatus)
+  const [managerStatusFilter, setManagerStatusFilter] = useState<'all' | 'pending_visit' | CoverageStatus>(initialManagerStatus)
   const [managerVisitFilter, setManagerVisitFilter] = useState<'all' | VisitMapStatus>('all')
   const [managerPeriodFilter, setManagerPeriodFilter] = useState<'all' | '7' | '30' | '90'>('all')
   const [coverageHouseholds, setCoverageHouseholds] = useState<Household[]>([])
@@ -107,6 +107,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   const [managerAcs, setManagerAcs] = useState<ManagerAcs[]>([])
   const [managerAssignments, setManagerAssignments] = useState<Record<string, string>>({})
   const [managerAcsFilter, setManagerAcsFilter] = useState('')
+  const [initialZoneApplied, setInitialZoneApplied] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -195,6 +196,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
   }, [])
 
   useEffect(() => { void loadMap() }, [loadMap])
+  useEffect(() => { if (readOnly && initialManagerZone && !initialZoneApplied && lots.length) { setZoneFilterIds([initialManagerZone]); setInitialZoneApplied(true) } }, [initialManagerZone, initialZoneApplied, lots.length, readOnly])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -315,7 +317,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       if (!households.length) { result.set(lot.id, 'no_activity'); continue }
       const states = households.map((household) => {
         const householdVisits = [...(visitsByHousehold.get(household.id) || [])].sort((a, b) => `${b.visit_date}-${b.created_at}`.localeCompare(`${a.visit_date}-${a.created_at}`))
-        const formResponses = householdVisits.flatMap((visit) => responsesByVisit.get(visit.id) || []).filter((response) => response.questionnaire_id === coverageFormId)
+        const formResponses = householdVisits.flatMap((visit) => responsesByVisit.get(visit.id) || []).filter((response) => readOnly || response.questionnaire_id === coverageFormId)
         if (formResponses.some((response) => response.status === 'SUBMITTED')) return 'answered' as const
         if (formResponses.some((response) => response.status === 'DRAFT')) return 'draft' as const
         const latest = householdVisits[0]
@@ -335,7 +337,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       else result.set(lot.id, 'cancelled')
     }
     return result
-  }, [coverageFormId, coverageHouseholds, coverageResponses, coverageVisits, lots])
+  }, [coverageFormId, coverageHouseholds, coverageResponses, coverageVisits, lots, readOnly])
   const visitStatusByLot = useMemo(() => {
     const householdByLot = new Map<string, Household[]>()
     for (const household of coverageHouseholds) householdByLot.set(household.lot_id, [...(householdByLot.get(household.lot_id) || []), household])
@@ -698,7 +700,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
     {readOnly && <section className="census-manager-map-intro" aria-label="Como interpretar o monitoramento"><div><span className="fleet-kicker">MAPA PRINCIPAL · SOMENTE LEITURA</span><strong>O que já foi concluído, o que está pendente, onde e com quem</strong><p>As cores representam a etapa principal do lote. Selecione um lote para consultar endereço, zona, ACS responsável, última movimentação, motivo da pendência e histórico.</p></div><div className="census-manager-status-key"><span><i className="gray" />Não iniciado</span><span><i className="orange" />Pendente</span><span><i className="green" />Concluído</span><span><i className="red" />Sem contato</span></div></section>}
     <section className="census-map-insights" aria-label="Filtros e cobertura do mapa">
       <div className="census-map-stage-heading"><span className="census-map-stage-number">1</span><div><span className="fleet-kicker">MONITORAMENTO TERRITORIAL</span><strong>{readOnly ? 'Onde a equipe precisa de atenção?' : 'O que você precisa fazer?'}</strong></div></div>
-      {readOnly && <div className="census-map-filter-row census-manager-filter-row"><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><UsersRound size={14} />ACS responsável</span><select value={managerAcsFilter} onChange={(event) => { setManagerAcsFilter(event.target.value); setMapTooltip(null) }}><option value="">Todos os ACS</option>{managerAcs.map((acs) => <option key={acs.id} value={acs.id}>{acs.name}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><Filter size={14} />Situação do lote</span><select value={managerStatusFilter} onChange={(event) => { setManagerStatusFilter(event.target.value as 'all' | CoverageStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option><option value="no_activity">Não iniciado</option><option value="no_visit">Não iniciado · sem visita</option><option value="in_progress">Pendente · em andamento</option><option value="questionnaire_pending">Pendente · falta questionário</option><option value="draft">Pendente · rascunho</option><option value="no_contact">Sem contato</option><option value="answered">Concluído</option></select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><ClipboardCheck size={14} />Situação da visita</span><select value={managerVisitFilter} onChange={(event) => { setManagerVisitFilter(event.target.value as 'all' | VisitMapStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option>{Object.entries(visitStatusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><RotateCcw size={14} />Período da última visita</span><select value={managerPeriodFilter} onChange={(event) => { setManagerPeriodFilter(event.target.value as 'all' | '7' | '30' | '90'); setMapTooltip(null) }}><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label><span className="census-manager-filter-help">Filtros apenas recortam o mapa e a lista. Gestor e Prefeito não alteram domicílios, visitas ou questionários nesta visão.</span></div>}
+      {readOnly && <div className="census-map-filter-row census-manager-filter-row"><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><UsersRound size={14} />ACS responsável</span><select value={managerAcsFilter} onChange={(event) => { setManagerAcsFilter(event.target.value); setMapTooltip(null) }}><option value="">Todos os ACS</option>{managerAcs.map((acs) => <option key={acs.id} value={acs.id}>{acs.name}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><Filter size={14} />Situação do lote</span><select value={managerStatusFilter} onChange={(event) => { setManagerStatusFilter(event.target.value as 'all' | 'pending_visit' | CoverageStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option><option value="pending_visit">Pendente · visita não concluída</option><option value="no_activity">Não iniciado</option><option value="no_visit">Não iniciado · sem visita</option><option value="in_progress">Pendente · em andamento</option><option value="questionnaire_pending">Pendente · falta questionário</option><option value="draft">Pendente · rascunho</option><option value="no_contact">Sem contato</option><option value="answered">Concluído</option></select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><ClipboardCheck size={14} />Situação da visita</span><select value={managerVisitFilter} onChange={(event) => { setManagerVisitFilter(event.target.value as 'all' | VisitMapStatus); setMapTooltip(null) }}><option value="all">Todas as situações</option>{Object.entries(visitStatusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label><label className="census-map-filter-control acs-filter-select"><span className="acs-filter-caption"><RotateCcw size={14} />Período da última visita</span><select value={managerPeriodFilter} onChange={(event) => { setManagerPeriodFilter(event.target.value as 'all' | '7' | '30' | '90'); setMapTooltip(null) }}><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label><span className="census-manager-filter-help">{initialManagerZone ? `Recorte inicial: zona ${zones.find((zone) => zone.id === initialManagerZone)?.name || 'selecionada'}. ` : ''}{initialManagerStatus === 'draft' ? 'Recorte inicial: lotes com questionário em rascunho. ' : initialManagerStatus === 'pending_visit' ? 'Recorte inicial: lotes sem visita concluída. ' : ''}Filtros apenas recortam o mapa e a lista. Gestor e Prefeito não alteram domicílios, visitas ou questionários nesta visão.</span></div>}
       <div className="census-map-mode-tabs acs-filter-segmented" role="group" aria-label="Modo de visualização do mapa">
         <button type="button" aria-pressed={mapMode === 'questionnaire'} data-state="questionnaire" className={mapMode === 'questionnaire' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('questionnaire') }}><MapPinned size={15} />Situação dos lotes</button>
         <button type="button" aria-pressed={mapMode === 'zones'} data-state="territory" className={mapMode === 'zones' ? 'active' : ''} onClick={() => { setMapTooltip(null); setMapMode('zones') }}><Home size={15} />Visualizar zonas</button>
@@ -736,7 +738,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
                 const isSelected = selectedLot?.id === lot.id
                 const outsideZoneFilter = zoneFilterIds.length > 0 && (mapMode === 'zones' || mapMode === 'questionnaire') && !(lot.zone_id && zoneFilterIds.includes(lot.zone_id))
                 const outsideStatusFilter = mapMode === 'questionnaire' && Boolean(coverageFormId) && questionnaireStatusFilter !== 'all' && (Boolean(lot.indicator_exclusion_reason) || mapStatus(lot) !== questionnaireStatusFilter)
-                const outsideManagerFilter = readOnly && ((managerStatusFilter !== 'all' && mapStatus(lot) !== managerStatusFilter) || (managerVisitFilter !== 'all' && mapVisitStatus(lot) !== managerVisitFilter) || (managerAcsFilter !== '' && managerAssignments[lot.id] !== managerAcsFilter))
+                const outsideManagerFilter = readOnly && ((managerStatusFilter === 'pending_visit' && mapVisitStatus(lot) === 'completed') || (managerStatusFilter !== 'all' && managerStatusFilter !== 'pending_visit' && mapStatus(lot) !== managerStatusFilter) || (managerVisitFilter !== 'all' && mapVisitStatus(lot) !== managerVisitFilter) || (managerAcsFilter !== '' && managerAssignments[lot.id] !== managerAcsFilter))
                 const silhouette = outsideZoneFilter || outsideStatusFilter || outsideManagerFilter
                 const mapCode = lotDisplayName(lot)
                 const mapContext = friendlyLotContext(lot)

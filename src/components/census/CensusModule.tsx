@@ -57,7 +57,7 @@ type MapImport = {
 type CensusSection = 'overview' | 'territory' | 'attention' | 'dwg' | 'families' | 'forms' | 'zones'
 type CensusRole = 'acs' | 'manager'
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
-type ManagerStatusFilter = 'all' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered'
+type ManagerStatusFilter = 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered'
 type CensusAccess = { role: CensusRole; label: string; description: string; acsId: string | null }
 type CensusModuleProps = { userEmail?: string; accessContext: MunicipalAccessContextValue; onBack: () => void; onLogout: () => void }
 type CensusNoticeTone = 'success' | 'error' | 'info'
@@ -108,6 +108,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
   const [view, setView] = useState<CensusSection>('overview')
   const [familyInitialFilter, setFamilyInitialFilter] = useState<OperationalFilter>('ALL')
   const [managerInitialStatus, setManagerInitialStatus] = useState<ManagerStatusFilter>('all')
+  const [managerInitialZone, setManagerInitialZone] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [profile, setProfile] = useState<{ name: string; photo: string | null }>({ name: userEmail || 'Usuário autenticado', photo: null })
   const [access, setAccess] = useState<CensusAccess>({ role: 'manager', label: 'Gestão municipal', description: 'Central de controle territorial e acompanhamento da equipe.', acsId: null })
@@ -147,9 +148,9 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
     setView(nextView); setMenuOpen(false)
   }
   const profileInitials = profile.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U'
-  const openOverview = (nextView: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter: OperationalFilter = 'ALL', managerStatus: ManagerStatusFilter = 'all') => {
+  const openOverview = (nextView: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter: OperationalFilter = 'ALL', managerStatus: ManagerStatusFilter = 'all', managerZone = '') => {
     if (nextView === 'families') setFamilyInitialFilter(filter)
-    if (nextView === 'territory') setManagerInitialStatus(managerStatus)
+    if (nextView === 'territory') { setManagerInitialStatus(managerStatus); setManagerInitialZone(managerZone) }
     selectView(access.role !== 'acs' && !isAdministrator && ['forms', 'zones', 'dwg'].includes(nextView) ? 'territory' : access.role === 'acs' && nextView === 'forms' ? 'territory' : nextView)
   }
 
@@ -160,7 +161,7 @@ export function CensusModule({ userEmail, accessContext, onBack, onLogout }: Cen
       {view === 'attention' && access.role === 'manager' && <CensusOverview role="manager" focus="attention" onOpen={openOverview} />}
       {view === 'families' && <CensusFamiliesVisits key={familyInitialFilter} initialFilter={familyInitialFilter} onOpenTerritory={() => setView('territory')} />}
       {isAdministrator && ['zones', 'dwg', 'forms'].includes(view) && <div className="census-admin-context-banner"><strong>Modo administrador · configuração</strong><span>As alterações nesta tela afetam o mapa, os questionários e os vínculos usados pela equipe de campo e pela gestão. Revise antes de salvar.</span></div>}
-      {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}`} initialManagerStatus={managerInitialStatus} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
+      {view === 'territory' && <CensusTerritory key={`territory-${managerInitialStatus}-${managerInitialZone}`} initialManagerStatus={managerInitialStatus} initialManagerZone={managerInitialZone} readOnly={access.role === 'manager' && !isAdministrator} onOpenQuestionnaires={() => selectView(access.role === 'acs' ? 'territory' : 'forms')} />}
       {view === 'zones' && access.role === 'manager' && isAdministrator && <ZoneManagement zones={zones} onChanged={() => void loadZones()} />}
       {view === 'dwg' && access.role === 'manager' && isAdministrator && <MapPreparationWorkspace />}
       {view === 'forms' && access.role === 'manager' && isAdministrator && <QuestionnairesManagement />}

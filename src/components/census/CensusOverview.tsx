@@ -14,7 +14,7 @@ type Forecast = { key: string; label: string; daysRemaining: number | null }
 type OperationalFilter = 'ALL' | 'NO_VISIT' | 'NO_CONTACT' | 'QUESTIONNAIRE' | 'DRAFT'
 type NextAction = { id: string; title: string; detail: string; address: string; zone: string; lastAction: string; nextStep: string; cta: string; filter: OperationalFilter; tone: 'urgent' | 'pending' | 'neutral' }
 type ManagerZoneStat = Zone & { lots: number; territoryLots: number; excludedLots: number; done: number; coverage: number }
-type ManagerMetrics = { lots: number; territoryLots: number; excludedLots: number; confirmed: number; visited: number; submitted: number; presumed: number; pending: number; withoutZone: number; zones: number; acs: number; draftResponses: number; forecasts: Forecast[] }
+type ManagerMetrics = { lots: number; territoryLots: number; excludedLots: number; confirmed: number; visited: number; submitted: number; presumed: number; pending: number; withoutZone: number; zones: number; acs: number; draftResponses: number; draftLots: number; forecasts: Forecast[] }
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const FORECAST_WINDOW_DAYS = 30
@@ -69,7 +69,7 @@ function daysToCompletion(timestamps: string[], remaining: number, now = Date.no
   return Math.ceil(remaining / dailyRate)
 }
 
-export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered') => void }) {
+export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { role?: 'acs' | 'manager'; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered', managerZone?: string) => void }) {
   const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -152,6 +152,7 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
     const confirmed = confirmedLotIds.size
     const visited = visitedLotIds.size
     const submitted = submittedLotIds.size
+    const draftLotIds = new Set(data.responses.filter((response) => response.status === 'DRAFT' && eligibleVisitIds.has(response.visit_id)).map((response) => visitById.get(response.visit_id)).map((visit) => visit ? householdById.get(visit.household_id)?.lot_id : null).filter((lotId): lotId is string => Boolean(lotId && lotIds.has(lotId))))
     const forecasts: Forecast[] = [
       { key: 'households', label: 'Domicílios confirmados (estimativa de 1 por lote)', daysRemaining: lots ? daysToCompletion(householdMilestones, Math.max(lots - confirmed, 0)) : null },
       { key: 'visits', label: 'Lotes com visita concluída', daysRemaining: lots ? daysToCompletion(visitMilestones, Math.max(lots - visited, 0)) : null },
@@ -171,6 +172,7 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
       zones: data.zones.length,
       acs: data.acs.length,
       draftResponses: data.responses.filter((response) => response.status === 'DRAFT' && eligibleVisitIds.has(response.visit_id)).length,
+      draftLots: draftLotIds.size,
       forecasts,
     }
   }, [data])
@@ -268,13 +270,13 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
   )
 }
 
-function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview', onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered') => void }) {
+function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview', onOpen }: { data: OverviewData; metrics: ManagerMetrics; zoneStats: ManagerZoneStat[]; recent: (Visit & { household: string; acs: string })[]; focus?: 'overview' | 'attention'; onOpen: (view: 'territory' | 'families' | 'dwg' | 'zones' | 'forms', filter?: OperationalFilter, managerStatus?: 'all' | 'pending_visit' | 'no_activity' | 'no_visit' | 'in_progress' | 'questionnaire_pending' | 'draft' | 'no_contact' | 'answered', managerZone?: string) => void }) {
   const coverage = metrics.lots ? Math.round((metrics.visited / metrics.lots) * 100) : 0
   const attention = [
-    metrics.pending > 0 ? { id: 'pending', title: `${metrics.pending.toLocaleString('pt-BR')} visitas pendentes`, detail: 'Existem lotes elegíveis sem visita concluída.', action: 'Ver visitas', onClick: () => onOpen('territory', 'ALL', 'no_visit'), tone: 'urgent' } : null,
-    metrics.draftResponses > 0 ? { id: 'drafts', title: `${metrics.draftResponses.toLocaleString('pt-BR')} questionários em rascunho`, detail: 'Respostas iniciadas ainda precisam ser concluídas.', action: 'Revisar questionários', onClick: () => onOpen('territory', 'ALL', 'draft'), tone: 'pending' } : null,
+    metrics.pending > 0 ? { id: 'pending', title: `${metrics.pending.toLocaleString('pt-BR')} visitas pendentes`, detail: 'Existem lotes elegíveis sem visita concluída.', action: 'Ver visitas', onClick: () => onOpen('territory', 'ALL', 'pending_visit'), tone: 'urgent' } : null,
+    metrics.draftResponses > 0 ? { id: 'drafts', title: `${metrics.draftLots.toLocaleString('pt-BR')} lotes com questionário em rascunho`, detail: `${metrics.draftResponses.toLocaleString('pt-BR')} questionário(s) iniciado(s) ainda precisam ser concluídos.`, action: 'Revisar questionários', onClick: () => onOpen('territory', 'ALL', 'draft'), tone: 'pending' } : null,
     metrics.withoutZone > 0 ? { id: 'zones', title: `${metrics.withoutZone.toLocaleString('pt-BR')} lotes sem zona`, detail: 'O território precisa ser organizado para melhorar o acompanhamento.', action: 'Organizar zonas', onClick: () => onOpen('zones'), tone: 'pending' } : null,
-    ...zoneStats.filter((zone) => zone.lots > 0 && zone.coverage < 50).slice(0, 2).map((zone) => ({ id: zone.id, title: `${zone.name} com cobertura de ${zone.coverage}%`, detail: `${zone.done} de ${zone.lots} lotes com visita concluída.`, action: 'Abrir território', onClick: () => onOpen('territory'), tone: 'urgent' })),
+    ...zoneStats.filter((zone) => zone.lots > 0 && zone.coverage < 50).slice(0, 2).map((zone) => ({ id: zone.id, title: `${zone.name} com cobertura de ${zone.coverage}%`, detail: `${zone.done} de ${zone.lots} lotes com visita concluída.`, action: 'Abrir território', onClick: () => onOpen('territory', 'ALL', 'all', zone.id), tone: 'urgent' })),
   ].filter(Boolean).slice(0, 5) as { id: string; title: string; detail: string; action: string; onClick: () => void; tone: string }[]
   const teamRows = data.acs.map((acs) => {
     const visits = data.visits.filter((visit) => visit.acs_id === acs.id)
@@ -294,7 +296,7 @@ function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview',
     <div className="manager-metric-grid">
       <article className="manager-metric"><span className="manager-metric-icon blue"><Gauge size={18} /></span><div><strong>{coverage}%</strong><small>Cobertura com visita concluída</small></div></article>
       <article className={`manager-metric${metrics.pending ? ' warning' : ''}`}><span className="manager-metric-icon amber"><UsersRound size={18} /></span><div><strong>{metrics.pending.toLocaleString('pt-BR')}</strong><small>Visitas pendentes</small></div></article>
-      <article className={`manager-metric${metrics.draftResponses ? ' warning' : ''}`}><span className="manager-metric-icon violet"><ClipboardCheck size={18} /></span><div><strong>{metrics.draftResponses.toLocaleString('pt-BR')}</strong><small>Questionários em rascunho</small></div></article>
+      <article className={`manager-metric${metrics.draftResponses ? ' warning' : ''}`}><span className="manager-metric-icon violet"><ClipboardCheck size={18} /></span><div><strong>{metrics.draftLots.toLocaleString('pt-BR')}</strong><small>Lotes com questionário em rascunho</small></div></article>
       <article className={`manager-metric${metrics.withoutZone ? ' warning' : ''}`}><span className="manager-metric-icon slate"><MapPinned size={18} /></span><div><strong>{metrics.withoutZone.toLocaleString('pt-BR')}</strong><small>Lotes sem zona</small></div></article>
     </div>
     <div className="manager-primary-grid">
@@ -303,7 +305,7 @@ function ManagerOverview({ data, metrics, zoneStats, recent, focus = 'overview',
     </div>
     <div className="manager-secondary-grid">
       <section className="manager-panel manager-team-panel"><header><div><span className="manager-kicker">EQUIPE</span><h3>Atividade dos ACS</h3></div><button type="button" onClick={() => onOpen('zones')}>Gerenciar equipe <ArrowRight size={14} /></button></header>{teamRows.length ? <div className="manager-table-wrap"><table className="manager-table"><thead><tr><th>ACS</th><th>Visitas concluídas</th><th>Última atividade</th><th>Situação</th></tr></thead><tbody>{teamRows.slice(0, 8).map((row) => <tr key={row.id}><td><strong>{row.full_name}</strong></td><td>{row.completed}</td><td>{row.latest}</td><td><span className={`manager-table-status ${row.active ? 'active' : 'quiet'}`}>{row.active ? 'Ativo' : 'Sem atividade recente'}</span></td></tr>)}</tbody></table></div> : <div className="manager-empty">Nenhum ACS ativo cadastrado.</div>}</section>
-      <section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">TERRITÓRIO</span><h3>Situação por zona</h3></div><button type="button" onClick={() => onOpen('territory')}>Abrir mapa <ArrowRight size={14} /></button></header>{zoneStats.length ? <div className="manager-zone-list">{zoneStats.slice(0, 6).map((zone) => <button type="button" key={zone.id} onClick={() => onOpen('territory')}><span><strong>{zone.name}</strong><small>{zone.done} de {zone.lots} lotes visitados</small></span><b>{zone.coverage}%</b><i><em style={{ width: `${zone.coverage}%` }} /></i></button>)}</div> : <div className="manager-empty">Nenhuma zona ativa cadastrada.</div>}</section>
+      <section className="manager-panel manager-zones-panel"><header><div><span className="manager-kicker">TERRITÓRIO</span><h3>Situação por zona</h3></div><button type="button" onClick={() => onOpen('territory')}>Abrir mapa <ArrowRight size={14} /></button></header>{zoneStats.length ? <div className="manager-zone-list">{zoneStats.slice(0, 6).map((zone) => <button type="button" key={zone.id} onClick={() => onOpen('territory', 'ALL', 'all', zone.id)}><span><strong>{zone.name}</strong><small>{zone.done} de {zone.lots} lotes visitados</small></span><b>{zone.coverage}%</b><i><em style={{ width: `${zone.coverage}%` }} /></i></button>)}</div> : <div className="manager-empty">Nenhuma zona ativa cadastrada.</div>}</section>
     </div>
     <section className="manager-recent"><span className="manager-kicker">ATIVIDADE RECENTE</span><strong>{recent.length ? `${recent.length} registros recentes carregados` : 'Nenhuma atividade recente registrada'}</strong><button type="button" onClick={() => onOpen('territory')}>Ver histórico de visitas <ArrowRight size={14} /></button></section>
   </section>
