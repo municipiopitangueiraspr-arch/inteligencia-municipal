@@ -227,7 +227,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
         const householdRows = (await Promise.all(splitIntoBatches(lotIds).map((batch) => fetchAllPages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,active,created_at').in('lot_id', batch).eq('active', true).order('created_at').order('id').range(from, to))))).flat()
         setCoverageHouseholds(householdRows)
         const householdIds = householdRows.map((item) => item.id)
-        const visitRows = householdIds.length ? (await Promise.all(splitIntoBatches(householdIds).map((batch) => fetchAllPages<Visit>((from, to) => db.from('census_visits').select('id,household_id,visit_date,status,notes,created_at,completed_at,professional_id').in('household_id', batch).order('visit_date', { ascending: false }).order('id').range(from, to))))).flat() : []
+        const visitRows = householdIds.length ? (await Promise.all(splitIntoBatches(householdIds).map((batch) => fetchAllPages<Visit>((from, to) => db.from('visitas_acs').select('id,household_id:domicilio_id,visit_date:data_evento,status:status_visita_operacional,notes:observacao_restrita,created_at,completed_at:data_hora_fim,professional_id').in('domicilio_id', batch).order('data_evento', { ascending: false }).order('id').range(from, to))))).flat() : []
         setCoverageVisits(visitRows)
         const visitIds = visitRows.map((item) => item.id)
         const responseRows = visitIds.length ? (await Promise.all(splitIntoBatches(visitIds).map((batch) => fetchAllPages<ResponseMeta>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,questionnaire_id,status,submitted_at,created_at,questionnaire_version,questionnaire_snapshot').in('visit_id', batch).order('created_at', { ascending: false }).order('id').range(from, to))))).flat() : []
@@ -692,7 +692,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
       if (request.previousResponse?.status === 'DRAFT') {
         setResponseEditor({ responseId: request.previousResponse.id, visitId: request.previousResponse.visit_id, householdLabel: request.household.label, form: request.form, answers: request.previousAnswers, status: 'DRAFT', readOnly: false })
       } else {
-        const { data, error } = await supabase.from('census_visits').insert({ household_id: request.household.id, visit_date: dateToday(), notes: '', status: 'IN_PROGRESS' }).select('id').single()
+        const { data, error } = await supabase.from('census_visits').insert({ household_id: request.household.id, visit_date: dateToday(), notes: '', status: 'IN_PROGRESS', tipo_evento: 'visita_acs', versao_modelo: '2026.1', status_integracao: 'rascunho', origem: 'web', data_hora_inicio: new Date().toISOString() }).select('id').single()
         if (error) throw new Error(error.message)
         setResponseEditor({ responseId: null, visitId: data.id, householdLabel: request.household.label, form: request.form, answers: request.previousAnswers, status: 'DRAFT', readOnly: false })
       }
@@ -782,7 +782,7 @@ export function CensusTerritory({ readOnly = false, initialManagerStatus = 'all'
         if (result.error) throw new Error(result.error.message)
         let visitWarning = ''
         if (action.status === 'SUBMITTED') {
-          const visitUpdate = await supabase.from('census_visits').update({ status: 'COMPLETED' }).eq('id', action.editor.visitId)
+          const visitUpdate = await supabase.from('census_visits').update({ status: 'COMPLETED', status_integracao: 'concluido_localmente', data_hora_fim: new Date().toISOString() }).eq('id', action.editor.visitId)
           if (visitUpdate.error) visitWarning = ' A resposta foi enviada, mas não foi possível atualizar a situação da visita.'
         }
         setResponseEditor(null)

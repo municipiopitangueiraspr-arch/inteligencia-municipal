@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarClock, CheckCircle2, ClipboardList, LoaderCircle, MapPinned, UserRound, UsersRound } from 'lucide-react'
 import type { MunicipalAccessContextValue } from '../../auth/MunicipalAccessContext'
 import { supabase } from '../../lib/supabase'
+import { digits, isValidCpf, sha256Hex } from '../../lib/canonicalPeople'
 import './AcsFieldWorkflow.css'
 
-type Task = { id: string; due_date: string; priority: number; status: 'PLANNED' | 'IN_PROGRESS'; task_type: string; instructions: string; household_id: string | null; family_id: string | null; citizen_id: string | null; family_reference: string | null; citizen_name: string | null; reason_code: string | null; reason_label: string | null; address_line: string | null; address_number: string | null; address_complement: string | null; neighborhood: string | null; locality: string | null; postal_code: string | null }
+type Task = { id: string; due_date: string; priority: number; status: 'PLANNED' | 'IN_PROGRESS'; task_type: string; instructions: string; household_id: string | null; family_id: string | null; pessoa_id: string | null; family_reference: string | null; citizen_name: string | null; reason_code: string | null; reason_label: string | null; address_line: string | null; address_number: string | null; address_complement: string | null; neighborhood: string | null; locality: string | null; postal_code: string | null }
 type Catalog = { id: string; code: string; label: string; version: number }
 type AttributeCatalog = Catalog & { domain: string }
 type Scope = { municipality: string; establishment: string; team: string; microarea: string }
@@ -19,23 +20,6 @@ function formatTaskAddress(task: Task) {
   const locality = [task.neighborhood, task.locality].filter(Boolean).join(' · ')
   const postal = task.postal_code ? ` · CEP ${task.postal_code}` : ''
   return [street, locality].filter(Boolean).join(' · ') + postal
-}
-
-function digits(value: string) { return value.replace(/\D/g, '') }
-
-function isValidCpf(value: string) {
-  const cpf = digits(value)
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false
-  let sum = 0
-  for (let index = 0; index < 9; index += 1) sum += Number(cpf[index]) * (10 - index)
-  let digit = (sum * 10) % 11
-  if (digit === 10) digit = 0
-  if (digit !== Number(cpf[9])) return false
-  sum = 0
-  for (let index = 0; index < 10; index += 1) sum += Number(cpf[index]) * (11 - index)
-  digit = (sum * 10) % 11
-  if (digit === 10) digit = 0
-  return digit === Number(cpf[10])
 }
 
 export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessContext: MunicipalAccessContextValue; onOpenTerritory: () => void }) {
@@ -111,6 +95,8 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
 
   async function createFamilyAndCitizen() {
     if (!supabase || !selectedTask?.household_id || !familyReference.trim() || !citizenName.trim()) return
+    if (!citizenBirthDate) { setError('A data de nascimento é obrigatória no cadastro mestre de pessoas.'); return }
+    if (!professional?.municipalityId) { setError('Seu vínculo profissional não informa o município do cadastro.'); return }
     const cns = digits(citizenCns)
     const cpf = digits(citizenCpf)
     if (cns && cns.length !== 15) { setError('O CNS deve conter 15 dígitos.'); return }
@@ -121,11 +107,18 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
         ? { data: { id: selectedTask.family_id }, error: null }
         : await supabase.from('census_families').insert({ household_id: selectedTask.household_id, family_reference: familyReference.trim() }).select('id').single()
       if (familyResult.error || !familyResult.data) throw new Error(familyResult.error?.message || 'Não foi possível criar a família.')
-      const citizenResult = await supabase.from('census_citizens').insert({ family_id: familyResult.data.id, full_name: citizenName.trim(), birth_date: citizenBirthDate || null, sex: citizenSex, cns: cns || null, cpf: cpf || null, race_color: citizenRaceColor || null, nationality: citizenNationality || null, education_level: citizenEducationLevel || null, occupation: citizenOccupation.trim() || null, mother_name: citizenMotherName.trim() || null, father_name: citizenFatherName.trim() || null, identification_status: cns || cpf ? 'DECLARED' : 'PROVISIONAL', data_source: 'CITIZEN_REPORTED' }).select('id').single()
-      if (citizenResult.error || !citizenResult.data) throw new Error(citizenResult.error?.message || 'Não foi possível cadastrar o cidadão.')
-      const memberResult = await supabase.from('census_family_members').insert({ family_id: familyResult.data.id, citizen_id: citizenResult.data.id, relationship_code: 'MEMBER', is_responsible: true })
+      const personResult = await supabase.from('pessoas').insert({ municipio_id: professional.municipalityId, nome_completo: citizenName.trim(), data_nascimento: citizenBirthDate, sexo_codigo: citizenSex, raca_cor_codigo: citizenRaceColor || null, nome_mae: citizenMotherName.trim() || null, origem_cadastro: 'acs_field_collection' }).select('id').single()
+      if (personResult.error || !personResult.data) throw new Error(personResult.error?.message || 'Não foi possível cadastrar a pessoa mestre.')
+      const identifiers = []
+      if (cpf) identifiers.push({ pessoa_id: personResult.data.id, tipo: 'CPF', valor: cpf, valor_hash: await sha256Hex(cpf), fonte: 'acs_field_collection' })
+      if (cns) identifiers.push({ pessoa_id: personResult.data.id, tipo: 'CNS', valor: cns, valor_hash: await sha256Hex(cns), fonte: 'acs_field_collection' })
+      if (identifiers.length) {
+        const identifierResult = await supabase.from('pessoa_identificadores').insert(identifiers)
+        if (identifierResult.error) throw new Error(identifierResult.error.message)
+      }
+      const memberResult = await supabase.from('census_family_members').insert({ family_id: familyResult.data.id, pessoa_id: personResult.data.id, citizen_id: personResult.data.id, relationship_code: 'MEMBER', is_responsible: true })
       if (memberResult.error) throw new Error(memberResult.error.message)
-      const linkResult = await supabase.rpc('census_attach_task_subject', { p_task_id: selectedTask.id, p_family_id: familyResult.data.id, p_citizen_id: citizenResult.data.id })
+      const linkResult = await supabase.from('census_agenda_tasks').update({ pessoa_id: personResult.data.id, family_id: familyResult.data.id, updated_at: new Date().toISOString() }).eq('id', selectedTask.id)
       if (linkResult.error) throw new Error(linkResult.error.message)
       setCitizenCns(''); setCitizenCpf(''); setCitizenRaceColor(''); setCitizenNationality(''); setCitizenEducationLevel(''); setCitizenOccupation(''); setCitizenMotherName(''); setCitizenFatherName('')
       setNotice(`Família e cidadão cadastrados. ${cns || cpf ? 'Os identificadores foram validados localmente e permanecem declarados até a confirmação oficial.' : 'O histórico será mantido como identificação provisória até validação posterior.'}`)
@@ -138,7 +131,7 @@ export function AcsFieldWorkflow({ accessContext, onOpenTerritory }: { accessCon
     if (!supabase || !selectedTask?.household_id || !selectedReasons.length || !outcome || !visitDate) return
     if (outcome !== 'REALIZADA' && !notes.trim()) { setError('Informe a justificativa para este desfecho.'); return }
     setSaving(true); setError(''); setNotice('')
-    const result = await supabase.rpc('census_register_fvd', { p_task_id: selectedTask.id, p_household_id: selectedTask.household_id, p_family_id: selectedTask.family_id, p_citizen_id: selectedTask.citizen_id, p_visit_date: visitDate, p_reason_codes: selectedReasons, p_outcome_code: outcome, p_notes: notes.trim(), p_guidance: guidance.trim(), p_referral: referral.trim(), p_return_date: returnDate || null })
+    const result = await supabase.rpc('census_register_fvd', { p_task_id: selectedTask.id, p_household_id: selectedTask.household_id, p_family_id: selectedTask.family_id, p_pessoa_id: selectedTask.pessoa_id, p_visit_date: visitDate, p_reason_codes: selectedReasons, p_outcome_code: outcome, p_notes: notes.trim(), p_guidance: guidance.trim(), p_referral: referral.trim(), p_return_date: returnDate || null })
     if (result.error) setError(result.error.message)
     else { setNotice('FVD registrada e tarefa concluída. O registro foi validado localmente e permanece auditável.'); setNotes(''); setGuidance(''); setReferral(''); setReturnDate(''); setSelectedTaskId(''); await load() }
     setSaving(false)

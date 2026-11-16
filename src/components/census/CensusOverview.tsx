@@ -103,7 +103,7 @@ export function CensusOverview({ role = 'acs', focus = 'overview', onOpen }: { r
         db.from('census_territory_map_imports').select('id').limit(1),
         pages<Lot>((from, to) => db.from('census_territory_map_lots').select('id,zone_id,street_name,neighborhood_name,block_reference,indicator_exclusion_reason').order('source_handle').order('id').range(from, to)),
         pages<Household>((from, to) => db.from('census_households').select('id,lot_id,label,created_at').eq('active', true).range(from, to)),
-        pages<Visit>((from, to) => db.from('census_visits').select('id,household_id,professional_id,visit_date,status,created_at,completed_at').order('created_at', { ascending: false }).range(from, to)),
+        pages<Visit>((from, to) => db.from('visitas_acs').select('id,household_id:domicilio_id,professional_id,visit_date:data_evento,status:status_visita_operacional,created_at,completed_at:data_hora_fim').order('created_at', { ascending: false }).range(from, to)),
         pages<Response>((from, to) => db.from('census_questionnaire_responses').select('id,visit_id,status,created_at,submitted_at').order('created_at', { ascending: false }).range(from, to)),
         db.from('census_zones').select('id,name,color').eq('active', true).order('created_at').limit(100),
         db.from('health_professionals').select('id,full_name').eq('professional_category', 'ACS').eq('active', true).order('full_name').limit(500),
