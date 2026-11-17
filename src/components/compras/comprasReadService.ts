@@ -113,6 +113,24 @@ export type ComprasOrderEvent = {
   metadados: Record<string, unknown> | null
 }
 
+export type ComprasDelivery = {
+  id: string
+  numero: number
+  data_entrega: string
+  tipo: string
+  documento_referencia: string | null
+  observacao: string | null
+}
+
+export type ComprasOccurrence = {
+  id: number
+  tipo: string
+  severidade: string
+  descricao: string
+  resolvida: boolean
+  created_at: string
+}
+
 export type ComprasOrderDetail = {
   pedido_id: number
   municipio_id: string
@@ -134,6 +152,8 @@ export type ComprasOrderDetail = {
   updated_at: string
   items: ComprasOrderItem[]
   events: ComprasOrderEvent[]
+  deliveries: ComprasDelivery[]
+  occurrences: ComprasOccurrence[]
 }
 
 export type ComprasReadResult = {
@@ -256,16 +276,20 @@ export async function loadComprasOrderDetail(municipalityId: string | null, pedi
   let orderQuery = supabase.from('pedidos').select('id,municipio_id,numero_pedido,numero_requisicao,ata_id,status,status_aprovacao,data_solicitacao,observacoes,justificativa,local_entrega,valor_total,unidade_id,unidade_organizacional_id,data_aprovacao,observacao_aprovacao,created_at,updated_at').eq('id', pedidoId)
   let itemsQuery = supabase.from('itens_pedido').select('id,item_ata_id,lote_numero,quantidade_solicitada,valor_unitario,valor_total').eq('pedido_id', pedidoId).order('id', { ascending: true }).limit(100)
   let eventsQuery = supabase.from('pedidos_eventos').select('id,evento,status_anterior,status_novo,justificativa,ocorrido_em,metadados').eq('pedido_id', pedidoId).order('ocorrido_em', { ascending: false }).limit(100)
+  let deliveriesQuery = supabase.from('pedidos_entregas').select('id,numero,data_entrega,tipo,documento_referencia,observacao').eq('pedido_id', pedidoId).order('numero', { ascending: false }).limit(100)
+  let occurrencesQuery = supabase.from('pedidos_ocorrencias').select('id,tipo,severidade,descricao,resolvida,created_at').eq('pedido_id', pedidoId).order('created_at', { ascending: false }).limit(100)
   if (municipalityId) {
     orderQuery = orderQuery.eq('municipio_id', municipalityId)
     itemsQuery = itemsQuery.eq('municipio_id', municipalityId)
     eventsQuery = eventsQuery.eq('municipio_id', municipalityId)
+    deliveriesQuery = deliveriesQuery.eq('municipio_id', municipalityId)
+    occurrencesQuery = occurrencesQuery.eq('municipio_id', municipalityId)
   }
-  const [order, items, events] = await Promise.all([orderQuery.limit(1).maybeSingle(), itemsQuery, eventsQuery])
-  const failure = [order.error, items.error, events.error].find(Boolean)
+  const [order, items, events, deliveries, occurrences] = await Promise.all([orderQuery.limit(1).maybeSingle(), itemsQuery, eventsQuery, deliveriesQuery, occurrencesQuery])
+  const failure = [order.error, items.error, events.error, deliveries.error, occurrences.error].find(Boolean)
   if (failure) throw new Error(failure.message)
   if (!order.data) throw new Error('Pedido não encontrado ou fora do escopo autorizado.')
-  return { ...(order.data as unknown as Omit<ComprasOrderDetail, 'pedido_id' | 'items' | 'events'>), pedido_id: Number(order.data.id), items: (items.data || []) as ComprasOrderItem[], events: (events.data || []) as ComprasOrderEvent[] }
+  return { ...(order.data as unknown as Omit<ComprasOrderDetail, 'pedido_id' | 'items' | 'events' | 'deliveries' | 'occurrences'>), pedido_id: Number(order.data.id), items: (items.data || []) as ComprasOrderItem[], events: (events.data || []) as ComprasOrderEvent[], deliveries: (deliveries.data || []) as ComprasDelivery[], occurrences: (occurrences.data || []) as ComprasOccurrence[] }
 }
 
 export async function executeComprasOrderAction(action: 'enviar' | 'aprovar' | 'rejeitar' | 'cancelar' | 'encerrar', pedidoId: number, justification = '') {
@@ -274,6 +298,20 @@ export async function executeComprasOrderAction(action: 'enviar' | 'aprovar' | '
   const rpc = rpcByAction[action]
   const args = action === 'rejeitar' ? { p_pedido_id: pedidoId, p_justificativa: justification } : action === 'cancelar' ? { p_pedido_id: pedidoId, p_justificativa: justification } : action === 'encerrar' ? { p_pedido_id: pedidoId, p_observacao: justification } : { p_pedido_id: pedidoId }
   const result = await supabase.rpc(rpc, args)
+  if (result.error) throw new Error(result.error.message)
+  return result.data
+}
+
+export async function executeComprasDelivery(pedidoId: number, items: { item_pedido_id: number; quantidade: number; observacao?: string }[], tipo: 'PARCIAL' | 'FINAL', dataEntrega: string, documento: string, observacao: string) {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  const result = await supabase.rpc('compras_registrar_entrega', { p_pedido_id: pedidoId, p_itens: items, p_tipo: tipo, p_data_entrega: dataEntrega, p_documento: documento || null, p_observacao: observacao || null })
+  if (result.error) throw new Error(result.error.message)
+  return result.data
+}
+
+export async function executeComprasOccurrence(pedidoId: number, tipo: string, descricao: string, severidade: string, entregaId: string | null) {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  const result = await supabase.rpc('compras_registrar_ocorrencia', { p_pedido_id: pedidoId, p_tipo: tipo, p_descricao: descricao, p_severidade: severidade, p_entrega_id: entregaId })
   if (result.error) throw new Error(result.error.message)
   return result.data
 }
