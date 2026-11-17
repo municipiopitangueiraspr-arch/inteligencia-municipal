@@ -10,6 +10,7 @@ import { CensusModule } from './components/census/CensusModule'
 import { MedicalVisitsModule } from './components/census/MedicalVisitsModule'
 import { SupplierPortal } from './components/SupplierPortal'
 import { SupplierAccessRequest } from './components/SupplierAccessRequest'
+import { ComprasModule } from './components/compras/ComprasModule'
 import type { Station } from './components/FleetResources'
 import { MunicipalAccessProvider, resolveMunicipalAccess } from './auth/MunicipalAccessContext'
 import type { MunicipalAccessContextValue } from './auth/MunicipalAccessContext'
@@ -17,13 +18,13 @@ import './App.css'
 
 const assetBase = import.meta.env.BASE_URL
 type SupplierContext = { station: Station; role: string; vehicleId: string | null; accessAvailable: boolean; accessReason: string | null }
-type ActiveArea = 'dashboard' | 'fleet' | 'census' | 'medical-visits' | 'governance'
+type ActiveArea = 'dashboard' | 'fleet' | 'census' | 'medical-visits' | 'compras' | 'governance'
 const activeAreaStorageKey = 'inteligencia-municipal.active-area'
 
 function getInitialActiveArea(): ActiveArea {
   try {
     const stored = window.sessionStorage.getItem(activeAreaStorageKey)
-    return stored === 'fleet' || stored === 'census' || stored === 'medical-visits' || stored === 'governance' ? stored : 'dashboard'
+    return stored === 'fleet' || stored === 'census' || stored === 'medical-visits' || stored === 'compras' || stored === 'governance' ? stored : 'dashboard'
   } catch { return 'dashboard' }
 }
 
@@ -199,8 +200,9 @@ function App() {
       {activeArea === 'fleet' && municipalContext.moduleIds.includes('fleet') ? <FleetModule userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
       {activeArea === 'census' && municipalContext.moduleIds.includes('census') ? <CensusModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
       {activeArea === 'medical-visits' && municipalContext.isAdministrator && municipalContext.moduleIds.includes('medical-visits') ? <MedicalVisitsModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'compras' && municipalContext.moduleIds.includes('compras') ? <ComprasModule userEmail={email} accessContext={municipalContext} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
       {activeArea === 'governance' && municipalContext.isAdministrator ? <GovernancePanel userEmail={email} onBack={() => setActiveArea('dashboard')} onLogout={() => void logout()} /> : null}
-      {activeArea === 'dashboard' || (activeArea === 'fleet' && !municipalContext.moduleIds.includes('fleet')) || (activeArea === 'census' && !municipalContext.moduleIds.includes('census')) || (activeArea === 'medical-visits' && (!municipalContext.isAdministrator || !municipalContext.moduleIds.includes('medical-visits'))) || (activeArea === 'governance' && !municipalContext.isAdministrator) ? <Dashboard userEmail={email} accessContext={municipalContext} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenMedicalVisits={() => setActiveArea('medical-visits')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} /> : null}
+      {activeArea === 'dashboard' || (activeArea === 'fleet' && !municipalContext.moduleIds.includes('fleet')) || (activeArea === 'census' && !municipalContext.moduleIds.includes('census')) || (activeArea === 'medical-visits' && (!municipalContext.isAdministrator || !municipalContext.moduleIds.includes('medical-visits'))) || (activeArea === 'compras' && !municipalContext.moduleIds.includes('compras')) || (activeArea === 'governance' && !municipalContext.isAdministrator) ? <Dashboard userEmail={email} accessContext={municipalContext} onOpenFleet={() => setActiveArea('fleet')} onOpenCensus={() => setActiveArea('census')} onOpenMedicalVisits={() => setActiveArea('medical-visits')} onOpenCompras={() => setActiveArea('compras')} onOpenGovernance={() => setActiveArea('governance')} onLogout={() => void logout()} /> : null}
     </MunicipalAccessProvider>
   }
   if (showFirstAccess && supplierMode) return <SupplierAccessRequest onBack={() => setShowFirstAccess(false)} />

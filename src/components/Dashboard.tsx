@@ -22,6 +22,7 @@ type DashboardProps = {
   onOpenFleet: () => void
   onOpenCensus: () => void
   onOpenMedicalVisits: () => void
+  onOpenCompras: () => void
   onOpenGovernance: () => void
   onLogout: () => void
   accessContext: MunicipalAccessContextValue
@@ -36,7 +37,7 @@ const moduleToneById: Record<string, string> = {
   acts: 'official',
 }
 
-export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenGovernance, onLogout }: DashboardProps) {
+export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus, onOpenMedicalVisits, onOpenCompras, onOpenGovernance, onLogout }: DashboardProps) {
   const [secretariats, setSecretariats] = useState<MunicipalSecretariat[]>([])
   const [modules, setModules] = useState<MunicipalModule[]>([])
   const [secretariatModules, setSecretariatModules] = useState<MunicipalSecretariatModule[]>([])
@@ -134,6 +135,7 @@ export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus,
     if (id === 'fleet') onOpenFleet()
     if (id === 'census') onOpenCensus()
     if (id === 'medical-visits') onOpenMedicalVisits()
+    if (id === 'compras') onOpenCompras()
   }
 
   return (
@@ -178,7 +180,7 @@ export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus,
                     <div className="health-access-grid">
                       {visibleModules.map((module) => {
                         const Icon = getMunicipalIcon(module.icon_name)
-                        const hasRoute = module.id === 'fleet' || module.id === 'census' || (module.id === 'medical-visits' && canManageGovernance)
+                        const hasRoute = module.id === 'fleet' || module.id === 'census' || module.id === 'compras' || (module.id === 'medical-visits' && canManageGovernance)
                         const canOpen = module.is_ready && hasRoute
                         return <button key={module.id} className={`module-card module-card--${moduleToneById[module.id] || 'fleet'}`} type="button" disabled={!canOpen} aria-label={canOpen ? `Acessar ${module.label}` : `${module.label}, ${module.status_label}`} onClick={() => openModule(module.id)}>
                           <span className="module-card-top"><span className="module-icon"><Icon size={30} strokeWidth={2.2} aria-hidden="true" /></span>{module.id !== 'census' && <span className={`module-status${module.is_ready ? ' module-status--active' : ''}`}><span className="status-dot" aria-hidden="true" />{module.status_label}</span>}</span>
@@ -194,7 +196,7 @@ export function Dashboard({ userEmail, accessContext, onOpenFleet, onOpenCensus,
                 <div className={`module-grid${selectedSecretariat.id === 'health' ? ' module-grid--health' : ''}`} aria-label={`Módulos de ${selectedSecretariat.name}`}>
                   {visibleModules.map((module) => {
                     const Icon = getMunicipalIcon(module.icon_name)
-                    const hasRoute = module.id === 'fleet' || module.id === 'census' || (module.id === 'medical-visits' && canManageGovernance)
+                    const hasRoute = module.id === 'fleet' || module.id === 'census' || module.id === 'compras' || (module.id === 'medical-visits' && canManageGovernance)
                     const canOpen = module.is_ready && hasRoute
                     return (
                       <button
