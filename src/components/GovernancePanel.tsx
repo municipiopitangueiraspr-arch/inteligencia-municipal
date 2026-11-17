@@ -427,7 +427,32 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
 
   const saveModule = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setMessage({ type: 'error', text: 'O catálogo de módulos é somente leitura. Alterações estruturais devem ser publicadas por migration controlada.' })
+    if (!supabase || !moduleDraft) return
+    const id = slugify(moduleDraft.id || moduleDraft.label)
+    const sortOrder = Number(moduleDraft.sort_order)
+    if (!id || !moduleDraft.label.trim() || !Number.isInteger(sortOrder) || sortOrder < 1) {
+      setMessage({ type: 'error', text: 'Informe identificador, nome e uma ordem inteira maior que zero para o módulo.' })
+      return
+    }
+    setSaving(true)
+    setMessage(null)
+    const result = await supabase.rpc('municipal_governance_save_module', {
+      p_id: id,
+      p_label: moduleDraft.label.trim(),
+      p_description: moduleDraft.description.trim(),
+      p_icon_name: moduleDraft.icon_name,
+      p_status_label: moduleDraft.status_label.trim() || (moduleDraft.is_ready ? 'Disponível' : 'Em preparação'),
+      p_sort_order: sortOrder,
+      p_is_ready: moduleDraft.is_ready,
+    })
+    setSaving(false)
+    if (result.error) {
+      setMessage({ type: 'error', text: errorText(result.error) })
+      return
+    }
+    setModuleDraft(null)
+    setMessage({ type: 'success', text: moduleDraft.id ? 'Módulo atualizado.' : 'Módulo cadastrado.' })
+    await loadPanel(false)
   }
 
   const saveUser = async (draft: UserDraft) => {
@@ -756,8 +781,8 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
               {activeTab === 'modules' && (
                 <section className="governance-section" aria-labelledby="modulesHeading">
                   <div className="governance-section-heading">
-                    <div><h2 id="modulesHeading">Catálogo de módulos</h2><p>Catálogo institucional somente leitura. Novos módulos e alterações estruturais são publicados por migration controlada.</p></div>
-                    <span className="governance-readonly-badge">Somente leitura</span>
+                    <div><h2 id="modulesHeading">Catálogo de módulos</h2><p>Cadastre as áreas do produto, marque a prontidão e mantenha a situação apresentada aos gestores.</p></div>
+                    <button className="governance-primary-button" type="button" onClick={() => { setMessage(null); setModuleDraft({ id: null, label: '', description: '', icon_name: 'Building2', status_label: 'Em preparação', sort_order: String(Math.max(0, ...modules.map((item) => item.sort_order)) + 1), is_ready: false }) }}><FilePlus2 size={17} />Novo módulo</button>
                   </div>
                   <div className="governance-module-grid">
                     {modules.map((module) => {
@@ -766,7 +791,7 @@ export function GovernancePanel({ userEmail, onBack, onLogout }: GovernancePanel
                         <article className="governance-module-card" key={module.id}>
                           <span className="governance-module-icon"><Icon size={22} aria-hidden="true" /></span>
                           <div className="governance-module-copy"><h3>{module.label}</h3><p>{module.description}</p></div>
-                          <div className="governance-module-actions"><span className={`governance-status${module.is_ready ? ' is-active' : ''}`}>{module.status_label}</span></div>
+                          <div className="governance-module-actions"><span className={`governance-status${module.is_ready ? ' is-active' : ''}`}>{module.status_label}</span><button className="governance-text-button" type="button" onClick={() => setModuleDraft({ id: module.id, label: module.label, description: module.description, icon_name: module.icon_name, status_label: module.status_label, sort_order: String(module.sort_order), is_ready: module.is_ready })}><Pencil size={15} />Editar</button></div>
                         </article>
                       )
                     })}
