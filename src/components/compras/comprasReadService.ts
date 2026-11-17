@@ -94,6 +94,48 @@ export type ComprasContractExecution = {
   valor_novo: number | null
 }
 
+export type ComprasOrderItem = {
+  id: number
+  item_ata_id: number
+  lote_numero: string | null
+  quantidade_solicitada: number
+  valor_unitario: number | null
+  valor_total: number | null
+}
+
+export type ComprasOrderEvent = {
+  id: number
+  evento: string
+  status_anterior: string | null
+  status_novo: string | null
+  justificativa: string | null
+  ocorrido_em: string
+  metadados: Record<string, unknown> | null
+}
+
+export type ComprasOrderDetail = {
+  pedido_id: number
+  municipio_id: string
+  numero_pedido: string | null
+  status: string | null
+  status_aprovacao: string | null
+  data_solicitacao: string | null
+  numero_requisicao: string | null
+  observacoes: string | null
+  justificativa: string | null
+  local_entrega: string | null
+  valor_total: number | null
+  ata_id: number | null
+  unidade_id: string | null
+  unidade_organizacional_id: string | null
+  data_aprovacao: string | null
+  observacao_aprovacao: string | null
+  created_at: string
+  updated_at: string
+  items: ComprasOrderItem[]
+  events: ComprasOrderEvent[]
+}
+
 export type ComprasReadResult = {
   summary: ComprasDashboardSummary
   recentDemands: ComprasRecentDemand[]
@@ -207,6 +249,33 @@ export async function loadComprasContractExecutions(municipalityId: string | nul
   const result = await query
   if (result.error) throw new Error(result.error.message)
   return (result.data || []) as ComprasContractExecution[]
+}
+
+export async function loadComprasOrderDetail(municipalityId: string | null, pedidoId: number): Promise<ComprasOrderDetail> {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  let orderQuery = supabase.from('pedidos').select('id,municipio_id,numero_pedido,numero_requisicao,ata_id,status,status_aprovacao,data_solicitacao,observacoes,justificativa,local_entrega,valor_total,unidade_id,unidade_organizacional_id,data_aprovacao,observacao_aprovacao,created_at,updated_at').eq('id', pedidoId)
+  let itemsQuery = supabase.from('itens_pedido').select('id,item_ata_id,lote_numero,quantidade_solicitada,valor_unitario,valor_total').eq('pedido_id', pedidoId).order('id', { ascending: true }).limit(100)
+  let eventsQuery = supabase.from('pedidos_eventos').select('id,evento,status_anterior,status_novo,justificativa,ocorrido_em,metadados').eq('pedido_id', pedidoId).order('ocorrido_em', { ascending: false }).limit(100)
+  if (municipalityId) {
+    orderQuery = orderQuery.eq('municipio_id', municipalityId)
+    itemsQuery = itemsQuery.eq('municipio_id', municipalityId)
+    eventsQuery = eventsQuery.eq('municipio_id', municipalityId)
+  }
+  const [order, items, events] = await Promise.all([orderQuery.limit(1).maybeSingle(), itemsQuery, eventsQuery])
+  const failure = [order.error, items.error, events.error].find(Boolean)
+  if (failure) throw new Error(failure.message)
+  if (!order.data) throw new Error('Pedido não encontrado ou fora do escopo autorizado.')
+  return { ...(order.data as unknown as Omit<ComprasOrderDetail, 'pedido_id' | 'items' | 'events'>), pedido_id: Number(order.data.id), items: (items.data || []) as ComprasOrderItem[], events: (events.data || []) as ComprasOrderEvent[] }
+}
+
+export async function executeComprasOrderAction(action: 'enviar' | 'aprovar' | 'rejeitar' | 'cancelar' | 'encerrar', pedidoId: number, justification = '') {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  const rpcByAction = { enviar: 'compras_enviar_pedido_aprovacao', aprovar: 'compras_aprovar_pedido', rejeitar: 'compras_rejeitar_pedido', cancelar: 'compras_cancelar_pedido', encerrar: 'compras_encerrar_pedido' } as const
+  const rpc = rpcByAction[action]
+  const args = action === 'rejeitar' ? { p_pedido_id: pedidoId, p_justificativa: justification } : action === 'cancelar' ? { p_pedido_id: pedidoId, p_justificativa: justification } : action === 'encerrar' ? { p_pedido_id: pedidoId, p_observacao: justification } : { p_pedido_id: pedidoId }
+  const result = await supabase.rpc(rpc, args)
+  if (result.error) throw new Error(result.error.message)
+  return result.data
 }
 
 export function isCriticalBalance(item: Pick<ComprasBalanceItem, 'quantidade_contratada' | 'saldo_quantidade' | 'quantidade_utilizavel'>) {
