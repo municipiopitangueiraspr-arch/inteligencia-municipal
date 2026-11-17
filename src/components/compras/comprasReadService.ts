@@ -66,6 +66,34 @@ export type ComprasAtaSummary = ComprasAta & {
   criticos: number
 }
 
+export type ComprasOrder = {
+  municipio_id: string
+  pedido_id: number
+  numero_pedido: string | null
+  status: string | null
+  status_aprovacao: string | null
+  data_solicitacao: string | null
+  quantidade_solicitada: number
+  quantidade_entregue: number
+  quantidade_pendente: number
+  entregas_registradas: number
+}
+
+export type ComprasContractExecution = {
+  id: string
+  contrato_id: string
+  tipo: string
+  status: string
+  ocorrido_em: string
+  descricao: string | null
+  quantidade: number | null
+  unidade_medida: string | null
+  empenho_numero: string | null
+  pagamento_status: string | null
+  valor_anterior: number | null
+  valor_novo: number | null
+}
+
 export type ComprasReadResult = {
   summary: ComprasDashboardSummary
   recentDemands: ComprasRecentDemand[]
@@ -158,6 +186,27 @@ export async function loadComprasBalances(municipalityId: string | null, search 
   const result = await query
   if (result.error) throw new Error(result.error.message)
   return (result.data || []) as ComprasBalanceItem[]
+}
+
+export async function loadComprasOrders(municipalityId: string | null, search = '', status = ''): Promise<ComprasOrder[]> {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  let query = supabase.from('compras_vw_pedidos_entregas').select('municipio_id,pedido_id,numero_pedido,status,status_aprovacao,data_solicitacao,quantidade_solicitada,quantidade_entregue,quantidade_pendente,entregas_registradas').order('data_solicitacao', { ascending: false }).limit(200)
+  if (municipalityId) query = query.eq('municipio_id', municipalityId)
+  if (status) query = query.eq('status', status)
+  if (search.trim()) query = query.ilike('numero_pedido', `%${search.trim()}%`)
+  const result = await query
+  if (result.error) throw new Error(result.error.message)
+  return (result.data || []) as ComprasOrder[]
+}
+
+export async function loadComprasContractExecutions(municipalityId: string | null, search = ''): Promise<ComprasContractExecution[]> {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  let query = supabase.from('compras_execucoes_contratuais').select('id,contrato_id,tipo,status,ocorrido_em,descricao,quantidade,unidade_medida,empenho_numero,pagamento_status,valor_anterior,valor_novo').order('ocorrido_em', { ascending: false }).limit(200)
+  if (municipalityId) query = query.eq('municipio_id', municipalityId)
+  if (search.trim()) query = query.or(`empenho_numero.ilike.%${search.trim()}%,descricao.ilike.%${search.trim()}%`)
+  const result = await query
+  if (result.error) throw new Error(result.error.message)
+  return (result.data || []) as ComprasContractExecution[]
 }
 
 export function isCriticalBalance(item: Pick<ComprasBalanceItem, 'quantidade_contratada' | 'saldo_quantidade' | 'quantidade_utilizavel'>) {
