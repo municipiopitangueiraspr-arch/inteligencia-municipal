@@ -131,6 +131,15 @@ export type ComprasOccurrence = {
   created_at: string
 }
 
+export type ComprasReportData = {
+  contratos: { total: number; vigentes: number; proximosVencimento: number }
+  saldos: { itens: number; criticos: number; valorDisponivel: number; percentualDisponivel: number }
+  pedidos: { total: number; pendentesEntrega: number; aguardandoDecisao: number; porSituacao: { label: string; total: number }[] }
+  entregas: { pendentes: number; quantidadePendente: number }
+  consumo: { descricao: string; consumida: number; contratada: number; percentual: number }[]
+  execucao: { eventos: number; comEmpenho: number; pagos: number }
+}
+
 export type ComprasOrderDetail = {
   pedido_id: number
   municipio_id: string
@@ -314,6 +323,40 @@ export async function executeComprasOccurrence(pedidoId: number, tipo: string, d
   const result = await supabase.rpc('compras_registrar_ocorrencia', { p_pedido_id: pedidoId, p_tipo: tipo, p_descricao: descricao, p_severidade: severidade, p_entrega_id: entregaId })
   if (result.error) throw new Error(result.error.message)
   return result.data
+}
+
+export async function loadComprasReports(municipalityId: string | null): Promise<ComprasReportData> {
+  if (!supabase) throw new Error('O serviço de dados não está configurado.')
+  let contracts = supabase.from('compras_contratos').select('id,situacao,vigencia_fim').limit(200)
+  let balances = supabase.from('compras_vw_saldos_operacionais').select('descricao,quantidade_contratada,saldo_quantidade,saldo_valor,quantidade_utilizavel').limit(2000)
+  let orders = supabase.from('compras_vw_pedidos_entregas').select('status,status_aprovacao,quantidade_pendente').limit(500)
+  let executions = supabase.from('compras_execucoes_contratuais').select('empenho_numero,pagamento_status').limit(500)
+  if (municipalityId) {
+    contracts = contracts.eq('municipio_id', municipalityId)
+    balances = balances.eq('municipio_id', municipalityId)
+    orders = orders.eq('municipio_id', municipalityId)
+    executions = executions.eq('municipio_id', municipalityId)
+  }
+  const [contractResult, balanceResult, orderResult, executionResult] = await Promise.all([contracts, balances, orders, executions])
+  const failure = [contractResult.error, balanceResult.error, orderResult.error, executionResult.error].find(Boolean)
+  if (failure) throw new Error(failure.message)
+  const today = new Date()
+  const inThirtyDays = new Date(today.getTime() + 30 * 86400000)
+  const contractRows = (contractResult.data || []) as { situacao: string | null; vigencia_fim: string | null }[]
+  const balanceRows = (balanceResult.data || []) as { descricao: string; quantidade_contratada: number; saldo_quantidade: number; saldo_valor: number; quantidade_utilizavel: number }[]
+  const orderRows = (orderResult.data || []) as { status: string | null; status_aprovacao: string | null; quantidade_pendente: number }[]
+  const executionRows = (executionResult.data || []) as { empenho_numero: string | null; pagamento_status: string | null }[]
+  const available = balanceRows.reduce((sum, row) => sum + Number(row.quantidade_utilizavel ?? row.saldo_quantidade ?? 0), 0)
+  const contracted = balanceRows.reduce((sum, row) => sum + Number(row.quantidade_contratada || 0), 0)
+  const consumptionMap = new Map<string, { contratada: number; saldo: number }>()
+  for (const row of balanceRows) {
+    const current = consumptionMap.get(row.descricao) || { contratada: 0, saldo: 0 }
+    current.contratada += Number(row.quantidade_contratada || 0); current.saldo += Number(row.saldo_quantidade || 0); consumptionMap.set(row.descricao, current)
+  }
+  const consumption = Array.from(consumptionMap.entries()).map(([descricao, values]) => ({ descricao, contratada: values.contratada, consumida: Math.max(values.contratada - values.saldo, 0), percentual: values.contratada ? Math.min((Math.max(values.contratada - values.saldo, 0) / values.contratada) * 100, 100) : 0 })).sort((a, b) => b.consumida - a.consumida).slice(0, 8)
+  const situationMap = new Map<string, number>()
+  for (const row of orderRows) { const label = row.status_aprovacao || row.status || 'SEM_SITUACAO'; situationMap.set(label, (situationMap.get(label) || 0) + 1) }
+  return { contratos: { total: contractRows.length, vigentes: contractRows.filter((row) => /ATIV|VIGENT/i.test(String(row.situacao))).length, proximosVencimento: contractRows.filter((row) => row.vigencia_fim && new Date(row.vigencia_fim) >= today && new Date(row.vigencia_fim) <= inThirtyDays).length }, saldos: { itens: balanceRows.length, criticos: balanceRows.filter((row) => Number(row.quantidade_utilizavel ?? row.saldo_quantidade ?? 0) <= 0 || Number(row.saldo_quantidade || 0) <= Number(row.quantidade_contratada || 0) * 0.1).length, valorDisponivel: balanceRows.reduce((sum, row) => sum + Number(row.saldo_valor || 0), 0), percentualDisponivel: contracted ? (available / contracted) * 100 : 0 }, pedidos: { total: orderRows.length, pendentesEntrega: orderRows.filter((row) => Number(row.quantidade_pendente || 0) > 0).length, aguardandoDecisao: orderRows.filter((row) => /ENVI|ANALISE|PENDENTE/i.test(`${row.status || ''} ${row.status_aprovacao || ''}`)).length, porSituacao: Array.from(situationMap.entries()).map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total) }, entregas: { pendentes: orderRows.filter((row) => Number(row.quantidade_pendente || 0) > 0).length, quantidadePendente: orderRows.reduce((sum, row) => sum + Number(row.quantidade_pendente || 0), 0) }, consumo: consumption, execucao: { eventos: executionRows.length, comEmpenho: executionRows.filter((row) => Boolean(row.empenho_numero)).length, pagos: executionRows.filter((row) => /PAGO|LIQUID/i.test(String(row.pagamento_status))).length } }
 }
 
 export function isCriticalBalance(item: Pick<ComprasBalanceItem, 'quantidade_contratada' | 'saldo_quantidade' | 'quantidade_utilizavel'>) {
