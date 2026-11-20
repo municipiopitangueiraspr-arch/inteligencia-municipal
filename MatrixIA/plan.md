@@ -2,47 +2,36 @@
 
 ## Objetivo e limites
 
-Construir um protótipo independente em React, Vite e TypeScript para apresentar ao prefeito uma visão municipal agregada, legível e orientada a prioridades. A primeira entrega é o painel inicial após login (o login fica para depois). Toda informação é demonstrativa, armazenada em mocks locais; este diretório não importa o cliente Supabase do app existente, não chama APIs e não altera o projeto raiz.
+Construir um protótipo independente em React, Vite e TypeScript que ajude o prefeito de uma cidade simulada de 3.000 habitantes a entender o que exige decisão, quais serviços estão atrasados e como está a execução financeira, sem obrigá-lo a abrir onze sistemas. A primeira entrega é o painel inicial, sem login, back-end, Supabase, persistência, APIs, IA ou dados municipais reais.
 
-## Experiência recomendada
+## Experiência do prefeito
 
-- O prefeito inicia em **Visão geral**, não em um módulo operacional de secretaria.
-- Exibir poucos sinais explicados em linguagem simples: serviços no prazo, solicitações aguardando atenção, execução orçamentária ilustrativa e variação de atendimento.
-- Dar destaque às prioridades e explicar por que merecem atenção; evitar depender de gráficos densos ou jargão.
-- Mostrar um panorama das onze secretarias, com estado resumido e caminho para aprofundar.
-- Direcionar o acesso de secretário para a sua área operacional. No futuro, acesso e escopo serão controlados por função; neste protótipo, o menu apenas demonstra a arquitetura.
-- Identificar permanentemente os dados como fictícios; não apresentar estimativas mock como informação municipal real.
+A primeira tela abre com uma síntese do que pode afetar o morador; prioridades explicam o contexto, o impacto e o próximo passo; a posição financeira separa orçamento aprovado, receita recebida, previsão acumulada e despesas empenhadas/pagas; o panorama mostra as onze secretarias sem transformar a tela em um relatório técnico. Os resumos das secretarias apontam solicitações administrativas abertas, atrasos, um indicador operacional e a ação seguinte. Esta visão executiva é diferente da futura tela operacional do secretário.
+
+## Integridade dos dados demonstrativos
+
+O conjunto de mocks descreve um cenário explicitamente fictício para uma prefeitura de cerca de 3 mil moradores. Os totais das solicitações administrativas são derivados dos registros das onze secretarias: 36 abertas, 7 atrasadas. Essa central é distinta da fila clínica de saúde, que tem 36 encaminhamentos aguardando consulta, 8 há mais de 60 dias. O cenário liga transporte escolar (1 de 3 micro-ônibus indisponível e rota readequada para 32 alunos), saúde, obras (duas ordens de serviço atrasadas) e receita (R$ 30,3 milhões recebidos contra R$ 31,05 milhões previstos até outubro). Cada secretaria deve mostrar consequência concreta para o morador; responsáveis e prazos devem ser coerentes com a hora de atualização. Gestão de Frota é apoio operacional transversal, não uma 12ª secretaria. Manter visíveis os períodos de referência e os avisos de simulação em resumos e prioridades. Não tratar os dados como indicadores oficiais nem usá-los para decisões reais.
 
 ## Tecnologia e estrutura
 
-Subprojeto Vite isolado na pasta `MatrixIA/`, com `src/data/mockData.ts` (fonte de dados demonstrativos), `src/App.tsx` (layout e navegação demonstrativa), `src/styles.css` (estilos responsivos), `src/main.tsx` (bootstrap) e `public/manus-routes.json` (inventário de rota). Dependências instaladas somente no subprojeto. Sem autenticação, persistência, Supabase, API, exportação ou integrações nesta etapa.
+Subprojeto Vite isolado na pasta `MatrixIA/`, com `src/data/mockData.ts` como fonte local demonstrativa, `src/App.tsx` para visão executiva, navegação e resumos de secretaria, `src/styles.css` para identidade e responsividade, `src/main.tsx` para inicialização e `public/manus-routes.json` para declarar a rota inicial. Dependências ficam isoladas da aplicação raiz.
 
-## Design
+## Direção visual
 
-- **Sala de situação editorial (0,07):** painel de leitura rápida com hierarquia de manchetes e estados claros. Escolhido: comunica gestão e prioridade sem transformar o produto em um sistema de BI.
-- **Centro cívico luminoso (0,04):** interface pública mais clara, cartões mais leves e linguagem acolhedora.
-- **Console de dados técnico (0,03):** interface densa com mapas, grades e métricas compactas.
+**Movimento:** painel cívico executivo contemporâneo, com linguagem direta e hierarquia de sala de situação.
 
-### Direção escolhida: sala de situação editorial
+**Princípios:** mostrar impacto antes do jargão; priorizar decisões e prazos; dar contexto e período a cada número; manter boa leitura em telas pequenas.
 
-**Movimento:** dashboard editorial contemporâneo, inspirado em salas de situação cívicas, evitando estética de terminal técnico.
+**Cores:** azul institucional forte para navegação, títulos e informação estrutural; fundo claro para leitura; chips de estado com cores sólidas e texto branco de contraste: verde para em dia, âmbar/laranja escuro para atenção e vermelho para crítico. Ícone e texto acompanham a cor para não depender apenas dela.
 
-**Princípios:** hierarquia clara; linguagem cotidiana antes do indicador; atenção visual reservada para o que requer ação; densidade adaptável ao tamanho da tela.
+**Layout:** navegação lateral compacta; panorama e indicadores executivos na primeira dobra; prioridades junto ao painel financeiro; todas as onze secretarias abaixo para leitura transversal.
 
-**Cores:** azul-petróleo profundo para confiança e estrutura; fundo marfim frio para reduzir cansaço; verde para andamento saudável; âmbar para atenção sem alarmismo; vermelho somente para risco importante.
+**Elementos assinatura:** aviso persistente “Cenário simulado · 3.000 habitantes”; faixa de decisão do dia; “próximo passo” associado ao impacto para o cidadão; status textual em chip sólido.
 
-**Layout:** navegação lateral compacta, cabeçalho contextual e uma coluna principal de leitura com destaque horizontal para o resumo municipal e lista de prioridades; visão das secretarias em cartões compactos.
+**Interação:** expansão das cinco prioridades, atalho para resumo de secretaria, navegação responsiva; nenhum botão deve sugerir gravação ou integração real ainda inexistente.
 
-**Elementos assinatura:** faixa “Em poucas palavras” com síntese narrativa; marcadores de estado textuais acompanhados de cor; rótulo persistente “Dados demonstrativos”.
+**Animação:** transições curtas, sem motion excessivo, respeitando `prefers-reduced-motion`.
 
-**Interação:** clique em secretaria abre seu resumo demonstrativo; navegação de abas distingue visão executiva de áreas; ações são reversíveis e não simulam alterações persistidas.
+**Tipografia:** system sans-serif de alta legibilidade, títulos semibold e hierarquia curta; valores financeiros e contagens com alinhamento visual claro.
 
-**Animação:** transições curtas (120–180 ms) em hover e navegação; respeitar `prefers-reduced-motion`; sem gráficos animados que distraiam da leitura.
-
-**Tipografia:** system stack sans-serif para alta legibilidade, títulos semibold e números tabulares; corpo 14–16 px, títulos com contraste de escala.
-
-**Essência da marca:** “A prefeitura inteira, explicada para quem precisa decidir.” Personalidade: clara, confiável, humana.
-
-**Voz:** direta, explicativa e sem jargão. Exemplos: “Veja o que precisa de atenção hoje.” / “Este número está acima do mês passado.”
-
-**Marca e cor assinatura:** wordmark tipográfico “MatrixIA” junto a símbolo abstrato de três módulos ligados; azul-petróleo como cor de marca.
+**Essência da marca:** “A prefeitura inteira, explicada para quem precisa decidir.” Personalidade: clara, confiável e prática. Voz: direta e sem jargão — “Veja o que precisa de atenção hoje”; “Esta diferença compara o realizado com a previsão até outubro”. Marca: wordmark MatrixIA e símbolo geométrico de três módulos conectados; assinatura azul institucional.

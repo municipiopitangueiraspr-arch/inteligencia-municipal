@@ -1,14 +1,16 @@
 # MatrixIA
 
-Protótipo independente de front-end para uma visão executiva e transversal da gestão municipal. O prefeito começa por um resumo da prefeitura, pontos que merecem atenção e panorama das 11 secretarias. A navegação demonstra a diferença entre visão executiva e resumos por área; não implementa ainda os módulos operacionais dos servidores das secretarias.
+Protótipo independente de front-end para uma visão executiva e transversal de uma prefeitura de pequeno porte. Ao entrar, o prefeito vê decisões que podem afetar o morador, solicitações e atrasos por secretaria, um resumo financeiro com data de fechamento e o panorama das onze áreas.
 
-## Escopo atual
+## Cenário demonstrativo
 
-Aplicação em React, Vite e TypeScript, com dados exclusivamente mockados em `src/data/mockData.ts`. **Não se conecta ao Supabase, não importa arquivos do aplicativo existente, não usa credenciais, não autentica usuários e não grava dados.** Os valores e o município mostrados são demonstrativos; não usar para decisões reais.
+Os registros locais simulam uma cidade de 3.000 habitantes. As situações se relacionam: 36 solicitações administrativas abertas nas onze secretarias (7 fora do prazo); um micro-ônibus escolar indisponível, com rota reorganizada para 32 alunos; e, em um conjunto distinto, 36 encaminhamentos clínicos aguardando consulta, dos quais 8 há mais de 60 dias. A fila clínica não integra a soma de solicitações administrativas. Os dados financeiros comparam a receita recebida com o valor previsto até outubro.
 
-O diretório `MatrixIA/` é independente do app existente no repositório. O login, back-end, integração com IA e conexão a sistemas federais/estaduais/nacionais permanecem para etapas futuras.
+**Tudo é fictício.** Nenhum nome de cidadão, saldo, contrato, fila, ocorrência ou número representa registro oficial de Pitangueiras ou de outro município. Os resumos por secretaria e as prioridades também identificam o cenário como simulado. A posição financeira fecha em 31/10/2026 (atualizada em 04/11); solicitações e demais situações usam como referência 19/11/2026, com carimbos de atualização por bloco. Gestão de Frota aparece apenas como área operacional transversal ligada à Administração, não como uma 12ª secretaria.
 
-## Executar
+A aplicação usa React, Vite e TypeScript, lê dados de `src/data/mockData.ts` e **não se conecta ao Supabase, não autentica usuários, não chama APIs e não grava informações**. Login, back-end, integrações e conexão com IA ficam para etapas futuras.
+
+## Executar localmente
 
 ```bash
 cd MatrixIA
@@ -16,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Compilar para produção local:
+Validar o build de front-end:
 
 ```bash
 npm run build

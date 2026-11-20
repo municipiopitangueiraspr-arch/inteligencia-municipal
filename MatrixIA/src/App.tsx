@@ -18,26 +18,45 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Wallet,
   X,
 } from "lucide-react";
 import {
   departments,
-  highlights,
+  financialPosition,
   lastUpdated,
+  municipalityProfile,
+  municipalitySnapshot,
   priorities,
   type Department,
+  type Priority,
 } from "./data/mockData";
 
 type View = "overview" | "departments";
+
+type MetricCard = {
+  label: string;
+  value: string;
+  change: string;
+  helper: string;
+  tone: "green" | "amber" | "red" | "blue";
+  icon: "requests" | "finance" | "departments" | "transport";
+};
+
+const formatMillions = (value: number) =>
+  `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} mi`;
+
+const formatPercent = (value: number) =>
+  `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 function App() {
   const [view, setView] = useState<View>("overview");
   const [selectedDepartment, setSelectedDepartment] =
     useState<Department | null>(null);
-  const [period, setPeriod] = useState("Este mês");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showAllPriorities, setShowAllPriorities] = useState(false);
 
   const statusCounts = useMemo(
     () => ({
@@ -53,6 +72,75 @@ function App() {
     [],
   );
 
+  const requestTotals = useMemo(
+    () => ({
+      open: departments.reduce(
+        (total, department) => total + department.openRequests,
+        0,
+      ),
+      overdue: departments.reduce(
+        (total, department) => total + department.overdueRequests,
+        0,
+      ),
+    }),
+    [],
+  );
+
+  const revenueToDatePercent =
+    (financialPosition.revenueReceivedMillions /
+      financialPosition.revenuePlannedThroughOctoberMillions) *
+    100;
+  const revenueGapMillions =
+    financialPosition.revenuePlannedThroughOctoberMillions -
+    financialPosition.revenueReceivedMillions;
+  const revenueOfAnnualBudgetPercent =
+    (financialPosition.revenueReceivedMillions /
+      financialPosition.annualBudgetMillions) *
+    100;
+  const committedPercent =
+    (financialPosition.expenditureCommittedMillions /
+      financialPosition.annualBudgetMillions) *
+    100;
+  const paidPercent =
+    (financialPosition.expenditurePaidMillions /
+      financialPosition.annualBudgetMillions) *
+    100;
+
+  const metricCards: MetricCard[] = [
+    {
+      label: "Solicitações administrativas em aberto",
+      value: requestTotals.open.toString(),
+      change: `${requestTotals.overdue} fora do prazo`,
+      helper: `Central das 11 secretarias · ${municipalitySnapshot.previousMonthOpenRequests - requestTotals.open} a menos que em 31/out`,
+      tone: "amber",
+      icon: "requests",
+    },
+    {
+      label: "Receita recebida · fechamento 31/out",
+      value: formatMillions(financialPosition.revenueReceivedMillions),
+      change: `${formatPercent(revenueToDatePercent)} do previsto até out.`,
+      helper: `Posição encerrada em 31/out · ${formatMillions(revenueGapMillions)} abaixo do previsto`,
+      tone: "amber",
+      icon: "finance",
+    },
+    {
+      label: "Secretarias sem pendência crítica",
+      value: `${statusCounts.okay} de ${departments.length}`,
+      change: `${statusCounts.attention} em atenção · ${statusCounts.critical} crítica`,
+      helper: "Situação calculada a partir das filas demonstrativas",
+      tone: "green",
+      icon: "departments",
+    },
+    {
+      label: "Transporte escolar em contingência",
+      value: `${municipalitySnapshot.studentsAffectedByTransportChange} alunos`,
+      change: `${municipalitySnapshot.schoolBusesTotal - municipalitySnapshot.schoolBusesAvailable} de ${municipalitySnapshot.schoolBusesTotal} veículos parado`,
+      helper: "Rota reorganizada durante o reparo do micro-ônibus 02",
+      tone: "red",
+      icon: "transport",
+    },
+  ];
+
   const openDepartment = (department: Department) => {
     setSelectedDepartment(department);
     setView("departments");
@@ -60,6 +148,17 @@ function App() {
   };
 
   const closeDepartment = () => setSelectedDepartment(null);
+
+  const openPriorityDepartment = (priority: Priority) => {
+    const department = departments.find(
+      (item) => item.name === priority.department,
+    );
+    if (department) openDepartment(department);
+  };
+
+  const visiblePriorities = showAllPriorities
+    ? priorities
+    : priorities.slice(0, 3);
 
   return (
     <div className="app-shell">
@@ -93,8 +192,8 @@ function App() {
             <Building2 size={17} />
           </span>
           <span className="municipality-copy">
-            <strong>Pitangueiras</strong>
-            <small>Paraná · Município piloto</small>
+            <strong>{municipalityProfile.name}</strong>
+            <small>{municipalityProfile.state} · Município piloto</small>
           </span>
           <ChevronDown size={15} className="muted-icon" />
         </button>
@@ -123,12 +222,12 @@ function App() {
           >
             <Building2 size={18} />
             <span>Secretarias</span>
-            <span className="nav-count">11</span>
+            <span className="nav-count">{departments.length}</span>
           </button>
           <button className="nav-item" onClick={() => setNoticeOpen(true)}>
             <Activity size={18} />
             <span>Indicadores</span>
-            <span className="nav-soon">em breve</span>
+            <span className="nav-soon">em construção</span>
           </button>
           <button className="nav-item" onClick={() => setNoticeOpen(true)}>
             <CalendarDays size={18} />
@@ -155,9 +254,10 @@ function App() {
             onClick={() => {
               setView("departments");
               setSelectedDepartment(null);
+              setMobileMenuOpen(false);
             }}
           >
-            Ver as 11 secretarias <ArrowRight size={14} />
+            Ver as {departments.length} secretarias <ArrowRight size={14} />
           </button>
         </div>
 
@@ -168,11 +268,11 @@ function App() {
               <span>Inteligência em construção</span>
             </div>
             <p>
-              Esta é a base para uma prefeitura conectada. A IA vem depois, com
-              dados confiáveis.
+              Primeiro, uma visão comum dos serviços e das pendências. A IA vem
+              depois, quando os dados forem confiáveis.
             </p>
             <span className="ai-card-status">
-              <span /> Preparando a plataforma
+              <span /> Protótipo com dados fictícios
             </span>
           </div>
           <button
@@ -183,9 +283,9 @@ function App() {
             <span>Ajuda e orientações</span>
           </button>
           <div className="profile-card">
-            <div className="avatar">HM</div>
+            <div className="avatar">ST</div>
             <div className="profile-copy">
-              <strong>Hugo Machado</strong>
+              <strong>Samuel Teixeira</strong>
               <small>Visão demonstrativa · Prefeito</small>
             </div>
             <Settings2 size={16} className="profile-settings" />
@@ -222,7 +322,7 @@ function App() {
           </div>
           <div className="topbar-actions">
             <div className="demo-pill">
-              <span /> AMBIENTE DE DEMONSTRAÇÃO
+              <span /> CENÁRIO SIMULADO · 3.000 HABITANTES
             </div>
             <button
               className="icon-button search-button"
@@ -272,28 +372,19 @@ function App() {
               <section className="welcome-row">
                 <div>
                   <div className="eyebrow">
-                    <span className="eyebrow-line" /> QUINTA-FEIRA, 20 DE
+                    <span className="eyebrow-line" /> QUINTA-FEIRA, 19 DE
                     NOVEMBRO DE 2026
                   </div>
-                  <h1>Bom dia, Hugo.</h1>
+                  <h1>Boa tarde, Samuel.</h1>
                   <p className="welcome-subtitle">
-                    Aqui está o que está acontecendo na sua prefeitura.
+                    O que precisa da sua atenção hoje em{" "}
+                    {municipalityProfile.name}?
                   </p>
                 </div>
                 <div className="welcome-actions">
-                  <label className="period-select">
-                    <CalendarDays size={15} />
-                    <select
-                      value={period}
-                      onChange={(event) => setPeriod(event.target.value)}
-                      aria-label="Período"
-                    >
-                      <option>Este mês</option>
-                      <option>Últimos 30 dias</option>
-                      <option>Este ano</option>
-                    </select>
-                    <ChevronDown size={14} />
-                  </label>
+                  <div className="as-of-pill">
+                    <CalendarDays size={15} /> Atualizado às 16h40
+                  </div>
                   <button
                     className="outline-button"
                     onClick={() => setNoticeOpen(true)}
@@ -310,17 +401,22 @@ function App() {
                 <div className="banner-orbit orbit-three" />
                 <div className="banner-copy">
                   <div className="banner-kicker">
-                    <span className="live-dot" /> PANORAMA DO MUNICÍPIO{" "}
-                    <span className="banner-separator">·</span> NOVEMBRO
+                    <span className="live-dot" /> CENÁRIO DE GESTÃO
+                    <span className="banner-separator">·</span>
+                    {municipalityProfile.population.toLocaleString(
+                      "pt-BR",
+                    )}{" "}
+                    HABITANTES
                   </div>
                   <h2>
-                    A cidade está avançando.
+                    Uma rota escolar mudou.
                     <br />
-                    <span>Há 3 pontos que merecem atenção.</span>
+                    <span>Saúde e estradas também pedem ação.</span>
                   </h2>
                   <p>
-                    8 das 11 secretarias estão com as atividades em dia. Veja
-                    onde sua atenção pode fazer a diferença hoje.
+                    Um dos três micro-ônibus está parado e a rota de 32 alunos
+                    foi reorganizada. O painel destaca cinco pontos de
+                    acompanhamento em cinco secretarias.
                   </p>
                   <button
                     className="banner-button"
@@ -330,17 +426,19 @@ function App() {
                         ?.scrollIntoView({ behavior: "smooth" })
                     }
                   >
-                    Ver prioridades <ArrowRight size={15} />
+                    Ver o que fazer hoje <ArrowRight size={15} />
                   </button>
                 </div>
                 <div className="banner-side">
                   <div
                     className="status-ring"
-                    aria-label="Oito secretarias em dia"
+                    aria-label={`${statusCounts.okay} secretarias sem pendência crítica`}
                   >
                     <div>
-                      <strong>8</strong>
-                      <small>de 11 em dia</small>
+                      <strong>{statusCounts.okay}</strong>
+                      <small>
+                        de {departments.length} sem pendência crítica
+                      </small>
                     </div>
                   </div>
                   <div className="banner-status-list">
@@ -354,7 +452,7 @@ function App() {
                     </span>
                     <span>
                       <i className="status-dot red" />
-                      Crítico <b>{statusCounts.critical}</b>
+                      Crítica <b>{statusCounts.critical}</b>
                     </span>
                   </div>
                 </div>
@@ -362,44 +460,36 @@ function App() {
 
               <section
                 className="metrics-grid"
-                aria-label="Resumo do município"
+                aria-label="Resumo para o prefeito"
               >
-                {highlights.map((item, index) => (
+                {metricCards.map((item) => (
                   <article className="metric-card" key={item.label}>
                     <div className="metric-top">
                       <span className="metric-label">{item.label}</span>
                       <span className={`metric-icon metric-icon-${item.tone}`}>
-                        {index === 0 ? (
-                          <Check size={16} />
-                        ) : index === 1 ? (
+                        {item.icon === "requests" ? (
                           <Activity size={16} />
+                        ) : item.icon === "finance" ? (
+                          <Wallet size={16} />
+                        ) : item.icon === "transport" ? (
+                          <ArrowDownRight size={16} />
                         ) : (
-                          <ArrowUpRight size={16} />
+                          <Check size={16} />
                         )}
                       </span>
                     </div>
                     <div className="metric-value-row">
                       <strong>{item.value}</strong>
-                      <span className={`metric-change ${item.tone}`}>
-                        {item.tone === "amber" ? (
-                          <ArrowDownRight size={14} />
-                        ) : (
-                          <ArrowUpRight size={14} />
-                        )}
-                        {item.change}
-                      </span>
                     </div>
-                    <div className="metric-bottom">
-                      <span>{item.helper}</span>
-                      <div
-                        className={`sparkline sparkline-${item.tone}`}
-                        aria-hidden="true"
-                      >
-                        {item.points.map((point, i) => (
-                          <i key={i} style={{ height: `${point}%` }} />
-                        ))}
-                      </div>
+                    <div className={`metric-change metric-change-${item.tone}`}>
+                      {item.tone === "green" ? (
+                        <ArrowUpRight size={13} />
+                      ) : (
+                        <ArrowDownRight size={13} />
+                      )}
+                      {item.change}
                     </div>
+                    <div className="metric-helper">{item.helper}</div>
                   </article>
                 ))}
               </section>
@@ -408,91 +498,56 @@ function App() {
                 <div className="priority-panel" id="priorities">
                   <div className="section-heading">
                     <div>
-                      <div className="section-eyebrow">PARA ACOMPANHAR</div>
-                      <h2>O que pede atenção</h2>
+                      <div className="section-eyebrow">
+                        DECISÕES E ACOMPANHAMENTOS
+                      </div>
+                      <h2>O que pede atenção hoje</h2>
                     </div>
                     <span className="priority-counter">
-                      03 <span>pontos</span>
+                      {priorities.length.toString().padStart(2, "0")}{" "}
+                      <span>pontos</span>
                     </span>
                   </div>
                   <div className="priority-list">
-                    {priorities.map((priority, index) => (
-                      <article className="priority-item" key={priority.title}>
-                        <div
-                          className={`priority-marker priority-marker-${index}`}
-                        >
-                          <span />
-                        </div>
-                        <div className="priority-content">
-                          <div className="priority-meta">
-                            <span
-                              className={`priority-tag priority-tag-${index}`}
-                            >
-                              {priority.level}
-                            </span>
-                            <span>{priority.time}</span>
-                          </div>
-                          <h3>{priority.title}</h3>
-                          <p>{priority.description}</p>
-                          <button
-                            onClick={() =>
-                              openDepartment(
-                                departments.find(
-                                  (department) =>
-                                    department.name === priority.department,
-                                )!,
-                              )
-                            }
-                          >
-                            {priority.department}
-                            <ArrowRight size={13} />
-                          </button>
-                        </div>
-                      </article>
+                    {visiblePriorities.map((priority) => (
+                      <PriorityItem
+                        key={priority.title}
+                        priority={priority}
+                        onOpen={() => openPriorityDepartment(priority)}
+                      />
                     ))}
                   </div>
                   <button
                     className="panel-footer-link"
-                    onClick={() => setNoticeOpen(true)}
+                    onClick={() => setShowAllPriorities(!showAllPriorities)}
                   >
-                    Ver todos os acompanhamentos <ArrowRight size={15} />
+                    {showAllPriorities
+                      ? "Mostrar somente as 3 mais urgentes"
+                      : `Ver outras ${priorities.length - 3} pendências`}
+                    <ArrowRight size={15} />
                   </button>
                 </div>
 
-                <aside className="narrative-panel">
-                  <div className="narrative-topline">
-                    <Sparkles size={15} />
-                    <span>EM POUCAS PALAVRAS</span>
-                  </div>
-                  <h2>Um município que cuida e segue em frente.</h2>
-                  <p>
-                    Os atendimentos cresceram neste mês e a maioria das áreas
-                    mantém o ritmo. O próximo passo é ajudar Saúde e Agricultura
-                    a dar retorno às pessoas que estão esperando.
-                  </p>
-                  <div className="narrative-divider" />
-                  <div className="narrative-source">
-                    <ShieldCheck size={15} />
-                    <span>Resumo baseado nos dados demonstrativos</span>
-                  </div>
-                  <button
-                    className="narrative-link"
-                    onClick={() => setNoticeOpen(true)}
-                  >
-                    Como ler este resumo <ArrowRight size={14} />
-                  </button>
-                </aside>
+                <FinancePanel
+                  annualBudgetPercent={revenueOfAnnualBudgetPercent}
+                  committedPercent={committedPercent}
+                  paidPercent={paidPercent}
+                  revenueToDatePercent={revenueToDatePercent}
+                  revenueGapMillions={revenueGapMillions}
+                />
               </section>
 
               <section className="departments-section">
                 <div className="section-heading departments-heading">
                   <div>
                     <div className="section-eyebrow">
-                      UMA PREFEITURA, MUITAS FRENTES
+                      A PREFEITURA INTEIRA, EM UMA SÓ VISÃO
                     </div>
                     <h2>
                       Panorama das secretarias{" "}
-                      <span className="section-count">11</span>
+                      <span className="section-count">
+                        {departments.length}
+                      </span>
                     </h2>
                   </div>
                   <button
@@ -502,11 +557,11 @@ function App() {
                       setSelectedDepartment(null);
                     }}
                   >
-                    Ver todas <ArrowRight size={15} />
+                    Abrir visão por área <ArrowRight size={15} />
                   </button>
                 </div>
                 <div className="department-grid">
-                  {departments.slice(0, 6).map((department) => (
+                  {departments.map((department) => (
                     <DepartmentCard
                       key={department.name}
                       department={department}
@@ -518,10 +573,11 @@ function App() {
 
               <footer className="page-footer">
                 <span>
-                  <MapPin size={14} /> Pitangueiras, Paraná
+                  <MapPin size={14} /> {municipalityProfile.name},{" "}
+                  {municipalityProfile.state}
                 </span>
                 <span>
-                  Atualizado {lastUpdated} <i />
+                  Cenário fictício · atualizado {lastUpdated} <i />
                 </span>
               </footer>
             </>
@@ -545,7 +601,7 @@ function App() {
                     Um panorama simples do trabalho em cada área.
                   </p>
                 </div>
-                <span className="total-count">11 áreas</span>
+                <span className="total-count">{departments.length} áreas</span>
               </div>
               <div className="directory-summary">
                 <div className="directory-summary-icon">
@@ -556,8 +612,8 @@ function App() {
                     Uma única prefeitura, trabalhando em conjunto.
                   </strong>
                   <p>
-                    Escolha uma secretaria para ver um resumo demonstrativo da
-                    sua área.
+                    Escolha uma secretaria para ver suas demandas, impacto no
+                    cidadão e próximo passo recomendado no cenário simulado.
                   </p>
                 </div>
               </div>
@@ -572,10 +628,11 @@ function App() {
               </div>
               <footer className="page-footer">
                 <span>
-                  <MapPin size={14} /> Pitangueiras, Paraná
+                  <MapPin size={14} /> {municipalityProfile.name},{" "}
+                  {municipalityProfile.state}
                 </span>
                 <span>
-                  Dados demonstrativos <i />
+                  Cenário fictício · dados de demonstração <i />
                 </span>
               </footer>
             </section>
@@ -609,9 +666,9 @@ function App() {
             <div className="section-eyebrow">PROTÓTIPO EM CONSTRUÇÃO</div>
             <h2 id="modal-title">Esta função vem depois.</h2>
             <p>
-              Este painel é uma demonstração visual com dados fictícios. Login,
-              indicadores reais, relatórios e integrações serão definidos em
-              etapas futuras.
+              Os valores, pessoas, veículos e ocorrências são inventados para
+              validar a interface. O protótipo não se conecta ao Supabase e não
+              representa dados oficiais do município.
             </p>
             <button
               className="modal-action"
@@ -626,6 +683,130 @@ function App() {
   );
 }
 
+function PriorityItem({
+  priority,
+  onOpen,
+}: {
+  priority: Priority;
+  onOpen: () => void;
+}) {
+  const severity = priority.level === "Crítico" ? "critical" : "attention";
+  return (
+    <article className="priority-item">
+      <div className={`priority-marker priority-marker-${severity}`}>
+        <span />
+      </div>
+      <div className="priority-content">
+        <div className="priority-meta">
+          <span className={`priority-tag priority-tag-${severity}`}>
+            {priority.level}
+          </span>
+          <span>SIMULADO · {priority.reference}</span>
+        </div>
+        <h3>{priority.title}</h3>
+        <p>{priority.description}</p>
+        <div className="priority-owner">Responsável: {priority.owner}</div>
+        <div className="priority-impact">Impacto: {priority.impact}</div>
+        <div className="priority-action">
+          <strong>Próximo passo:</strong> {priority.action}
+        </div>
+        <button onClick={onOpen}>
+          Ver resumo de {priority.department} <ArrowRight size={13} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function FinancePanel({
+  annualBudgetPercent,
+  committedPercent,
+  paidPercent,
+  revenueToDatePercent,
+  revenueGapMillions,
+}: {
+  annualBudgetPercent: number;
+  committedPercent: number;
+  paidPercent: number;
+  revenueToDatePercent: number;
+  revenueGapMillions: number;
+}) {
+  return (
+    <aside className="finance-panel">
+      <div className="finance-header">
+        <div>
+          <div className="section-eyebrow">FINANÇAS DO MUNICÍPIO</div>
+          <h2>Orçamento 2026</h2>
+        </div>
+        <span className="finance-period">
+          Fechamento {financialPosition.referenceDate}
+        </span>
+      </div>
+      <div className="finance-total">
+        <span>Orçamento anual autorizado</span>
+        <strong>
+          {formatMillions(financialPosition.annualBudgetMillions)}
+        </strong>
+      </div>
+      <div className="finance-line">
+        <div className="finance-line-heading">
+          <span>Receita recebida</span>
+          <strong>
+            {formatMillions(financialPosition.revenueReceivedMillions)}
+          </strong>
+        </div>
+        <div className="finance-track">
+          <span
+            className="finance-fill finance-fill-blue"
+            style={{ width: `${Math.min(annualBudgetPercent, 100)}%` }}
+          />
+        </div>
+        <div className="finance-line-foot">
+          <span>{formatPercent(annualBudgetPercent)} do orçamento anual</span>
+          <span>
+            {formatPercent(revenueToDatePercent)} da previsão até outubro
+          </span>
+        </div>
+      </div>
+      <div className="finance-variance">
+        <span className="solid-chip chip-attention">Abaixo do previsto</span>
+        <strong>{formatMillions(revenueGapMillions)}</strong>
+        <p>
+          Diferença entre a receita recebida e a previsão acumulada até 31/out.
+        </p>
+      </div>
+      <div className="finance-line finance-expenses">
+        <div className="finance-line-heading">
+          <span>Despesas empenhadas</span>
+          <strong>
+            {formatMillions(financialPosition.expenditureCommittedMillions)}
+          </strong>
+        </div>
+        <div className="finance-track">
+          <span
+            className="finance-fill finance-fill-amber"
+            style={{ width: `${Math.min(committedPercent, 100)}%` }}
+          />
+        </div>
+        <div className="finance-line-foot">
+          <span>{formatPercent(committedPercent)} do orçamento</span>
+          <span>
+            {formatMillions(financialPosition.expenditurePaidMillions)} pagos (
+            {formatPercent(paidPercent)})
+          </span>
+        </div>
+      </div>
+      <div className="finance-footer">
+        <ShieldCheck size={14} />
+        <span>
+          Cenário fictício · referência {financialPosition.referenceDate} ·
+          atualizado {financialPosition.updatedDate}
+        </span>
+      </div>
+    </aside>
+  );
+}
+
 function DepartmentCard({
   department,
   onClick,
@@ -633,12 +814,7 @@ function DepartmentCard({
   department: Department;
   onClick: () => void;
 }) {
-  const statusClass =
-    department.status === "Em dia"
-      ? "okay"
-      : department.status === "Atenção"
-        ? "attention"
-        : "critical";
+  const statusClass = getStatusClass(department.status);
   return (
     <button className="department-card" onClick={onClick}>
       <div className="department-card-top">
@@ -648,13 +824,19 @@ function DepartmentCard({
           {department.status}
         </span>
       </div>
-      <span className="department-area">{department.area}</span>
+      <span className="department-area">
+        CENÁRIO SIMULADO · {department.area} · {department.openRequests}{" "}
+        solicitações administrativas
+      </span>
       <h3>{department.name}</h3>
       <p>{department.summary}</p>
       <div className="department-card-bottom">
         <strong>{department.metric}</strong>
         <span>{department.metricLabel}</span>
         <ArrowRight size={15} />
+      </div>
+      <div className={`department-trend department-trend-${statusClass}`}>
+        {department.trend}
       </div>
     </button>
   );
@@ -667,6 +849,7 @@ function DepartmentDetail({
   department: Department;
   onBack: () => void;
 }) {
+  const statusClass = getStatusClass(department.status);
   return (
     <section className="department-detail">
       <button className="back-link" onClick={onBack}>
@@ -684,43 +867,54 @@ function DepartmentDetail({
           <h1>{department.name}</h1>
           <p className="welcome-subtitle">{department.summary}</p>
         </div>
-        <span
-          className={`status-label status-${department.status === "Em dia" ? "okay" : department.status === "Atenção" ? "attention" : "critical"}`}
-        >
+        <span className={`status-label status-${statusClass}`}>
           <i />
           {department.status}
         </span>
       </div>
+      {department.relatedAreas && (
+        <div className="department-partners">
+          <strong>Área transversal envolvida:</strong> {department.relatedAreas}
+          . A Gestão de Frota é apoio operacional, não uma 12ª secretaria.
+        </div>
+      )}
       <div className="detail-metric-card">
-        <span>Indicador demonstrativo</span>
+        <span>Indicador demonstrativo · cenário fictício</span>
         <strong>{department.metric}</strong>
         <p>{department.metricLabel}</p>
         <small>{department.trend}</small>
+      </div>
+      <div className="detail-facts">
+        <span>
+          <strong>{department.openRequests}</strong> solicitações
+          administrativas abertas
+        </span>
+        <span>
+          <strong>{department.overdueRequests}</strong> fora do prazo
+        </span>
       </div>
       <div className="directory-summary detail-explainer">
         <div className="directory-summary-icon">
           <ShieldCheck size={20} />
         </div>
         <div>
-          <strong>O que o prefeito precisa saber</strong>
-          <p>
-            Este espaço resume a situação da área em linguagem simples. Os
-            módulos operacionais e permissões específicas de cada secretaria
-            serão construídos em etapas posteriores.
-          </p>
+          <strong>Próximo passo sugerido no cenário</strong>
+          <p>{department.nextAction}</p>
         </div>
       </div>
       <div className="detail-next">
-        <span className="section-eyebrow">PRÓXIMOS PASSOS DO PROTÓTIPO</span>
-        <h2>Uma visão clara para decidir melhor.</h2>
-        <p>
-          Quando os módulos forem conectados, este resumo poderá indicar
-          tendências, pendências e onde uma decisão da gestão pode ajudar — sem
-          substituir o trabalho da equipe técnica.
-        </p>
+        <span className="section-eyebrow">CONTEXTO PARA A DECISÃO</span>
+        <h2>O que isso significa para o morador?</h2>
+        <p>{department.citizenImpact}</p>
       </div>
     </section>
   );
+}
+
+function getStatusClass(status: Department["status"]) {
+  if (status === "Em dia") return "okay";
+  if (status === "Atenção") return "attention";
+  return "critical";
 }
 
 export default App;

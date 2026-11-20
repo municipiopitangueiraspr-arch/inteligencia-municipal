@@ -1,4 +1,5 @@
 export type Status = "Em dia" | "Atenção" | "Crítico";
+export type Severity = "Crítico" | "Atenção";
 
 export type Department = {
   name: string;
@@ -10,187 +11,310 @@ export type Department = {
   metricLabel: string;
   trend: string;
   icon: string;
+  openRequests: number;
+  overdueRequests: number;
+  nextAction: string;
+  citizenImpact: string;
+  relatedAreas?: string;
 };
 
+export type Priority = {
+  level: Severity;
+  title: string;
+  description: string;
+  department: string;
+  owner: string;
+  reference: string;
+  action: string;
+  impact: string;
+};
+
+export const municipalityProfile = {
+  name: "Pitangueiras",
+  state: "Paraná",
+  population: 3000,
+  referenceDate: "19 de novembro de 2026",
+  scenarioNote:
+    "Cenário demonstrativo fictício para município de pequeno porte.",
+};
+
+// Solicitações administrativas registradas no painel: 36 abertas e 7 fora do prazo.
+// A fila de encaminhamentos clínicos é outro conjunto e não entra nessa soma.
 export const departments: Department[] = [
   {
     name: "Administração e Finanças",
     shortName: "Administração",
     area: "Gestão interna",
     status: "Em dia",
-    summary: "Processos administrativos dentro do ritmo esperado.",
-    metric: "92%",
-    metricLabel: "processos no prazo",
-    trend: "+4% neste mês",
+    summary: "A rotina financeira está dentro do cronograma do mês.",
+    metric: "R$ 30,3 mi",
+    metricLabel: "receita recebida até 31/out",
+    trend: "R$ 750 mil abaixo do previsto no período",
     icon: "AF",
+    openRequests: 3,
+    overdueRequests: 0,
+    nextAction:
+      "Acompanhar a previsão de receita e a execução das despesas no fechamento mensal.",
+    citizenImpact:
+      "Antecipar diferenças entre a receita prevista e recebida ajuda a proteger a continuidade dos serviços básicos.",
   },
   {
     name: "Agricultura e Meio Ambiente",
     shortName: "Agricultura e Meio Ambiente",
     area: "Desenvolvimento rural",
     status: "Atenção",
-    summary: "Há solicitações rurais aguardando encaminhamento.",
-    metric: "18",
-    metricLabel: "solicitações abertas",
-    trend: "6 há mais de 7 dias",
+    summary: "Dois pedidos de atendimento rural passaram do prazo combinado.",
+    metric: "4",
+    metricLabel: "solicitações em aberto",
+    trend: "2 aguardam retorno há mais de 10 dias",
     icon: "AM",
+    openRequests: 4,
+    overdueRequests: 2,
+    nextAction:
+      "Confirmar com os produtores uma data para as duas visitas de campo pendentes.",
+    citizenImpact:
+      "Sem uma data de visita ou orientação, os produtores não conseguem planejar quando receberão o apoio solicitado.",
   },
   {
     name: "Assistência Social",
     shortName: "Assistência Social",
     area: "Proteção social",
     status: "Em dia",
-    summary: "Acompanhamentos prioritários estão atualizados.",
-    metric: "96%",
-    metricLabel: "acompanhamentos em dia",
-    trend: "+2% neste mês",
+    summary: "Os atendimentos prioritários do CRAS estão atualizados.",
+    metric: "64",
+    metricLabel: "atendimentos registrados em outubro",
+    trend: "3 solicitações administrativas em aberto",
     icon: "AS",
+    openRequests: 3,
+    overdueRequests: 0,
+    nextAction: "Manter o acompanhamento das famílias com retorno já agendado.",
+    citizenImpact:
+      "Retornos previsíveis reduzem deslocamentos desnecessários e ajudam as famílias a saber quando receberão atendimento.",
   },
   {
     name: "Cultura e Turismo",
     shortName: "Cultura e Turismo",
     area: "Cultura e eventos",
     status: "Em dia",
-    summary: "Agenda cultural e ações previstas em andamento.",
-    metric: "8",
-    metricLabel: "ações programadas",
-    trend: "Próximos 30 dias",
+    summary:
+      "As próximas atividades têm local e equipe responsáveis definidos.",
+    metric: "3",
+    metricLabel: "ações realizadas em outubro",
+    trend: "2 atividades previstas até o fim do ano",
     icon: "CT",
+    openRequests: 2,
+    overdueRequests: 0,
+    nextAction:
+      "Confirmar os espaços e a divulgação das duas próximas atividades.",
+    citizenImpact:
+      "Uma agenda divulgada com antecedência facilita o acesso dos moradores às atividades e evita viagens sem necessidade.",
   },
   {
     name: "Desenvolvimento Econômico",
     shortName: "Desenvolvimento Econômico",
     area: "Emprego e renda",
     status: "Atenção",
-    summary: "Atendimentos a empreendedores pedem acompanhamento.",
-    metric: "27",
-    metricLabel: "atendimentos no mês",
-    trend: "5 aguardam retorno",
+    summary: "Um pedido de orientação a pequeno negócio aguarda retorno.",
+    metric: "3",
+    metricLabel: "solicitações em aberto",
+    trend: "1 aguarda resposta há 8 dias",
     icon: "DE",
+    openRequests: 3,
+    overdueRequests: 1,
+    nextAction:
+      "Dar retorno ao empreendedor e registrar o próximo passo do atendimento.",
+    citizenImpact:
+      "Sem retorno, o empreendedor não sabe qual providência tomar nem quando poderá avançar com seu pedido.",
   },
   {
     name: "Educação",
     shortName: "Educação",
     area: "Rede de ensino",
-    status: "Em dia",
-    summary: "Frequência e calendário escolar acompanhados.",
-    metric: "94%",
-    metricLabel: "frequência registrada",
-    trend: "+1,2% neste mês",
+    status: "Crítico",
+    summary: "Um dos três micro-ônibus está parado; uma rota foi reorganizada.",
+    metric: "32 alunos",
+    metricLabel: "com rota escolar readequada",
+    trend: "Micro-ônibus 02 aguarda reparo nos freios",
     icon: "ED",
+    openRequests: 4,
+    overdueRequests: 0,
+    nextAction:
+      "Confirmar a entrega da peça e o retorno seguro do veículo antes da próxima rota.",
+    citizenImpact:
+      "A rota alternativa mantém o transporte de 32 alunos, mas precisa de acompanhamento para evitar atrasos e assegurar a continuidade do serviço.",
+    relatedAreas: "Educação + Gestão de Frota da Administração",
   },
   {
     name: "Esporte e Lazer",
     shortName: "Esporte e Lazer",
     area: "Atividades e espaços",
     status: "Em dia",
-    summary: "Atividades e manutenção dos espaços em curso.",
-    metric: "12",
-    metricLabel: "turmas ativas",
-    trend: "4 espaços atendidos",
+    summary: "As turmas mantêm atividades regulares nos espaços municipais.",
+    metric: "74",
+    metricLabel: "participantes ativos em outubro",
+    trend: "2 solicitações de rotina em aberto",
     icon: "EL",
+    openRequests: 2,
+    overdueRequests: 0,
+    nextAction:
+      "Conferir a agenda das turmas e a manutenção preventiva dos espaços.",
+    citizenImpact:
+      "A manutenção e a continuidade das turmas ajudam os moradores a usar os espaços públicos com regularidade.",
   },
   {
     name: "Obras",
     shortName: "Obras",
     area: "Infraestrutura",
     status: "Atenção",
-    summary: "Duas frentes estão próximas do prazo previsto.",
-    metric: "7",
-    metricLabel: "obras em andamento",
-    trend: "2 pedem atenção",
+    summary: "Duas ordens de serviço de manutenção rural estão atrasadas.",
+    metric: "5",
+    metricLabel: "ordens de serviço em aberto",
+    trend: "2 aguardam equipe há mais de 10 dias",
     icon: "OB",
+    openRequests: 5,
+    overdueRequests: 2,
+    nextAction:
+      "Definir a data da equipe para manutenção dos dois trechos rurais pendentes.",
+    citizenImpact:
+      "A condição das estradas pode aumentar o tempo de deslocamento de moradores e veículos de serviço.",
   },
   {
     name: "Planejamento e Urbanismo",
     shortName: "Planejamento e Urbanismo",
     area: "Planejamento urbano",
     status: "Em dia",
-    summary: "Análises e solicitações urbanísticas em andamento.",
-    metric: "89%",
-    metricLabel: "análises no prazo",
-    trend: "+3% neste mês",
+    summary: "Os processos de análise estão dentro do prazo de atendimento.",
+    metric: "7",
+    metricLabel: "processos de alvará em análise",
+    trend: "Nenhum processo vencido",
     icon: "PU",
+    openRequests: 2,
+    overdueRequests: 0,
+    nextAction:
+      "Atualizar os requerentes quando houver movimentação dos processos.",
+    citizenImpact:
+      "A atualização de cada etapa permite que moradores e comerciantes planejem obras e regularizações.",
   },
   {
     name: "Saúde e Vigilância Sanitária",
     shortName: "Saúde",
     area: "Atenção à saúde",
     status: "Atenção",
-    summary: "A fila de consultas especializadas merece acompanhamento.",
-    metric: "134",
-    metricLabel: "pessoas aguardando consulta",
-    trend: "12 há mais de 60 dias",
+    summary:
+      "Oito pessoas esperam há mais de 60 dias por consulta especializada.",
+    metric: "8 pessoas",
+    metricLabel: "na fila clínica há mais de 60 dias",
+    trend: "36 encaminhamentos clínicos aguardam consulta",
     icon: "SV",
+    openRequests: 5,
+    overdueRequests: 2,
+    nextAction:
+      "Revisar a fila por tempo de espera e confirmar novas vagas com a regulação regional.",
+    citizenImpact:
+      "A demora pode prolongar o tempo até a avaliação especializada; a secretaria precisa revisar os casos com maior espera.",
   },
   {
     name: "Segurança Pública e Trânsito",
     shortName: "Segurança e Trânsito",
     area: "Segurança e mobilidade",
     status: "Em dia",
-    summary: "Registros e ações preventivas atualizados.",
-    metric: "41",
-    metricLabel: "ações preventivas no mês",
-    trend: "+8 neste mês",
+    summary:
+      "Os registros de trânsito e as solicitações de sinalização estão atualizados.",
+    metric: "12",
+    metricLabel: "registros acompanhados em outubro",
+    trend: "3 solicitações administrativas em aberto",
     icon: "ST",
+    openRequests: 3,
+    overdueRequests: 0,
+    nextAction:
+      "Manter a ronda de sinalização nos pontos indicados pela comunidade.",
+    citizenImpact:
+      "Acompanhar pedidos de sinalização ajuda a priorizar pontos de circulação usados por pedestres e motoristas.",
   },
 ];
 
-export const priorities = [
+export const priorities: Priority[] = [
+  {
+    level: "Crítico",
+    title: "Transporte escolar com rota readequada",
+    description:
+      "O micro-ônibus 02 está parado desde 18/nov aguardando reparo nos freios. A equipe reorganizou a rota para manter o atendimento a 32 alunos.",
+    department: "Educação",
+    owner: "Educação + Gestão de Frota da Administração",
+    reference: "Registro atualizado em 19/nov, 15h20",
+    action:
+      "Cobrar a oficina antes do fechamento de hoje, às 17h. Se o reparo não estiver concluído, manter a rota alternativa amanhã.",
+    impact: "32 estudantes · 1 de 3 micro-ônibus indisponível",
+  },
   {
     level: "Atenção",
-    title: "Fila de consultas especializadas",
+    title: "Oito pessoas aguardam consulta especializada há mais de 60 dias",
     description:
-      "12 pessoas aguardam há mais de 60 dias. A secretaria pode revisar os encaminhamentos prioritários.",
+      "São 36 encaminhamentos clínicos na regulação. Essa fila é separada das 36 solicitações administrativas exibidas no cartão do município.",
     department: "Saúde e Vigilância Sanitária",
-    time: "Atualizado hoje, 09:20",
-    icon: "heart",
+    owner: "Regulação da Secretaria de Saúde",
+    reference: "Posição simulada em 19/nov",
+    action:
+      "Revisar os oito casos com maior espera e confirmar a próxima oferta de vagas regionais.",
+    impact: "8 pessoas na faixa de maior espera",
   },
   {
     level: "Atenção",
-    title: "Solicitações rurais sem retorno",
+    title: "Dois trechos rurais aguardam manutenção",
     description:
-      "6 pedidos de apoio à agricultura estão abertos há mais de uma semana.",
-    department: "Agricultura e Meio Ambiente",
-    time: "Atualizado ontem, 16:45",
-    icon: "sprout",
-  },
-  {
-    level: "Acompanhamento",
-    title: "Duas obras próximas do prazo",
-    description:
-      "As equipes podem atualizar a previsão e informar se precisam de apoio.",
+      "Duas ordens de serviço estão abertas há mais de 10 dias. As equipes ainda não registraram data prevista para atendimento.",
     department: "Obras",
-    time: "Atualizado ontem, 14:10",
-    icon: "building",
+    owner: "Secretaria de Obras",
+    reference: "Ordens de serviço atualizadas em 19/nov, 14h10",
+    action: "Informar a sequência da equipe e uma previsão para cada trecho.",
+    impact: "2 ordens de serviço fora do prazo",
+  },
+  {
+    level: "Atenção",
+    title: "Dois pedidos de visita rural aguardam resposta",
+    description:
+      "As solicitações de orientação aos produtores estão abertas há mais de 10 dias sem data combinada para visita.",
+    department: "Agricultura e Meio Ambiente",
+    owner: "Equipe de atendimento rural",
+    reference: "Solicitações atualizadas em 19/nov, 13h40",
+    action:
+      "Agendar as visitas ou informar aos solicitantes quando serão atendidos.",
+    impact: "2 solicitações vencidas",
+  },
+  {
+    level: "Atenção",
+    title: "Empreendedor aguarda retorno da prefeitura",
+    description:
+      "Um pedido de orientação para pequeno negócio está sem resposta há oito dias.",
+    department: "Desenvolvimento Econômico",
+    owner: "Secretaria de Desenvolvimento Econômico",
+    reference: "Atendimento atualizado em 19/nov, 11h05",
+    action: "Registrar responsável pelo retorno e a providência combinada.",
+    impact: "1 solicitação vencida",
   },
 ];
 
-export const highlights = [
-  {
-    label: "Serviços no prazo",
-    value: "87%",
-    change: "+5%",
-    helper: "em relação ao mês anterior",
-    tone: "green",
-    points: [42, 48, 45, 58, 56, 68, 72, 69, 81, 77, 87, 88],
-  },
-  {
-    label: "Pedidos que precisam de atenção",
-    value: "23",
-    change: "−8",
-    helper: "menos que no mês anterior",
-    tone: "amber",
-    points: [70, 64, 68, 56, 59, 50, 54, 43, 49, 40, 34, 30],
-  },
-  {
-    label: "Atendimentos realizados",
-    value: "1.284",
-    change: "+12%",
-    helper: "em relação ao mês anterior",
-    tone: "blue",
-    points: [36, 40, 48, 44, 55, 61, 58, 68, 70, 78, 75, 88],
-  },
-];
+export const municipalitySnapshot = {
+  previousMonthOpenRequests: 42,
+  schoolBusesAvailable: 2,
+  schoolBusesTotal: 3,
+  studentsAffectedByTransportChange: 32,
+  specialtyReferralsWaiting: 36,
+  specialtyReferralsOver60Days: 8,
+  primaryCareVisitsOctober: 1126,
+  studentsEnrolled: 418,
+  schoolAttendanceOctoberPercent: 94.2,
+};
 
-export const lastUpdated = "20 de novembro de 2026, às 09:40";
+export const financialPosition = {
+  fiscalYear: 2026,
+  annualBudgetMillions: 37.2,
+  revenueReceivedMillions: 30.3,
+  revenuePlannedThroughOctoberMillions: 31.05,
+  expenditureCommittedMillions: 27.5,
+  expenditurePaidMillions: 23.8,
+  referenceDate: "31/out/2026",
+  updatedDate: "4/nov/2026",
+};
+
+export const lastUpdated = "19 de novembro de 2026, às 16:40";
