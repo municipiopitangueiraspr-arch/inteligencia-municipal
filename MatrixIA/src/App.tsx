@@ -69,6 +69,10 @@ import {
   initialHealthDiagnostics,
   type HealthDiagnosticsDataset,
 } from "./data/healthDiagnostics";
+import {
+  initialHealthSanitary,
+  type HealthSanitaryDataset,
+} from "./data/healthSanitary";
 
 type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -101,6 +105,9 @@ function App() {
     useState<HealthReferralsDataset>(initialHealthReferrals);
   const [healthDiagnostics, setHealthDiagnostics] =
     useState<HealthDiagnosticsDataset>(initialHealthDiagnostics);
+  const [healthSanitary, setHealthSanitary] = useState<HealthSanitaryDataset>(
+    initialHealthSanitary,
+  );
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -139,7 +146,8 @@ function App() {
                 ? `Revisar os ${clinicalReferralSummary.waitingOver60Days} casos com maior tempo de espera e confirmar ofertas regionais.`
                 : "Acompanhar a fila e confirmar ofertas de vagas com a regulação regional.",
             impact: `${clinicalReferralSummary.waiting} encaminhamentos clínicos em acompanhamento`,
-            reference: "Situação derivada dos encaminhamentos demonstrativos em memória",
+            reference:
+              "Situação derivada dos encaminhamentos demonstrativos em memória",
           },
         ];
       }),
@@ -406,6 +414,8 @@ function App() {
         onHealthReferralsChange={setHealthReferrals}
         healthDiagnostics={healthDiagnostics}
         onHealthDiagnosticsChange={setHealthDiagnostics}
+        healthSanitary={healthSanitary}
+        onHealthSanitaryChange={setHealthSanitary}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}
@@ -837,7 +847,9 @@ function App() {
                       <h2>O que pede atenção hoje</h2>
                     </div>
                     <span className="priority-counter">
-                      {referralAwarePriorities.length.toString().padStart(2, "0")} {" "}
+                      {referralAwarePriorities.length
+                        .toString()
+                        .padStart(2, "0")}{" "}
                       <span>pontos</span>
                     </span>
                   </div>

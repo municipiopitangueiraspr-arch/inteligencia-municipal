@@ -1,4 +1,11 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   Activity,
   ArrowRight,
@@ -13,6 +20,7 @@ import {
   LogOut,
   MapPinned,
   MapPin,
+  ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import {
@@ -45,6 +53,11 @@ import HealthExamsProceduresModule from "./HealthExamsProceduresModule";
 import type { HealthDiagnosticsDataset } from "../data/healthDiagnostics";
 import PeopleFamiliesDomicilesModule from "./PeopleFamiliesDomicilesModule";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
+import type { HealthSanitaryDataset } from "../data/healthSanitary";
+
+const HealthSanitarySurveillanceModule = lazy(
+  () => import("./HealthSanitarySurveillanceModule"),
+);
 
 export type Experience = "mayor" | "secretary" | "operator";
 
@@ -70,6 +83,10 @@ type WorkspaceProps = {
   healthDiagnostics: HealthDiagnosticsDataset;
   onHealthDiagnosticsChange: (
     update: (current: HealthDiagnosticsDataset) => HealthDiagnosticsDataset,
+  ) => void;
+  healthSanitary: HealthSanitaryDataset;
+  onHealthSanitaryChange: (
+    update: (current: HealthSanitaryDataset) => HealthSanitaryDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -160,7 +177,8 @@ const departmentModules: Record<string, string[]> = {
     "Agenda e atendimentos",
     "Visitas e procedimentos",
     "Encaminhamentos e regulação",
-    "Vigilância e inspeções",
+    "Estabelecimentos e licenciamento",
+    "Inspeções, providências e retornos",
   ],
   "Segurança Pública e Trânsito": [
     "Ocorrências e solicitações",
@@ -391,6 +409,52 @@ const operatorPersonas: Persona[] = [
       },
     ],
   },
+  {
+    id: "visa",
+    label: "Fiscal da Vigilância Sanitária",
+    unit: "Vigilância Sanitária · cenário demonstrativo",
+    description:
+      "Cadastro local de estabelecimentos, agenda fictícia de inspeções e acompanhamento de providências.",
+    modules: [
+      "Estabelecimentos e licenciamento",
+      "Inspeções demonstrativas",
+      "Providências e retornos",
+    ],
+    fields: [
+      {
+        label: "Estabelecimento",
+        placeholder: "Ex.: estabelecimento sintético SIM-VSA-EST-001",
+      },
+      {
+        label: "Atividade e localidade",
+        placeholder: "Atividade declarada e endereço fictício",
+      },
+      {
+        label: "Inspeção ou etapa",
+        placeholder: "Ex.: retorno demonstrativo programado",
+      },
+      {
+        label: "Providência e prazo",
+        placeholder: "Nota e data de referência",
+      },
+    ],
+    tasks: [
+      {
+        id: "SIM-VSA-INS-002",
+        title: "Acompanhar providência demonstrativa",
+        time: "10h00 · Estabelecimento sintético",
+        source:
+          "Inspeção fictícia SIM-VSA-INS-002 → histórico e prazo de referência",
+      },
+      {
+        id: "SIM-VSA-INS-003",
+        title: "Preparar retorno da agenda demonstrativa",
+        time: "14h00 · Setor fictício",
+        source:
+          "Inspeção fictícia SIM-VSA-INS-003 → estabelecimento SIM-VSA-EST-003",
+      },
+    ],
+  },
 ];
 
 type LocalEntry = {
@@ -420,6 +484,8 @@ export default function OperationalWorkspace({
   onHealthReferralsChange,
   healthDiagnostics,
   onHealthDiagnosticsChange,
+  healthSanitary,
+  onHealthSanitaryChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -440,17 +506,18 @@ export default function OperationalWorkspace({
     | "health-activities"
     | "health-referrals"
     | "health-diagnostics"
+    | "health-sanitary"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
   const [healthReferralOpen, setHealthReferralOpen] = useState(false);
   const [healthDiagnosticsOpen, setHealthDiagnosticsOpen] = useState(false);
+  const [healthSanitaryOpen, setHealthSanitaryOpen] = useState(false);
   const [diagnosticsSourceServiceId, setDiagnosticsSourceServiceId] = useState<
     string | undefined
   >();
-  const [diagnosticsSourceReferralId, setDiagnosticsSourceReferralId] = useState<
-    string | undefined
-  >();
+  const [diagnosticsSourceReferralId, setDiagnosticsSourceReferralId] =
+    useState<string | undefined>();
   const [diagnosticsReturnTab, setDiagnosticsReturnTab] = useState<
     "services" | "health-activities" | "health-referrals"
   >("services");
@@ -507,6 +574,7 @@ export default function OperationalWorkspace({
   )
     ? (selectedPersona.id as HealthOperatorPersona)
     : undefined;
+  const sanitaryOperator = selectedPersona.id === "visa";
   const openHealthRegulation = (serviceRecordId?: string) => {
     setReferralSourceServiceId(serviceRecordId);
     if (isSecretary) {
@@ -736,6 +804,7 @@ export default function OperationalWorkspace({
                 setHealthWorkflowOpen(false);
                 setHealthReferralOpen(false);
                 setHealthDiagnosticsOpen(false);
+                setHealthSanitaryOpen(false);
                 setReferralSourceServiceId(undefined);
                 setDiagnosticsSourceServiceId(undefined);
                 setDiagnosticsSourceReferralId(undefined);
@@ -864,7 +933,11 @@ export default function OperationalWorkspace({
                     <ArrowRight size={14} /> Encaminhamentos e Regulação
                   </button>
                   <button
-                    className={activeSecretaryTab === "health-diagnostics" ? "active" : ""}
+                    className={
+                      activeSecretaryTab === "health-diagnostics"
+                        ? "active"
+                        : ""
+                    }
                     onClick={() => {
                       setDiagnosticsReturnTab("services");
                       setDiagnosticsSourceServiceId(undefined);
@@ -872,7 +945,16 @@ export default function OperationalWorkspace({
                       setActiveSecretaryTab("health-diagnostics");
                     }}
                   >
-                    <ClipboardPlus size={14} /> Exames, Procedimentos e Resultados
+                    <ClipboardPlus size={14} /> Exames, Procedimentos e
+                    Resultados
+                  </button>
+                  <button
+                    className={
+                      activeSecretaryTab === "health-sanitary" ? "active" : ""
+                    }
+                    onClick={() => setActiveSecretaryTab("health-sanitary")}
+                  >
+                    <ShieldCheck size={14} /> Vigilância Sanitária
                   </button>
                 </>
               )}
@@ -1052,7 +1134,8 @@ export default function OperationalWorkspace({
                         <strong>Visitas e Atendimentos</strong>
                         <small>
                           Roteiros de ACS/ACE, registros da UBS, resultados,
-                          retornos e histórico vinculados ao cadastro territorial.
+                          retornos e histórico vinculados ao cadastro
+                          territorial.
                         </small>
                       </span>
                       <span className="health-module-launch-action">
@@ -1097,7 +1180,28 @@ export default function OperationalWorkspace({
                       <span className="health-module-launch-copy">
                         <strong>Exames, Procedimentos e Resultados</strong>
                         <small>
-                          Pedidos clínicos vinculados a pessoas e eventos existentes, com agenda, execução, resultados e histórico.
+                          Pedidos clínicos vinculados a pessoas e eventos
+                          existentes, com agenda, execução, resultados e
+                          histórico.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => setActiveSecretaryTab("health-sanitary")}
+                    >
+                      <span className="health-module-launch-icon">
+                        <ShieldCheck size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Vigilância Sanitária</strong>
+                        <small>
+                          Estabelecimentos, acompanhamento local de licenças,
+                          inspeções, providências e retornos demonstrativos.
                         </small>
                       </span>
                       <span className="health-module-launch-action">
@@ -1182,6 +1286,23 @@ export default function OperationalWorkspace({
                     setDiagnosticsSourceReferralId(undefined);
                   }}
                 />
+              )}
+            {activeSecretaryTab === "health-sanitary" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <Suspense
+                  fallback={
+                    <div className="workspace-cross-area" role="status">
+                      <strong>Carregando Vigilância Sanitária...</strong>
+                    </div>
+                  }
+                >
+                  <HealthSanitarySurveillanceModule
+                    mode="secretary"
+                    dataset={healthSanitary}
+                    onChange={onHealthSanitaryChange}
+                    onBack={() => setActiveSecretaryTab("services")}
+                  />
+                </Suspense>
               )}
             {activeSecretaryTab === "records" && (
               <div className="secretary-records-page">
@@ -1280,11 +1401,16 @@ export default function OperationalWorkspace({
                 className="workspace-primary-button"
                 onClick={() => {
                   if (healthOperatorPersona) setHealthWorkflowOpen(true);
+                  else if (sanitaryOperator) setHealthSanitaryOpen(true);
                   else setEntryOpen(true);
                 }}
               >
                 <FilePlus2 size={16} />
-                {healthOperatorPersona ? "Abrir módulo de Saúde" : "Registrar atividade"}
+                {healthOperatorPersona
+                  ? "Abrir módulo de Saúde"
+                  : sanitaryOperator
+                    ? "Abrir módulo de Vigilância Sanitária"
+                    : "Registrar atividade"}
               </button>
               {healthOperatorPersona === "ubs" && (
                 <button
@@ -1361,11 +1487,28 @@ export default function OperationalWorkspace({
                 onBack={() => {
                   setHealthDiagnosticsOpen(false);
                   if (diagnosticsSourceReferralId) setHealthReferralOpen(true);
-                  else if (diagnosticsSourceServiceId) setHealthWorkflowOpen(true);
+                  else if (diagnosticsSourceServiceId)
+                    setHealthWorkflowOpen(true);
                   setDiagnosticsSourceServiceId(undefined);
                   setDiagnosticsSourceReferralId(undefined);
                 }}
               />
+            )}
+            {healthSanitaryOpen && sanitaryOperator && (
+              <Suspense
+                fallback={
+                  <div className="workspace-cross-area" role="status">
+                    <strong>Carregando Vigilância Sanitária...</strong>
+                  </div>
+                }
+              >
+                <HealthSanitarySurveillanceModule
+                  mode="operator"
+                  dataset={healthSanitary}
+                  onChange={onHealthSanitaryChange}
+                  onBack={() => setHealthSanitaryOpen(false)}
+                />
+              </Suspense>
             )}
             {latestProtocol && (
               <div className="request-confirmation" role="status">
@@ -1449,7 +1592,10 @@ export default function OperationalWorkspace({
                       </p>
                       <button
                         onClick={() => {
-                          if (healthOperatorPersona) setHealthWorkflowOpen(true);
+                          if (healthOperatorPersona)
+                            setHealthWorkflowOpen(true);
+                          else if (sanitaryOperator)
+                            setHealthSanitaryOpen(true);
                           else setEntryOpen(true);
                         }}
                       >

@@ -1,0 +1,757 @@
+.health-sanitary-module {
+  margin-top: 24px;
+  padding: 23px;
+  border: 1px solid #dfe7eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(19, 50, 67, 0.045);
+  color: var(--ink, #1d3544);
+}
+
+.sanitary-header,
+.sanitary-header-actions,
+.sanitary-record-title,
+.sanitary-record-meta,
+.sanitary-form-actions,
+.sanitary-detail-heading,
+.sanitary-section-title,
+.sanitary-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sanitary-header {
+  align-items: flex-start;
+  margin-bottom: 17px;
+}
+.sanitary-header h2 {
+  margin: 6px 0 5px;
+  color: var(--navy, #102e40);
+  font:
+    800 23px/1.2 Manrope,
+    sans-serif;
+  letter-spacing: -0.55px;
+}
+.sanitary-header p {
+  max-width: 760px;
+  margin: 0;
+  color: #6c808a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.sanitary-eyebrow,
+.sanitary-list-heading > div > span,
+.sanitary-section-title > div > span {
+  display: block;
+  color: #547181;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.sanitary-header-actions {
+  flex: 0 0 auto;
+}
+.sanitary-primary,
+.sanitary-secondary,
+.sanitary-open,
+.sanitary-clear,
+.sanitary-back-link,
+.sanitary-link-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.sanitary-primary {
+  background: #176a91;
+  color: #fff;
+}
+.sanitary-primary:hover {
+  background: #0d5578;
+  transform: translateY(-1px);
+}
+.sanitary-secondary,
+.sanitary-back-link {
+  border-color: #dce6ea;
+  background: #fff;
+  color: #365565;
+}
+.sanitary-secondary:hover,
+.sanitary-back-link:hover {
+  border-color: #b7ccd5;
+  background: #f4f8fa;
+}
+.sanitary-back-link {
+  min-height: 33px;
+  margin-bottom: 14px;
+  padding: 0 10px;
+}
+.sanitary-demo-note,
+.sanitary-origin-note,
+.sanitary-terminal-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #c9dfe8;
+  border-radius: 9px;
+  background: #edf6fa;
+  color: #24536a;
+}
+.sanitary-demo-note {
+  margin-bottom: 16px;
+}
+.sanitary-demo-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.sanitary-demo-note p,
+.sanitary-origin-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sanitary-origin-note {
+  display: block;
+  margin-top: 16px;
+}
+.sanitary-origin-note strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.sanitary-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+  padding: 10px 12px;
+  border: 1px solid #b7dfcd;
+  border-radius: 8px;
+  background: #e5f6ec;
+  color: #176b43;
+  font-size: 12px;
+  font-weight: 700;
+}
+.sanitary-tabs {
+  display: flex;
+  gap: 7px;
+  margin: 12px 0 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e6ecef;
+}
+.sanitary-tabs button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #607783;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sanitary-tabs button:hover {
+  background: #f2f7f9;
+}
+.sanitary-tabs button.active {
+  background: #e9f4f8;
+  color: #176a91;
+}
+.sanitary-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 17px 0 20px;
+}
+.sanitary-metric-grid button {
+  min-height: 103px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #607783;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.sanitary-metric-grid button:hover {
+  transform: translateY(-1px);
+  border-color: #a8c9d8;
+}
+.sanitary-metric-grid button span {
+  font-size: 11px;
+  font-weight: 700;
+}
+.sanitary-metric-grid button strong {
+  color: #173c51;
+  font:
+    800 25px/1 Manrope,
+    sans-serif;
+}
+.sanitary-metric-grid button small {
+  color: #7b8d95;
+  font-size: 10px;
+}
+.sanitary-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.sanitary-overview-card {
+  padding: 16px;
+  border: 1px solid #e3eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+.sanitary-section-title {
+  justify-content: flex-start;
+  color: #176a91;
+}
+.sanitary-section-title > svg {
+  flex: 0 0 auto;
+}
+.sanitary-section-title h3 {
+  margin: 4px 0 0;
+  color: #173c51;
+  font:
+    750 16px/1.25 Manrope,
+    sans-serif;
+}
+.sanitary-section-title h4 {
+  margin: 4px 0 0;
+  color: #173c51;
+  font:
+    750 15px/1.25 Manrope,
+    sans-serif;
+}
+.sanitary-overview-card > p {
+  min-height: 52px;
+  margin: 13px 0;
+  color: #6c808a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.sanitary-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #176a91;
+}
+.sanitary-link-button:hover {
+  color: #0d5578;
+}
+.sanitary-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0 18px;
+}
+.sanitary-filters label {
+  min-height: 37px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid #dfe7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #70838d;
+}
+.sanitary-filters select,
+.sanitary-filters input {
+  max-width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #355464;
+  font: inherit;
+  font-size: 11px;
+}
+.sanitary-search {
+  flex: 1 1 260px;
+}
+.sanitary-search input {
+  width: 100%;
+  min-width: 120px;
+}
+.sanitary-clear {
+  min-height: 35px;
+  border-color: #dce6ea;
+  background: #fff;
+  color: #365565;
+}
+.sanitary-list-heading {
+  margin: 15px 0 10px;
+}
+.sanitary-list-heading h3 {
+  margin: 4px 0 0;
+  color: #173c51;
+  font:
+    750 17px/1.2 Manrope,
+    sans-serif;
+}
+.sanitary-list-heading > span {
+  color: #71858f;
+  font-size: 11px;
+}
+.sanitary-record-list {
+  display: grid;
+  gap: 9px;
+}
+.sanitary-record-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #e3eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+.sanitary-record-main {
+  min-width: 0;
+  flex: 1;
+}
+.sanitary-record-title {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.sanitary-record-title > strong {
+  color: #193e52;
+  font-size: 13px;
+}
+.sanitary-record-main > p {
+  margin: 6px 0 7px;
+  color: #627986;
+  font-size: 11px;
+}
+.sanitary-record-main > p > span {
+  color: #8698a0;
+}
+.sanitary-record-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  color: #71858f;
+  font-size: 10px;
+}
+.sanitary-record-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sanitary-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+}
+.status-amber {
+  background: #fff3d9;
+  color: #936312;
+}
+.status-red {
+  background: #fde6e4;
+  color: #a63831;
+}
+.status-blue {
+  background: #e5f2f8;
+  color: #176a91;
+}
+.status-green {
+  background: #e4f5eb;
+  color: #1c7149;
+}
+.sanitary-open {
+  flex: 0 0 auto;
+  border-color: #dce6ea;
+  background: #fff;
+  color: #176a91;
+}
+.sanitary-open:hover {
+  border-color: #a8c9d8;
+  background: #f3f9fb;
+}
+.sanitary-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  border: 1px dashed #ccd9df;
+  border-radius: 10px;
+  color: #6e838d;
+  text-align: center;
+}
+.sanitary-empty > svg {
+  color: #5d8da2;
+}
+.sanitary-empty strong {
+  color: #244758;
+  font-size: 13px;
+}
+.sanitary-empty p {
+  max-width: 440px;
+  margin: 0 0 5px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sanitary-form-view,
+.sanitary-detail-view {
+  padding: 5px 0;
+}
+.sanitary-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+.sanitary-section-heading h3 {
+  margin: 5px 0;
+  color: #173c51;
+  font:
+    780 19px/1.25 Manrope,
+    sans-serif;
+}
+.sanitary-section-heading p {
+  margin: 0;
+  color: #70838d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sanitary-section-heading > svg {
+  color: #176a91;
+}
+.sanitary-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fbfdfe;
+}
+.sanitary-form label,
+.sanitary-update-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #3c5d6d;
+  font-size: 11px;
+  font-weight: 700;
+}
+.sanitary-form label > span,
+.sanitary-update-form label > span {
+  color: #b0443e;
+}
+.sanitary-form input,
+.sanitary-form select,
+.sanitary-update-form input,
+.sanitary-update-form select,
+.sanitary-update-form textarea {
+  width: 100%;
+  min-height: 37px;
+  padding: 8px 10px;
+  border: 1px solid #dce6ea;
+  border-radius: 7px;
+  background: #fff;
+  color: #28495a;
+  font: inherit;
+  font-size: 12px;
+}
+.sanitary-update-form textarea {
+  resize: vertical;
+}
+.sanitary-form input:focus,
+.sanitary-form select:focus,
+.sanitary-update-form input:focus,
+.sanitary-update-form select:focus,
+.sanitary-update-form textarea:focus {
+  outline: 2px solid #b6dce9;
+  border-color: #71a9bf;
+}
+.sanitary-form small {
+  color: #7d9098;
+  font-size: 10px;
+  font-weight: 500;
+}
+.sanitary-field-wide,
+.sanitary-error,
+.sanitary-form-actions {
+  grid-column: 1 / -1;
+}
+.sanitary-form-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.sanitary-error {
+  margin: 0;
+  color: #a63831;
+  font-size: 11px;
+  font-weight: 700;
+}
+.sanitary-detail-heading {
+  align-items: flex-start;
+  margin: 10px 0 16px;
+}
+.sanitary-detail-heading h3 {
+  margin: 5px 0 4px;
+  color: #173c51;
+  font:
+    800 21px/1.25 Manrope,
+    sans-serif;
+}
+.sanitary-detail-heading p {
+  margin: 0;
+  color: #6c808a;
+  font-size: 12px;
+}
+.sanitary-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 15px;
+}
+.sanitary-detail-grid > article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e4eaed;
+  border-radius: 8px;
+  background: #fbfdfe;
+}
+.sanitary-detail-grid > article > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #71858f;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sanitary-detail-grid > article > strong {
+  color: #27495a;
+  font-size: 12px;
+}
+.sanitary-detail-grid > article > small {
+  display: block;
+  margin-top: 4px;
+  color: #83949c;
+  font-size: 10px;
+}
+.sanitary-detail-grid > article > p {
+  margin: 0;
+  color: #385866;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sanitary-detail-wide {
+  grid-column: 1 / -1;
+}
+.sanitary-linked-inspections {
+  display: grid;
+  gap: 6px;
+}
+.sanitary-linked-inspections button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #dce6ea;
+  border-radius: 7px;
+  background: #fff;
+  color: #176a91;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.sanitary-linked-inspections p {
+  margin: 0;
+  color: #71858f;
+  font-size: 11px;
+}
+.sanitary-update-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  margin: 16px 0;
+  padding: 15px;
+  border: 1px solid #dfe7eb;
+  border-radius: 10px;
+  background: #f8fbfc;
+}
+.sanitary-update-form .sanitary-section-heading,
+.sanitary-update-form > button,
+.sanitary-update-form > small {
+  grid-column: 1 / -1;
+}
+.sanitary-update-form > small {
+  color: #778b94;
+  font-size: 10px;
+}
+.sanitary-update-form > button {
+  justify-self: start;
+}
+.sanitary-history {
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+}
+.sanitary-history .sanitary-section-title {
+  justify-content: flex-start;
+  margin-bottom: 13px;
+}
+.sanitary-history ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sanitary-history li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  padding: 0 0 13px;
+}
+.sanitary-history li:not(:last-child)::before {
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  background: #d8e4e9;
+  content: "";
+}
+.sanitary-history-dot {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid #5c97b0;
+  border-radius: 50%;
+  background: #fff;
+}
+.sanitary-history li strong {
+  color: #294b5a;
+  font-size: 11px;
+}
+.sanitary-history li p {
+  margin: 3px 0;
+  color: #637a85;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.sanitary-history li small {
+  color: #82949c;
+  font-size: 9px;
+}
+.sanitary-terminal-note {
+  align-items: center;
+  margin: 12px 0;
+  border-color: #b9dfcb;
+  background: #eaf7ef;
+  color: #246743;
+}
+.sanitary-terminal-note p {
+  margin: 0;
+  font-size: 11px;
+}
+.sanitary-footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #e8edef;
+  color: #7c8f97;
+  font-size: 10px;
+}
+.sanitary-footer span {
+  color: #b0bdc2;
+}
+
+@media (max-width: 900px) {
+  .sanitary-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .health-sanitary-module {
+    padding: 15px;
+  }
+  .sanitary-header,
+  .sanitary-detail-heading {
+    flex-direction: column;
+  }
+  .sanitary-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .sanitary-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .sanitary-record-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .sanitary-open {
+    align-self: flex-end;
+  }
+  .sanitary-form,
+  .sanitary-detail-grid,
+  .sanitary-update-form {
+    grid-template-columns: 1fr;
+  }
+  .sanitary-field-wide,
+  .sanitary-error,
+  .sanitary-form-actions,
+  .sanitary-update-form .sanitary-section-heading,
+  .sanitary-update-form > button,
+  .sanitary-update-form > small {
+    grid-column: 1;
+  }
+  .sanitary-tabs {
+    overflow-x: auto;
+  }
+  .sanitary-tabs button {
+    flex: 0 0 auto;
+  }
+  .sanitary-filters label {
+    flex: 1 1 100%;
+  }
+  .sanitary-filters label select {
+    width: 100%;
+  }
+  .sanitary-list-heading {
+    align-items: flex-start;
+  }
+  .sanitary-footer {
+    flex-wrap: wrap;
+  }
+}
