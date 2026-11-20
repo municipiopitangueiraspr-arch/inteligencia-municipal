@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   Building2,
   CalendarDays,
@@ -569,6 +570,8 @@ export default function OperationalWorkspace({
     [clinicalReferralSummary, selectedDepartment.name],
   );
   const isSecretary = experience === "secretary";
+  const isHealthDepartment =
+    selectedDepartment.name === "Saúde e Vigilância Sanitária";
   const healthOperatorPersona = (["acs", "ace", "ubs"] as const).includes(
     selectedPersona.id as HealthOperatorPersona,
   )
@@ -766,7 +769,11 @@ export default function OperationalWorkspace({
                   }
                   onClick={() => {
                     setSelectedDepartment(department);
-                    setActiveSecretaryTab("overview");
+                    setActiveSecretaryTab(
+                      department.name === "Saúde e Vigilância Sanitária"
+                        ? "services"
+                        : "overview",
+                    );
                   }}
                 >
                   <span
@@ -860,15 +867,26 @@ export default function OperationalWorkspace({
                 <h1>{selectedDepartment.name}</h1>
                 <p>{selectedDepartmentSummary.summary}</p>
               </div>
-              <button
-                className="workspace-primary-button"
-                onClick={() => setActiveSecretaryTab("requests")}
-              >
-                <ClipboardList size={16} /> Ver solicitações
-              </button>
+              {!isHealthDepartment && (
+                <button
+                  className="workspace-primary-button"
+                  onClick={() => setActiveSecretaryTab("requests")}
+                >
+                  <ClipboardList size={16} /> Ver solicitações
+                </button>
+              )}
             </div>
+            {isHealthDepartment && activeSecretaryTab !== "services" && (
+              <button
+                type="button"
+                className="health-secretary-hub-back"
+                onClick={() => setActiveSecretaryTab("services")}
+              >
+                <ArrowLeft size={15} /> Voltar aos módulos e serviços
+              </button>
+            )}
             <div
-              className="workspace-tabs"
+              className={`workspace-tabs${isHealthDepartment ? " workspace-tabs-hidden" : ""}`}
               role="tablist"
               aria-label="Seções da secretaria"
             >
@@ -1060,164 +1078,235 @@ export default function OperationalWorkspace({
                   <div>
                     <span>CATÁLOGO OPERACIONAL</span>
                     <h2>
-                      Serviços e módulos de {selectedDepartment.shortName}
+                      {isHealthDepartment
+                        ? "Módulos e serviços da Secretaria de Saúde"
+                        : `Serviços e módulos de ${selectedDepartment.shortName}`}
                     </h2>
                   </div>
                   <span className="workspace-count">
-                    {secretariatAreas.length} áreas
+                    {isHealthDepartment
+                      ? "9 acessos"
+                      : `${secretariatAreas.length} áreas`}
                   </span>
                 </div>
-                <div className="service-module-grid">
-                  {secretariatAreas.map((area, index) => (
-                    <article className="service-module-card" key={area}>
-                      <span className="service-module-number">
-                        0{index + 1}
-                      </span>
-                      <h3>{area}</h3>
-                      <p>
-                        Rotina municipal demonstrativa, com cadastros, tarefas,
-                        histórico e relatórios ligados à área.
-                      </p>
-                      <span>ÁREA PREVISTA NA PLATAFORMA</span>
-                    </article>
-                  ))}
-                </div>
-                {selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                {!isHealthDepartment && (
+                  <div className="service-module-grid">
+                    {secretariatAreas.map((area, index) => (
+                      <article className="service-module-card" key={area}>
+                        <span className="service-module-number">
+                          0{index + 1}
+                        </span>
+                        <h3>{area}</h3>
+                        <p>
+                          Rotina municipal demonstrativa, com cadastros,
+                          tarefas, histórico e relatórios ligados à área.
+                        </p>
+                        <span>ÁREA PREVISTA NA PLATAFORMA</span>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                {isHealthDepartment && (
                   <>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => setActiveSecretaryTab("territory")}
-                    >
-                      <span className="health-module-launch-icon">
-                        <MapPinned size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Território, Unidades e Equipes</strong>
-                        <small>
-                          Mapa demonstrativo, áreas de atuação e cadastros
-                          relacionados da rede municipal de saúde.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => setActiveSecretaryTab("people")}
-                    >
-                      <span className="health-module-launch-icon">
-                        <UsersRound size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Pessoas, Famílias e Domicílios</strong>
-                        <small>
-                          Cadastro municipal fictício de referência, relações
-                          familiares, endereços compartilhados e mapa agregado.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => setActiveSecretaryTab("health-activities")}
-                    >
-                      <span className="health-module-launch-icon">
-                        <Activity size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Visitas e Atendimentos</strong>
-                        <small>
-                          Roteiros de ACS/ACE, registros da UBS, resultados,
-                          retornos e histórico vinculados ao cadastro
-                          territorial.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => {
-                        setReferralSourceServiceId(undefined);
-                        setActiveSecretaryTab("health-referrals");
-                      }}
-                    >
-                      <span className="health-module-launch-icon">
-                        <Activity size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Encaminhamentos e Regulação</strong>
-                        <small>
-                          Fila clínica demonstrativa, tempo de espera, ofertas,
-                          agendamentos, desfechos e histórico do pedido.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => {
-                        setDiagnosticsReturnTab("services");
-                        setDiagnosticsSourceServiceId(undefined);
-                        setDiagnosticsSourceReferralId(undefined);
-                        setActiveSecretaryTab("health-diagnostics");
-                      }}
-                    >
-                      <span className="health-module-launch-icon">
-                        <ClipboardPlus size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Exames, Procedimentos e Resultados</strong>
-                        <small>
-                          Pedidos clínicos vinculados a pessoas e eventos
-                          existentes, com agenda, execução, resultados e
-                          histórico.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="health-module-launch-card"
-                      onClick={() => setActiveSecretaryTab("health-sanitary")}
-                    >
-                      <span className="health-module-launch-icon">
-                        <ShieldCheck size={19} />
-                      </span>
-                      <span className="health-module-launch-copy">
-                        <strong>Vigilância Sanitária</strong>
-                        <small>
-                          Estabelecimentos, acompanhamento local de licenças,
-                          inspeções, providências e retornos demonstrativos.
-                        </small>
-                      </span>
-                      <span className="health-module-launch-action">
-                        Abrir módulo <ArrowRight size={14} />
-                      </span>
-                    </button>
+                    <div className="health-module-launch-grid">
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("territory")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <MapPinned size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Território, Unidades e Equipes</strong>
+                          <small>
+                            Mapa demonstrativo, áreas de atuação e cadastros
+                            relacionados da rede municipal de saúde.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("people")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <UsersRound size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Pessoas, Famílias e Domicílios</strong>
+                          <small>
+                            Cadastro municipal fictício de referência, relações
+                            familiares, endereços compartilhados e mapa
+                            agregado.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() =>
+                          setActiveSecretaryTab("health-activities")
+                        }
+                      >
+                        <span className="health-module-launch-icon">
+                          <Activity size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Visitas e Atendimentos</strong>
+                          <small>
+                            Roteiros de ACS/ACE, registros da UBS, resultados,
+                            retornos e histórico vinculados ao cadastro
+                            territorial.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => {
+                          setReferralSourceServiceId(undefined);
+                          setActiveSecretaryTab("health-referrals");
+                        }}
+                      >
+                        <span className="health-module-launch-icon">
+                          <Activity size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Encaminhamentos e Regulação</strong>
+                          <small>
+                            Fila clínica demonstrativa, tempo de espera,
+                            ofertas, agendamentos, desfechos e histórico do
+                            pedido.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => {
+                          setDiagnosticsReturnTab("services");
+                          setDiagnosticsSourceServiceId(undefined);
+                          setDiagnosticsSourceReferralId(undefined);
+                          setActiveSecretaryTab("health-diagnostics");
+                        }}
+                      >
+                        <span className="health-module-launch-icon">
+                          <ClipboardPlus size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Exames, Procedimentos e Resultados</strong>
+                          <small>
+                            Pedidos clínicos vinculados a pessoas e eventos
+                            existentes, com agenda, execução, resultados e
+                            histórico.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("health-sanitary")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <ShieldCheck size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Vigilância Sanitária</strong>
+                          <small>
+                            Estabelecimentos, acompanhamento local de licenças,
+                            inspeções, providências e retornos demonstrativos.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("overview")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <Activity size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Resumo e prioridades</strong>
+                          <small>
+                            Indicadores da pasta, prioridades e atualizações
+                            recentes da Secretaria.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir resumo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("requests")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <ClipboardList size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Solicitações administrativas</strong>
+                          <small>
+                            Consulte demandas da Secretaria e acompanhe os
+                            respectivos encaminhamentos e prazos.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir solicitações <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("records")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <FilePlus2 size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Ações e registros</strong>
+                          <small>
+                            Registre uma atualização demonstrativa da Secretaria
+                            nesta sessão.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir registros <ArrowRight size={14} />
+                        </span>
+                      </button>
+                    </div>
                   </>
                 )}
-                <div className="workspace-cross-area">
-                  <strong>Integração dentro da prefeitura</strong>
-                  <p>
-                    Solicitações, unidades, profissionais, endereços, veículos e
-                    ordens de serviço podem ser relacionados ao processo sem
-                    repetir o cadastro do mesmo objeto em cada área.
-                  </p>
-                </div>
+                {!isHealthDepartment && (
+                  <div className="workspace-cross-area">
+                    <strong>Integração dentro da prefeitura</strong>
+                    <p>
+                      Solicitações, unidades, profissionais, endereços, veículos
+                      e ordens de serviço podem ser relacionados ao processo sem
+                      repetir o cadastro do mesmo objeto em cada área.
+                    </p>
+                  </div>
+                )}
               </>
             )}
             {activeSecretaryTab === "territory" &&
