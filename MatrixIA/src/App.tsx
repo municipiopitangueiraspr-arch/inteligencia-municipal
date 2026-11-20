@@ -57,6 +57,11 @@ import {
   type HealthActivitiesDataset,
 } from "./data/healthActivities";
 import {
+  getHealthReferralSummary,
+  initialHealthReferrals,
+  type HealthReferralsDataset,
+} from "./data/healthReferrals";
+import {
   initialPeopleRegistry,
   type PeopleRegistryDataset,
 } from "./data/peopleRegistry";
@@ -88,6 +93,8 @@ function App() {
     useState<HealthTerritoryDataset>(initialHealthTerritory);
   const [healthActivities, setHealthActivities] =
     useState<HealthActivitiesDataset>(initialHealthActivities);
+  const [healthReferrals, setHealthReferrals] =
+    useState<HealthReferralsDataset>(initialHealthReferrals);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -102,17 +109,69 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAllPriorities, setShowAllPriorities] = useState(false);
 
+  const clinicalReferralSummary = useMemo(
+    () => getHealthReferralSummary(healthReferrals.referrals),
+    [healthReferrals.referrals],
+  );
+
+  const referralAwarePriorities = useMemo(
+    () =>
+      priorities.flatMap((priority) => {
+        if (priority.sourceId !== "clinical-referrals") return [priority];
+        if (clinicalReferralSummary.waiting === 0) return [];
+        const waitingText =
+          clinicalReferralSummary.waitingOver60Days > 0
+            ? `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam consulta especializada há mais de 60 dias`
+            : `${clinicalReferralSummary.waiting} encaminhamentos aguardam consulta especializada`;
+        return [
+          {
+            ...priority,
+            title: waitingText,
+            description: `São ${clinicalReferralSummary.waiting} encaminhamentos clínicos em situação aguardando vaga. A fila é separada das solicitações administrativas municipais.`,
+            action:
+              clinicalReferralSummary.waitingOver60Days > 0
+                ? `Revisar os ${clinicalReferralSummary.waitingOver60Days} casos com maior tempo de espera e confirmar ofertas regionais.`
+                : "Acompanhar a fila e confirmar ofertas de vagas com a regulação regional.",
+            impact: `${clinicalReferralSummary.waiting} encaminhamentos clínicos em acompanhamento`,
+            reference: "Situação derivada dos encaminhamentos demonstrativos em memória",
+          },
+        ];
+      }),
+    [clinicalReferralSummary],
+  );
+
   const departmentsWithRequestCounts = useMemo(
     () =>
       departments.map((department) => {
         const counts = getDepartmentRequestCounts(requests, department.name);
+        const referralAwareDepartment =
+          department.name === "Saúde e Vigilância Sanitária"
+            ? {
+                ...department,
+                status:
+                  clinicalReferralSummary.waiting > 0
+                    ? ("Atenção" as const)
+                    : ("Em dia" as const),
+                summary:
+                  clinicalReferralSummary.waitingOver60Days > 0
+                    ? `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam consulta especializada há mais de 60 dias.`
+                    : `${clinicalReferralSummary.waiting} encaminhamentos aguardam vaga para consulta especializada.`,
+                metric: String(clinicalReferralSummary.waitingOver60Days),
+                metricLabel: "encaminhamentos na fila há mais de 60 dias",
+                trend: `${clinicalReferralSummary.waiting} encaminhamentos clínicos aguardam vaga`,
+                nextAction:
+                  clinicalReferralSummary.waitingOver60Days > 0
+                    ? `Revisar os ${clinicalReferralSummary.waitingOver60Days} encaminhamentos com maior tempo de espera e confirmar novas vagas.`
+                    : "Acompanhar a fila clínica e registrar as próximas ofertas de vaga.",
+              }
+            : department;
         return {
-          ...department,
+          ...referralAwareDepartment,
           openRequests: counts.open,
           overdueRequests: counts.overdue,
         };
       }),
-    [requests],
+    [clinicalReferralSummary, requests],
   );
 
   const statusCounts = useMemo(
@@ -289,8 +348,8 @@ function App() {
   };
 
   const visiblePriorities = showAllPriorities
-    ? priorities
-    : priorities.slice(0, 3);
+    ? referralAwarePriorities
+    : referralAwarePriorities.slice(0, 3);
   const searchResults = searchQuery.trim()
     ? departmentsWithRequestCounts.filter((department) =>
         `${department.name} ${department.summary} ${department.area}`
@@ -307,8 +366,8 @@ function App() {
     },
     notifications: {
       eyebrow: "ACOMPANHAMENTOS DO MUNICÍPIO · SIMULADOS",
-      title: `${priorities.length} pontos com próximo passo definido`,
-      body: priorities
+      title: `${referralAwarePriorities.length} pontos com próximo passo definido`,
+      body: referralAwarePriorities
         .map(
           (priority) =>
             `${priority.level}: ${priority.title} — próximo passo: ${priority.action}`,
@@ -337,6 +396,8 @@ function App() {
         onHealthTerritoryChange={setHealthTerritory}
         healthActivities={healthActivities}
         onHealthActivitiesChange={setHealthActivities}
+        healthReferrals={healthReferrals}
+        onHealthReferralsChange={setHealthReferrals}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}
@@ -768,7 +829,7 @@ function App() {
                       <h2>O que pede atenção hoje</h2>
                     </div>
                     <span className="priority-counter">
-                      {priorities.length.toString().padStart(2, "0")}{" "}
+                      {referralAwarePriorities.length.toString().padStart(2, "0")} {" "}
                       <span>pontos</span>
                     </span>
                   </div>
@@ -777,6 +838,7 @@ function App() {
                       <PriorityItem
                         key={priority.title}
                         priority={priority}
+                        clinicalReferralSummary={clinicalReferralSummary}
                         onOpen={() => openPriorityDepartment(priority)}
                       />
                     ))}
@@ -787,7 +849,7 @@ function App() {
                   >
                     {showAllPriorities
                       ? "Mostrar somente as 3 mais urgentes"
-                      : `Ver outras ${priorities.length - 3} pendências`}
+                      : `Ver outras ${Math.max(0, referralAwarePriorities.length - 3)} pendências`}
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -943,13 +1005,23 @@ function App() {
 
 function PriorityItem({
   priority,
+  clinicalReferralSummary,
   onOpen,
 }: {
   priority: Priority;
+  clinicalReferralSummary: ReturnType<typeof getHealthReferralSummary>;
   onOpen: () => void;
 }) {
   const severity = priority.level === "Crítico" ? "critical" : "attention";
   const source = dataLineage[priority.sourceId];
+  const sourceRecords =
+    priority.sourceId === "clinical-referrals"
+      ? [
+          `${clinicalReferralSummary.waiting} encaminhamentos aguardam vaga na fila clínica simulada`,
+          `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam há mais de 60 dias`,
+          `${clinicalReferralSummary.offered} vagas ofertadas · ${clinicalReferralSummary.scheduled} atendimentos agendados · ${clinicalReferralSummary.completed} realizados`,
+        ]
+      : source.records;
   return (
     <article className="priority-item">
       <div className={`priority-marker priority-marker-${severity}`}>
@@ -974,7 +1046,7 @@ function PriorityItem({
           <div className="priority-origin-content">
             <strong>{source.modules.join(" · ")}</strong>
             <ul>
-              {source.records.map((record) => (
+              {sourceRecords.map((record) => (
                 <li key={record}>{record}</li>
               ))}
             </ul>

@@ -206,8 +206,8 @@ export const departments: Department[] = [
     shortName: "Saúde",
     area: "Atenção à saúde",
     status: "Atenção",
-    summary: `${clinicalReferralSummary.waitingOver60Days} pessoas esperam há mais de 60 dias por consulta especializada.`,
-    metric: `${clinicalReferralSummary.waitingOver60Days} pessoas`,
+    summary: `${clinicalReferralSummary.waitingOver60Days} encaminhamentos esperam há mais de 60 dias por consulta especializada.`,
+    metric: `${clinicalReferralSummary.waitingOver60Days} encaminhamentos`,
     metricLabel: "na fila clínica há mais de 60 dias",
     trend: `${clinicalReferralSummary.waiting} encaminhamentos clínicos aguardam consulta`,
     icon: "SV",
@@ -253,14 +253,14 @@ export const priorities: Priority[] = [
   },
   {
     level: "Atenção",
-    title: `${clinicalReferralSummary.waitingOver60Days} pessoas aguardam consulta especializada há mais de 60 dias`,
+    title: `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam consulta especializada há mais de 60 dias`,
     description: `São ${clinicalReferralSummary.waiting} encaminhamentos clínicos na regulação. Essa fila é separada das solicitações administrativas exibidas no cartão do município.`,
     department: "Saúde e Vigilância Sanitária",
     owner: "Regulação da Secretaria de Saúde",
     reference: "Posição simulada em 19/nov",
     action:
-      "Revisar os oito casos com maior espera e confirmar a próxima oferta de vagas regionais.",
-    impact: `${clinicalReferralSummary.waitingOver60Days} pessoas na faixa de maior espera`,
+      `Revisar os ${clinicalReferralSummary.waitingOver60Days} casos com maior espera e confirmar a próxima oferta de vagas regionais.`,
+    impact: `${clinicalReferralSummary.waitingOver60Days} encaminhamentos na faixa de maior espera`,
     sourceId: "clinical-referrals",
   },
   {

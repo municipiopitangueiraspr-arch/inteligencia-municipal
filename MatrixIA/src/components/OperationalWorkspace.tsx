@@ -35,6 +35,11 @@ import HealthVisitsAttendanceModule, {
 import HealthTerritoryModule from "./HealthTerritoryModule";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
 import type { HealthActivitiesDataset } from "../data/healthActivities";
+import HealthReferralRegulationModule from "./HealthReferralRegulationModule";
+import {
+  getHealthReferralSummary,
+  type HealthReferralsDataset,
+} from "../data/healthReferrals";
 import PeopleFamiliesDomicilesModule from "./PeopleFamiliesDomicilesModule";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
 
@@ -54,6 +59,10 @@ type WorkspaceProps = {
   healthActivities: HealthActivitiesDataset;
   onHealthActivitiesChange: (
     update: (current: HealthActivitiesDataset) => HealthActivitiesDataset,
+  ) => void;
+  healthReferrals: HealthReferralsDataset;
+  onHealthReferralsChange: (
+    update: (current: HealthReferralsDataset) => HealthReferralsDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -400,6 +409,8 @@ export default function OperationalWorkspace({
   onPeopleRegistryChange,
   healthActivities,
   onHealthActivitiesChange,
+  healthReferrals,
+  onHealthReferralsChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -418,9 +429,14 @@ export default function OperationalWorkspace({
     | "territory"
     | "people"
     | "health-activities"
+    | "health-referrals"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
+  const [healthReferralOpen, setHealthReferralOpen] = useState(false);
+  const [referralSourceServiceId, setReferralSourceServiceId] = useState<
+    string | undefined
+  >();
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestValidationError, setRequestValidationError] = useState<
     string | null
@@ -435,12 +451,35 @@ export default function OperationalWorkspace({
   >([]);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
+  const clinicalReferralSummary = useMemo(
+    () => getHealthReferralSummary(healthReferrals.referrals),
+    [healthReferrals.referrals],
+  );
   const departmentPriorities = useMemo(
     () =>
-      priorities.filter(
-        (priority) => priority.department === selectedDepartment.name,
-      ),
-    [selectedDepartment],
+      priorities
+        .filter((priority) => priority.department === selectedDepartment.name)
+        .flatMap((priority) => {
+          if (priority.sourceId !== "clinical-referrals") return [priority];
+          if (clinicalReferralSummary.waiting === 0) return [];
+          return [
+            {
+              ...priority,
+              title:
+                clinicalReferralSummary.waitingOver60Days > 0
+                  ? `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam consulta especializada há mais de 60 dias`
+                  : `${clinicalReferralSummary.waiting} encaminhamentos aguardam consulta especializada`,
+              description: `${clinicalReferralSummary.waiting} encaminhamentos clínicos aguardam vaga. A fila é separada das solicitações administrativas municipais.`,
+              action:
+                clinicalReferralSummary.waitingOver60Days > 0
+                  ? `Revisar os ${clinicalReferralSummary.waitingOver60Days} casos com maior espera e confirmar ofertas regionais.`
+                  : "Acompanhar a fila e confirmar ofertas de vagas com a regulação regional.",
+              impact: `${clinicalReferralSummary.waiting} encaminhamentos clínicos em acompanhamento`,
+              reference: "Atualizado pelos registros demonstrativos da sessão",
+            },
+          ];
+        }),
+    [clinicalReferralSummary, selectedDepartment.name],
   );
   const isSecretary = experience === "secretary";
   const healthOperatorPersona = (["acs", "ace", "ubs"] as const).includes(
@@ -448,6 +487,36 @@ export default function OperationalWorkspace({
   )
     ? (selectedPersona.id as HealthOperatorPersona)
     : undefined;
+  const openHealthRegulation = (serviceRecordId?: string) => {
+    setReferralSourceServiceId(serviceRecordId);
+    if (isSecretary) {
+      setActiveSecretaryTab("health-referrals");
+      return;
+    }
+    setHealthWorkflowOpen(false);
+    setHealthReferralOpen(true);
+  };
+  const selectedDepartmentSummary =
+    selectedDepartment.name === "Saúde e Vigilância Sanitária"
+      ? {
+          ...selectedDepartment,
+          status:
+            clinicalReferralSummary.waiting > 0
+              ? ("Atenção" as const)
+              : ("Em dia" as const),
+          summary:
+            clinicalReferralSummary.waitingOver60Days > 0
+              ? `${clinicalReferralSummary.waitingOver60Days} encaminhamentos aguardam consulta especializada há mais de 60 dias.`
+              : `${clinicalReferralSummary.waiting} encaminhamentos aguardam vaga para consulta especializada.`,
+          metric: String(clinicalReferralSummary.waitingOver60Days),
+          metricLabel: "encaminhamentos na fila há mais de 60 dias",
+          trend: `${clinicalReferralSummary.waiting} encaminhamentos clínicos aguardam vaga`,
+          nextAction:
+            clinicalReferralSummary.waitingOver60Days > 0
+              ? `Revisar os ${clinicalReferralSummary.waitingOver60Days} encaminhamentos com maior tempo de espera e confirmar novas vagas.`
+              : "Acompanhar a fila clínica e registrar as próximas ofertas de vaga.",
+        }
+      : selectedDepartment;
   const departmentRequestCounts = getDepartmentRequestCounts(
     requests,
     selectedDepartment.name,
@@ -624,6 +693,8 @@ export default function OperationalWorkspace({
                   )!,
                 );
                 setHealthWorkflowOpen(false);
+                setHealthReferralOpen(false);
+                setReferralSourceServiceId(undefined);
               }}
             >
               {operatorPersonas.map((persona) => (
@@ -674,7 +745,7 @@ export default function OperationalWorkspace({
             <div className="workspace-heading-row">
               <div>
                 <h1>{selectedDepartment.name}</h1>
-                <p>{selectedDepartment.summary}</p>
+                <p>{selectedDepartmentSummary.summary}</p>
               </div>
               <button
                 className="workspace-primary-button"
@@ -737,6 +808,17 @@ export default function OperationalWorkspace({
                   >
                     <Activity size={14} /> Visitas e Atendimentos
                   </button>
+                  <button
+                    className={
+                      activeSecretaryTab === "health-referrals" ? "active" : ""
+                    }
+                    onClick={() => {
+                      setReferralSourceServiceId(undefined);
+                      setActiveSecretaryTab("health-referrals");
+                    }}
+                  >
+                    <ArrowRight size={14} /> Encaminhamentos e Regulação
+                  </button>
                 </>
               )}
             </div>
@@ -759,21 +841,21 @@ export default function OperationalWorkspace({
                   <WorkspaceMetric
                     icon={<Check size={17} />}
                     label="Situação da secretaria"
-                    value={selectedDepartment.status}
+                    value={selectedDepartmentSummary.status}
                     detail="derivada das filas demonstrativas"
                     tone={
-                      selectedDepartment.status === "Crítico"
+                      selectedDepartmentSummary.status === "Crítico"
                         ? "red"
-                        : selectedDepartment.status === "Atenção"
+                        : selectedDepartmentSummary.status === "Atenção"
                           ? "amber"
                           : "green"
                     }
                   />
                   <WorkspaceMetric
                     icon={<UsersRound size={17} />}
-                    label={selectedDepartment.metricLabel}
-                    value={selectedDepartment.metric}
-                    detail={selectedDepartment.trend}
+                    label={selectedDepartmentSummary.metricLabel}
+                    value={selectedDepartmentSummary.metric}
+                    detail={selectedDepartmentSummary.trend}
                   />
                 </div>
                 <div className="workspace-section-heading">
@@ -798,7 +880,7 @@ export default function OperationalWorkspace({
                       <CalendarDays size={17} />
                     </span>
                     <div>
-                      <strong>{selectedDepartment.nextAction}</strong>
+                      <strong>{selectedDepartmentSummary.nextAction}</strong>
                       <p>
                         Providência sugerida a partir do resumo demonstrativo da
                         pasta.
@@ -922,6 +1004,28 @@ export default function OperationalWorkspace({
                         Abrir módulo <ArrowRight size={14} />
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => {
+                        setReferralSourceServiceId(undefined);
+                        setActiveSecretaryTab("health-referrals");
+                      }}
+                    >
+                      <span className="health-module-launch-icon">
+                        <Activity size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Encaminhamentos e Regulação</strong>
+                        <small>
+                          Fila clínica demonstrativa, tempo de espera, ofertas,
+                          agendamentos, desfechos e histórico do pedido.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
                   </>
                 )}
                 <div className="workspace-cross-area">
@@ -957,6 +1061,23 @@ export default function OperationalWorkspace({
                   peopleRegistry={peopleRegistry}
                   healthTerritory={healthTerritory}
                   onChange={onHealthActivitiesChange}
+                  onOpenRegulation={openHealthRegulation}
+                />
+              )}
+            {activeSecretaryTab === "health-referrals" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthReferralRegulationModule
+                  mode="secretary"
+                  dataset={healthReferrals}
+                  healthActivities={healthActivities}
+                  peopleRegistry={peopleRegistry}
+                  healthTerritory={healthTerritory}
+                  onChange={onHealthReferralsChange}
+                  initialServiceRecordId={referralSourceServiceId}
+                  onBack={() => {
+                    setReferralSourceServiceId(undefined);
+                    setActiveSecretaryTab("health-activities");
+                  }}
                 />
               )}
             {activeSecretaryTab === "records" && (
@@ -986,7 +1107,7 @@ export default function OperationalWorkspace({
                     id="secretary-update"
                     name="update"
                     rows={4}
-                    placeholder={`Ex.: ${selectedDepartment.nextAction}`}
+                    placeholder={`Ex.: ${selectedDepartmentSummary.nextAction}`}
                     required
                   />
                   <div>
@@ -1062,6 +1183,14 @@ export default function OperationalWorkspace({
                 <FilePlus2 size={16} />
                 {healthOperatorPersona ? "Abrir módulo de Saúde" : "Registrar atividade"}
               </button>
+              {healthOperatorPersona === "ubs" && (
+                <button
+                  className="workspace-secondary-button"
+                  onClick={() => openHealthRegulation()}
+                >
+                  <Activity size={16} /> Abrir fila de encaminhamentos
+                </button>
+              )}
               <button
                 className="workspace-secondary-button"
                 onClick={() => {
@@ -1081,7 +1210,23 @@ export default function OperationalWorkspace({
                 peopleRegistry={peopleRegistry}
                 healthTerritory={healthTerritory}
                 onChange={onHealthActivitiesChange}
+                onOpenRegulation={openHealthRegulation}
                 onBack={() => setHealthWorkflowOpen(false)}
+              />
+            )}
+            {healthReferralOpen && healthOperatorPersona === "ubs" && (
+              <HealthReferralRegulationModule
+                mode="operator"
+                dataset={healthReferrals}
+                healthActivities={healthActivities}
+                peopleRegistry={peopleRegistry}
+                healthTerritory={healthTerritory}
+                onChange={onHealthReferralsChange}
+                initialServiceRecordId={referralSourceServiceId}
+                onBack={() => {
+                  setHealthReferralOpen(false);
+                  setReferralSourceServiceId(undefined);
+                }}
               />
             )}
             {latestProtocol && (

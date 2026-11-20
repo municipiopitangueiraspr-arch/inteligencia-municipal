@@ -51,6 +51,7 @@ type HealthVisitsAttendanceModuleProps = {
   onChange: (
     update: (current: HealthActivitiesDataset) => HealthActivitiesDataset,
   ) => void;
+  onOpenRegulation?: (serviceRecordId: string) => void;
   onBack?: () => void;
 };
 
@@ -180,6 +181,7 @@ export default function HealthVisitsAttendanceModule({
   peopleRegistry,
   healthTerritory,
   onChange,
+  onOpenRegulation,
   onBack,
 }: HealthVisitsAttendanceModuleProps) {
   const initialView: ModuleView =
@@ -1309,6 +1311,26 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field health-detail-wide"><span>Resumo do atendimento</span><p>{selectedAttendance.careSummary || "Sem resumo clínico demonstrativo registrado."}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Encaminhamento ou próximo passo</span><p>{selectedAttendance.referral || "Nenhum encaminhamento registrado."}</p></div>
                 <div className="health-detail-field"><span>Acompanhamento previsto</span><strong>{formatDate(selectedAttendance.followUpDate)}</strong></div>
+                {onOpenRegulation && (
+                  <div className="health-detail-field health-detail-wide">
+                    <span>Continuidade do cuidado</span>
+                    <p>
+                      Encaminhe este atendimento realizado à fila clínica sem
+                      recadastrar a pessoa, o profissional ou a unidade.
+                    </p>
+                    <button
+                      type="button"
+                      className="health-action-secondary"
+                      disabled={selectedAttendance.status !== "Realizado"}
+                      onClick={() => onOpenRegulation(selectedAttendance.id)}
+                    >
+                      <ArrowRight size={14} />
+                      {selectedAttendance.status === "Realizado"
+                        ? "Criar encaminhamento vinculado"
+                        : "Conclua o atendimento para encaminhar"}
+                    </button>
+                  </div>
+                )}
               </>
             ) : null}
           </div>

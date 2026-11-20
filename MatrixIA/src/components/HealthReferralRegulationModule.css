@@ -1,0 +1,899 @@
+.health-referrals-module {
+  margin-top: 24px;
+  padding: 23px;
+  border: 1px solid #dfe7eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(19, 50, 67, 0.045);
+  color: var(--ink, #1d3544);
+}
+
+.health-referrals-header,
+.health-referrals-header-actions,
+.health-referral-queue-heading,
+.health-referral-row-heading,
+.health-referral-row-origin,
+.health-referral-form-actions,
+.health-referral-section-heading,
+.health-referral-detail-heading,
+.health-referral-detail-badges,
+.health-referral-history .health-referral-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.health-referrals-header {
+  align-items: flex-start;
+  margin-bottom: 17px;
+}
+
+.health-referrals-eyebrow,
+.health-referral-section-heading > div > span {
+  display: block;
+  color: #547181;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.health-referrals-header h2 {
+  margin: 6px 0 5px;
+  color: var(--navy, #102e40);
+  font: 800 23px/1.2 Manrope, sans-serif;
+  letter-spacing: -0.55px;
+}
+
+.health-referrals-header p,
+.health-referral-queue-heading p,
+.health-referral-section-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: #6c808a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.health-referrals-header-actions {
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+.health-referrals-primary,
+.health-referrals-back,
+.health-referral-secondary,
+.health-referral-open,
+.health-referral-clear {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.health-referrals-primary {
+  background: #176a91;
+  color: #fff;
+}
+
+.health-referrals-primary:hover {
+  background: #0d5578;
+  transform: translateY(-1px);
+}
+
+.health-referrals-back,
+.health-referral-secondary {
+  border-color: #dce6ea;
+  background: #fff;
+  color: #365565;
+}
+
+.health-referrals-back:hover,
+.health-referral-secondary:hover {
+  border-color: #b7ccd5;
+  background: #f4f8fa;
+}
+
+.health-referrals-demo-note,
+.health-referral-linked-source,
+.health-referral-reference-line,
+.health-referrals-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #c9dfe8;
+  border-radius: 9px;
+  background: #edf6fa;
+  color: #24536a;
+}
+
+.health-referrals-demo-note {
+  margin-bottom: 17px;
+}
+
+.health-referrals-demo-note svg,
+.health-referral-linked-source svg,
+.health-referral-reference-line svg,
+.health-referrals-footer svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.health-referrals-demo-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.health-referrals-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #b7dfcd;
+  border-radius: 8px;
+  background: #e5f6ec;
+  color: #176b43;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.health-referral-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 17px 0 22px;
+}
+
+.health-referral-metric {
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 14px 15px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #607783;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.health-referral-metric:hover {
+  transform: translateY(-1px);
+  border-color: #a8c9d8;
+}
+
+.health-referral-metric > span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.health-referral-metric strong {
+  color: #16384b;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.health-referral-metric small {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.health-referral-metric.metric-attention {
+  border-color: #f3d38a;
+  background: #fff8e7;
+}
+
+.health-referral-metric.metric-attention strong {
+  color: #8a5200;
+}
+
+.health-referral-metric.metric-overdue {
+  border-color: #f1c2bb;
+  background: #fff0ed;
+}
+
+.health-referral-metric.metric-overdue strong {
+  color: #a4352b;
+}
+
+.health-referral-metric.metric-scheduled {
+  border-color: #c8dce8;
+  background: #f0f7fb;
+}
+
+.health-referral-metric.metric-scheduled strong {
+  color: #185573;
+  font-size: 21px;
+}
+
+.health-referral-queue-heading {
+  align-items: flex-end;
+  margin: 0 0 13px;
+}
+
+.health-referral-queue-heading h3,
+.health-referral-section-heading h3,
+.health-referral-detail-heading h3 {
+  margin: 5px 0;
+  color: #15384b;
+  font: 800 18px/1.25 Manrope, sans-serif;
+}
+
+.health-referral-result-count {
+  flex: 0 0 auto;
+  color: #607783;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.health-referral-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 11px;
+  border: 1px solid #e4ebee;
+  border-radius: 9px;
+  background: #f8fafb;
+}
+
+.health-referral-filters > label {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid #d9e3e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #65808e;
+}
+
+.health-referral-filters select,
+.health-referral-search input {
+  min-height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #294957;
+  font: inherit;
+  font-size: 11px;
+}
+
+.health-referral-search {
+  flex: 1 1 230px;
+  min-width: 210px;
+}
+
+.health-referral-search input {
+  width: 100%;
+}
+
+.health-referral-filters select {
+  max-width: 190px;
+  cursor: pointer;
+}
+
+.health-referral-clear {
+  min-height: 34px;
+  margin-left: auto;
+  border-color: #d9e3e7;
+  background: #fff;
+  color: #496777;
+  font-size: 11px;
+}
+
+.health-referral-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-referral-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(185px, 0.9fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #e3eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.health-referral-row:hover {
+  border-color: #c4d8e1;
+  background: #fcfefe;
+}
+
+.health-referral-row-main {
+  min-width: 0;
+}
+
+.health-referral-row-heading {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.health-referral-row-heading > strong {
+  color: #17394b;
+  font-size: 13px;
+}
+
+.health-referral-status,
+.health-referral-priority {
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-attention {
+  background: #ffdf91;
+  color: #704000;
+}
+
+.status-analysis {
+  background: #dcecf7;
+  color: #1d5a7b;
+}
+
+.status-scheduled {
+  background: #cfe8f2;
+  color: #14506b;
+}
+
+.status-complete {
+  background: #ccebd8;
+  color: #17623d;
+}
+
+.status-cancelled {
+  background: #f4d0cc;
+  color: #8a2e27;
+}
+
+.priority-urgent {
+  background: #f5d0cc;
+  color: #8a3028;
+}
+
+.priority-preferred {
+  background: #ffedc6;
+  color: #805000;
+}
+
+.priority-routine {
+  background: #e8edf0;
+  color: #526a76;
+}
+
+.health-referral-row-meta,
+.health-referral-row-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 12px;
+  margin-top: 7px;
+  color: #69808b;
+  font-size: 10px;
+}
+
+.health-referral-row-meta span:first-child {
+  color: #315c70;
+  font-weight: 800;
+}
+
+.health-referral-row-origin {
+  gap: 8px 13px;
+}
+
+.health-referral-row-origin span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.health-referral-row-age {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #738892;
+  font-size: 10px;
+}
+
+.health-referral-row-age strong {
+  color: #26495a;
+  font-size: 13px;
+}
+
+.health-referral-row-age strong.wait-critical {
+  color: #9b352d;
+}
+
+.health-referral-row-age small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-referral-open {
+  border-color: #dce6ea;
+  background: #fff;
+  color: #285870;
+}
+
+.health-referral-open:hover {
+  border-color: #b6ced8;
+  background: #eef6f9;
+}
+
+.health-referral-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 16px;
+  border: 1px dashed #cbd9df;
+  border-radius: 10px;
+  color: #6a808c;
+  text-align: center;
+}
+
+.health-referral-empty strong {
+  color: #294957;
+  font-size: 14px;
+}
+
+.health-referral-empty p {
+  max-width: 440px;
+  margin: 0 0 5px;
+  font-size: 12px;
+}
+
+.health-referrals-footer {
+  margin-top: 15px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.health-referral-form-view,
+.health-referral-detail-view {
+  padding-top: 12px;
+}
+
+.health-referral-section-heading {
+  margin-bottom: 14px;
+  color: #607783;
+}
+
+.health-referral-section-heading h3,
+.health-referral-section-heading h4 {
+  margin: 5px 0;
+  color: #17394b;
+  font: 800 17px/1.25 Manrope, sans-serif;
+}
+
+.health-referral-section-heading p {
+  max-width: 700px;
+  margin-top: 4px;
+}
+
+.health-referral-form,
+.health-referral-update-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  padding: 17px;
+  border: 1px solid #e2e9ec;
+  border-radius: 11px;
+  background: #fbfcfd;
+}
+
+.health-referral-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #375565;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.health-referral-field > span {
+  color: #a63830;
+}
+
+.health-referral-field input,
+.health-referral-field select,
+.health-referral-field textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d5e0e5;
+  border-radius: 7px;
+  outline: none;
+  background: #fff;
+  color: #264552;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.health-referral-field textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.health-referral-field input:focus,
+.health-referral-field select:focus,
+.health-referral-field textarea:focus {
+  border-color: #4d9ab9;
+  box-shadow: 0 0 0 3px rgba(51, 139, 176, 0.12);
+}
+
+.health-referral-field input:disabled,
+.health-referral-field select:disabled {
+  background: #edf2f4;
+  color: #6c8088;
+}
+
+.health-referral-field small {
+  color: #70858e;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.health-referral-field-wide {
+  grid-column: 1 / -1;
+}
+
+.health-referral-linked-source,
+.health-referral-reference-line {
+  grid-column: 1 / -1;
+  align-items: center;
+  font-size: 11px;
+}
+
+.health-referral-reference-line {
+  border-color: #e0e9ed;
+  background: #f4f8fa;
+  color: #59717d;
+}
+
+.health-referral-reference-line strong,
+.health-referral-linked-source strong {
+  color: #254c60;
+}
+
+.health-referral-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #edc1bc;
+  border-radius: 7px;
+  background: #fff0ed;
+  color: #9a342b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.health-referral-form-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  margin-top: 3px;
+  padding-top: 13px;
+  border-top: 1px solid #e7edef;
+}
+
+.health-referral-detail-heading {
+  align-items: flex-start;
+  margin: 13px 0 17px;
+}
+
+.health-referral-detail-heading h3 {
+  font-size: 21px;
+}
+
+.health-referral-detail-heading p {
+  margin: 0;
+  color: #617984;
+  font-size: 13px;
+}
+
+.health-referral-detail-badges {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.health-referral-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 16px;
+}
+
+.health-referral-detail-grid article {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid #e3eaed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.health-referral-detail-grid article > span {
+  color: #6c828d;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.health-referral-detail-grid article > strong {
+  color: #2a4d5e;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.health-referral-detail-grid article > small,
+.health-referral-detail-grid article > p {
+  margin: 0;
+  color: #607782;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.health-referral-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.health-referral-update-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.75fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.health-referral-update-form {
+  grid-template-columns: 1fr;
+  background: #f9fbfc;
+}
+
+.health-referral-update-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.health-referral-update-form .health-referrals-primary {
+  justify-self: start;
+}
+
+.health-referral-actor-note {
+  color: #70858e;
+  font-size: 10px;
+}
+
+.health-referral-next-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #c9dfe8;
+  border-radius: 10px;
+  background: #edf6fa;
+  color: #315d70;
+}
+
+.health-referral-next-step > span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+}
+
+.health-referral-next-step p {
+  margin: 0;
+  color: #254b5e;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.health-referral-next-step small {
+  color: #5f7884;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.health-referral-history {
+  margin-top: 17px;
+  padding: 16px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.health-referral-history ol {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin: 15px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health-referral-history li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.health-referral-history li:not(:last-child)::after {
+  position: absolute;
+  top: 11px;
+  bottom: -17px;
+  left: 5px;
+  width: 1px;
+  background: #d4e0e5;
+  content: "";
+}
+
+.health-referral-history-dot {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #3681a0;
+  box-shadow: 0 0 0 1px #8fb8c9;
+}
+
+.health-referral-history li strong {
+  color: #294b5a;
+  font-size: 12px;
+}
+
+.health-referral-history li p {
+  margin: 4px 0;
+  color: #607782;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.health-referral-history li small {
+  color: #7b8e96;
+  font-size: 10px;
+}
+
+@media (max-width: 950px) {
+  .health-referral-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .health-referral-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .health-referral-row-age {
+    grid-column: 1;
+    padding-left: 1px;
+  }
+
+  .health-referral-open {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .health-referrals-module {
+    padding: 15px;
+  }
+
+  .health-referrals-header,
+  .health-referral-queue-heading,
+  .health-referral-detail-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .health-referrals-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .health-referral-queue-heading {
+    gap: 7px;
+  }
+
+  .health-referral-filters {
+    align-items: stretch;
+  }
+
+  .health-referral-filters > label,
+  .health-referral-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .health-referral-filters select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .health-referral-clear {
+    margin-left: 0;
+  }
+
+  .health-referral-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .health-referral-row-age,
+  .health-referral-open {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .health-referral-open {
+    justify-self: start;
+  }
+
+  .health-referral-form,
+  .health-referral-detail-grid,
+  .health-referral-update-layout,
+  .health-referral-update-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-referral-field-wide,
+  .health-referral-detail-wide {
+    grid-column: auto;
+  }
+
+  .health-referral-detail-badges {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 460px) {
+  .health-referral-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-referral-form-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .health-referral-form-actions button,
+  .health-referral-update-form .health-referrals-primary {
+    width: 100%;
+  }
+}

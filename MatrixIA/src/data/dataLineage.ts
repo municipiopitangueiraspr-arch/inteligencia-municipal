@@ -7,6 +7,11 @@ export type DataLineage = {
   note: string;
 };
 
+import {
+  getHealthReferralSummary,
+  initialHealthReferrals,
+} from "./healthReferrals";
+
 /** Catálogo para explicar de onde cada destaque demonstrativo poderia ser calculado. */
 export const dataLineage: Record<string, DataLineage> = {
   "school-transport": {
@@ -123,25 +128,10 @@ export const simulatedTransportRecords = {
   studentRouteLinks,
 };
 
-const referenceDate = new Date("2026-11-19T12:00:00.000Z");
-export const simulatedClinicalReferrals = Array.from(
-  { length: 36 },
-  (_, index) => ({
-    id: `SIM-SAU-ENC-${String(index + 1).padStart(3, "0")}`,
-    referredAt: index < 8 ? "2026-09-15" : "2026-11-01",
-    status: "Aguardando vaga",
-  }),
-);
+export const simulatedClinicalReferrals =
+  initialHealthReferrals.referrals;
 
-export const clinicalReferralSummary = {
-  waiting: simulatedClinicalReferrals.filter(
-    (referral) => referral.status === "Aguardando vaga",
-  ).length,
-  waitingOver60Days: simulatedClinicalReferrals.filter((referral) => {
-    const referredAt = new Date(`${referral.referredAt}T00:00:00.000Z`);
-    return (
-      referral.status === "Aguardando vaga" &&
-      (referenceDate.getTime() - referredAt.getTime()) / 86_400_000 > 60
-    );
-  }).length,
-};
+export const clinicalReferralSummary = getHealthReferralSummary(
+  simulatedClinicalReferrals,
+  "2026-11-19",
+);
