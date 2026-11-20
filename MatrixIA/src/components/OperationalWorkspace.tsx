@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Clock3,
   ClipboardList,
   FilePlus2,
   LogOut,
@@ -19,11 +20,26 @@ import {
   type Priority,
 } from "../data/mockData";
 import { dataLineage } from "../data/dataLineage";
+import RequestCenter from "./RequestCenter";
+import {
+  formatRequestDate,
+  getDepartmentRequestCounts,
+  type MunicipalRequest,
+  type MunicipalRequestDraft,
+  type RequestStatus,
+} from "../data/requests";
 
 export type Experience = "mayor" | "secretary" | "operator";
 
 type WorkspaceProps = {
   experience: Exclude<Experience, "mayor">;
+  requests: MunicipalRequest[];
+  onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
+  onUpdateRequest: (
+    id: string,
+    update: { status: RequestStatus; assignedTo: string; note: string },
+    actor: string,
+  ) => void;
   onSwitchExperience: () => void;
 };
 
@@ -355,6 +371,9 @@ type LocalSecretaryUpdate = {
 
 export default function OperationalWorkspace({
   experience,
+  requests,
+  onCreateRequest,
+  onUpdateRequest,
   onSwitchExperience,
 }: WorkspaceProps) {
   const [selectedDepartment, setSelectedDepartment] = useState<Department>(
@@ -364,9 +383,17 @@ export default function OperationalWorkspace({
     operatorPersonas[3],
   );
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
-    "overview" | "services" | "records"
+    "overview" | "services" | "records" | "requests"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestValidationError, setRequestValidationError] = useState<
+    string | null
+  >(null);
+  const [latestProtocol, setLatestProtocol] = useState<MunicipalRequest | null>(
+    null,
+  );
+  const [createdRequestIds, setCreatedRequestIds] = useState<string[]>([]);
   const [operatorEntries, setOperatorEntries] = useState<LocalEntry[]>([]);
   const [secretaryUpdates, setSecretaryUpdates] = useState<
     LocalSecretaryUpdate[]
@@ -381,8 +408,17 @@ export default function OperationalWorkspace({
     [selectedDepartment],
   );
   const isSecretary = experience === "secretary";
+  const departmentRequestCounts = getDepartmentRequestCounts(
+    requests,
+    selectedDepartment.name,
+  );
+  const operatorRequests = requests.filter((request) =>
+    createdRequestIds.includes(request.id),
+  );
   const personaTaskCount =
-    selectedPersona.tasks.length + operatorEntries.length;
+    selectedPersona.tasks.length +
+    operatorEntries.length +
+    operatorRequests.length;
   const secretariatAreas = departmentModules[selectedDepartment.name] ?? [];
   const updatesForDepartment = secretaryUpdates.filter(
     (update) => update.departmentName === selectedDepartment.name,
@@ -429,6 +465,49 @@ export default function OperationalWorkspace({
     };
     setOperatorEntries((previous) => [entry, ...previous]);
     setEntryOpen(false);
+    form.reset();
+  };
+
+  const saveMunicipalRequest = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const draft: MunicipalRequestDraft = {
+      subject: String(values.get("subject") ?? "").trim(),
+      description: String(values.get("description") ?? "").trim(),
+      category: String(values.get("category") ?? "").trim(),
+      department: String(values.get("department") ?? "").trim(),
+      priority: String(
+        values.get("priority") ?? "Normal",
+      ) as MunicipalRequestDraft["priority"],
+      requester: String(values.get("requester") ?? "").trim(),
+      contact: String(values.get("contact") ?? "").trim(),
+      location: String(values.get("location") ?? "").trim(),
+      channel: String(values.get("channel") ?? "").trim(),
+      createdBy: selectedPersona.label,
+    };
+    const firstEmptyField = [
+      "subject",
+      "description",
+      "category",
+      "requester",
+      "location",
+      "channel",
+      "department",
+    ].find((field) => !String(values.get(field) ?? "").trim());
+    if (firstEmptyField) {
+      setRequestValidationError(
+        "Preencha todos os campos obrigatórios. Campos contendo apenas espaços não são aceitos.",
+      );
+      const control = form.elements.namedItem(firstEmptyField);
+      if (control instanceof HTMLElement) control.focus();
+      return;
+    }
+    const request = onCreateRequest(draft);
+    setCreatedRequestIds((previous) => [request.id, ...previous]);
+    setLatestProtocol(request);
+    setRequestOpen(false);
+    setRequestValidationError(null);
     form.reset();
   };
 
@@ -555,9 +634,9 @@ export default function OperationalWorkspace({
               </div>
               <button
                 className="workspace-primary-button"
-                onClick={() => setActiveSecretaryTab("records")}
+                onClick={() => setActiveSecretaryTab("requests")}
               >
-                <FilePlus2 size={16} /> Registrar atualização
+                <ClipboardList size={16} /> Ver solicitações
               </button>
             </div>
             <div
@@ -583,6 +662,13 @@ export default function OperationalWorkspace({
               >
                 Ações e registros
               </button>
+              <button
+                className={activeSecretaryTab === "requests" ? "active" : ""}
+                onClick={() => setActiveSecretaryTab("requests")}
+              >
+                Solicitações
+                <span>{departmentRequestCounts.open}</span>
+              </button>
             </div>
             {activeSecretaryTab === "overview" && (
               <>
@@ -590,17 +676,15 @@ export default function OperationalWorkspace({
                   <WorkspaceMetric
                     icon={<ClipboardList size={17} />}
                     label="Solicitações administrativas"
-                    value={String(selectedDepartment.openRequests)}
+                    value={String(departmentRequestCounts.open)}
                     detail="em aberto nesta pasta"
                   />
                   <WorkspaceMetric
                     icon={<Activity size={17} />}
                     label="Fora do prazo"
-                    value={String(selectedDepartment.overdueRequests)}
+                    value={String(departmentRequestCounts.overdue)}
                     detail="requerem acompanhamento"
-                    tone={
-                      selectedDepartment.overdueRequests ? "amber" : "green"
-                    }
+                    tone={departmentRequestCounts.overdue ? "amber" : "green"}
                   />
                   <WorkspaceMetric
                     icon={<Check size={17} />}
@@ -786,6 +870,16 @@ export default function OperationalWorkspace({
                 ))}
               </div>
             )}
+            {activeSecretaryTab === "requests" && (
+              <RequestCenter
+                requests={requests}
+                mode="secretary"
+                departmentName={selectedDepartment.name}
+                onUpdate={(id, update) =>
+                  onUpdateRequest(id, update, selectedDepartment.shortName)
+                }
+              />
+            )}
             <footer className="workspace-footer">
               <MapPin size={14} /> Pitangueiras, Paraná <span>·</span> Visão de
               secretário · cenário simulado
@@ -808,7 +902,37 @@ export default function OperationalWorkspace({
               >
                 <FilePlus2 size={16} /> Registrar atividade
               </button>
+              <button
+                className="workspace-secondary-button"
+                onClick={() => {
+                  setRequestValidationError(null);
+                  setRequestOpen(true);
+                }}
+              >
+                <ClipboardList size={16} /> Registrar demanda
+              </button>
             </div>
+            {latestProtocol && (
+              <div className="request-confirmation" role="status">
+                <span>
+                  <Check size={17} />
+                </span>
+                <div>
+                  <strong>Demanda registrada nesta demonstração</strong>
+                  <p>
+                    Protocolo {latestProtocol.protocol} · encaminhado para{" "}
+                    {latestProtocol.department} · prazo inicial{" "}
+                    {formatRequestDate(latestProtocol.dueAt)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLatestProtocol(null)}
+                  aria-label="Fechar confirmação"
+                >
+                  ×
+                </button>
+              </div>
+            )}
             <div className="operator-context-card">
               <div className="operator-context-icon">
                 <CalendarDays size={20} />
@@ -876,6 +1000,33 @@ export default function OperationalWorkspace({
                 </article>
               ))}
             </div>
+            {operatorRequests.length > 0 && (
+              <section className="operator-new-records">
+                <div className="workspace-section-heading">
+                  <div>
+                    <span>PROTOCOLOS CRIADOS NESTA SESSÃO</span>
+                    <h2>Demandas encaminhadas</h2>
+                  </div>
+                  <span className="workspace-count">
+                    {operatorRequests.length}
+                  </span>
+                </div>
+                {operatorRequests.map((request) => (
+                  <article className="operator-record-card" key={request.id}>
+                    <span className="operator-record-check">
+                      <Check size={15} />
+                    </span>
+                    <div>
+                      <strong>{request.subject}</strong>
+                      <p>
+                        {request.protocol} · {request.department} ·{" "}
+                        {request.status} · somente nesta sessão
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
             {operatorEntries.length > 0 && (
               <section className="operator-new-records">
                 <div className="workspace-section-heading">
@@ -982,6 +1133,152 @@ export default function OperationalWorkspace({
                 </button>
                 <button className="workspace-primary-button" type="submit">
                   <Check size={15} /> Salvar nesta sessão
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {requestOpen && !isSecretary && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setRequestOpen(false)}
+        >
+          <section
+            className="operator-entry-dialog request-entry-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-entry-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="icon-button modal-close"
+              onClick={() => setRequestOpen(false)}
+              aria-label="Fechar formulário"
+            >
+              <ChevronDown size={18} />
+            </button>
+            <div className="origin-eyebrow">
+              CENTRAL MUNICIPAL · REGISTRO DEMONSTRATIVO
+            </div>
+            <h2 id="request-entry-title">Registrar uma demanda</h2>
+            <p className="operator-entry-intro">
+              Informe o pedido e escolha a secretaria responsável. Um protocolo
+              fictício será gerado para acompanhar o fluxo nesta sessão.
+            </p>
+            <form
+              className="operator-entry-form request-entry-form"
+              onChange={() => setRequestValidationError(null)}
+              onSubmit={saveMunicipalRequest}
+            >
+              {requestValidationError && (
+                <p className="request-validation-error" role="alert">
+                  {requestValidationError}
+                </p>
+              )}
+              <label>
+                Assunto
+                <input
+                  name="subject"
+                  placeholder="Ex.: reparo de via pública"
+                  required
+                  maxLength={120}
+                />
+              </label>
+              <label className="request-description-field">
+                Descrição
+                <textarea
+                  name="description"
+                  rows={3}
+                  placeholder="Descreva a solicitação e o resultado esperado"
+                  required
+                  maxLength={1000}
+                />
+              </label>
+              <label>
+                Categoria
+                <select name="category" defaultValue="" required>
+                  <option value="" disabled>
+                    Selecione uma categoria
+                  </option>
+                  <option>Serviço municipal</option>
+                  <option>Informação</option>
+                  <option>Manutenção</option>
+                  <option>Fiscalização</option>
+                  <option>Outro</option>
+                </select>
+              </label>
+              <label>
+                Solicitante
+                <input
+                  name="requester"
+                  placeholder="Nome de quem solicita"
+                  required
+                  maxLength={100}
+                />
+              </label>
+              <label>
+                Contato <span className="request-optional">opcional</span>
+                <input
+                  name="contact"
+                  placeholder="Telefone ou e-mail"
+                  maxLength={120}
+                />
+              </label>
+              <label>
+                Localização
+                <input
+                  name="location"
+                  placeholder="Endereço, bairro ou comunidade"
+                  required
+                  maxLength={180}
+                />
+              </label>
+              <label>
+                Canal de entrada
+                <select name="channel" defaultValue="Presencial" required>
+                  <option>Presencial</option>
+                  <option>Telefone</option>
+                  <option>Portal demonstrativo</option>
+                  <option>E-mail</option>
+                  <option>Aplicativo</option>
+                </select>
+              </label>
+              <label>
+                Secretaria responsável
+                <select name="department" defaultValue="" required>
+                  <option value="" disabled>
+                    Selecione a secretaria
+                  </option>
+                  {departments.map((department) => (
+                    <option key={department.name}>{department.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Prioridade
+                <select name="priority" defaultValue="Normal" required>
+                  <option>Baixa</option>
+                  <option>Normal</option>
+                  <option>Alta</option>
+                  <option>Urgente</option>
+                </select>
+              </label>
+              <div className="request-deadline-note">
+                <Clock3 size={15} /> Prazo demonstrativo inicial: cinco dias
+                após o registro.
+              </div>
+              <div className="operator-entry-actions">
+                <button
+                  type="button"
+                  className="operator-cancel"
+                  onClick={() => setRequestOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button className="workspace-primary-button" type="submit">
+                  <FilePlus2 size={15} /> Gerar protocolo
                 </button>
               </div>
             </form>

@@ -90,3 +90,11 @@ Nesta etapa, as três entradas, transições, seleções de secretaria/persona, 
 **Tipografia:** sans-serif de alta legibilidade, títulos objetivos, texto de apoio curto e valores tabulares.
 
 **Essência da marca:** “A prefeitura inteira, explicada para quem precisa decidir e executar.” Personalidade: clara, confiável e prática. Voz direta, sem jargão.
+
+## Fluxo funcional de Solicitações e Protocolos
+
+O protótipo inclui uma central municipal para demandas administrativas. O cadastro feito pelo operador informa assunto, descrição, categoria, solicitante, contato opcional, local, canal, secretaria responsável e prioridade. A aplicação atribui um protocolo demonstrativo, situação inicial, responsável, datas de recebimento e prazo; toda alteração acrescenta evento ao histórico do mesmo registro. O secretário acompanha a fila da pasta selecionada e pode atualizar situação, responsável e nota de andamento. O prefeito consulta os protocolos e resumos agregados.
+
+No front-end, `src/data/requests.ts` define o contrato comum (`MunicipalRequest`), os registros sintéticos iniciais, a regra de aberto/atrasado e a numeração demonstrativa. `src/components/RequestCenter.tsx` apresenta lista, filtros, detalhamento, histórico e atualização da secretaria; `OperationalWorkspace.tsx` oferece o cadastro ao operador e passa as alterações à aplicação. `App.tsx` mantém a coleção única em memória e deriva dela os totais por secretaria e do município. Os 36 registros abertos e 7 vencidos são seeds fictícios alinhados ao cenário que já existia. A fila de encaminhamentos clínicos especializados continua separada e não é contada como solicitação administrativa.
+
+Não existe persistência nesta etapa: cadastro, atualização e histórico desaparecem ao recarregar ou encerrar a sessão. O protocolo exibido não é número oficial de prefeitura e os registros não correspondem a manifestações reais. O futuro backend deverá substituir a geração local por numeração transacional, trilha auditável e persistência apropriada, preservando o mesmo contrato funcional.

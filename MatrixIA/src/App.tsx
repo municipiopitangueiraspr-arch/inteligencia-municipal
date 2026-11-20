@@ -11,6 +11,7 @@ import {
   ChevronDown,
   CircleHelp,
   Command,
+  FilePlus2,
   LogOut,
   LayoutDashboard,
   MapPin,
@@ -26,7 +27,17 @@ import DataOriginDialog from "./components/DataOriginDialog";
 import OperationalWorkspace, {
   type Experience,
 } from "./components/OperationalWorkspace";
+import RequestCenter from "./components/RequestCenter";
 import { dataLineage, simulatedTransportRecords } from "./data/dataLineage";
+import {
+  createHistoryEntry,
+  getDepartmentRequestCounts,
+  getRequestCounts,
+  initialMunicipalRequests,
+  nextProtocolNumber,
+  type MunicipalRequest,
+  type RequestStatus,
+} from "./data/requests";
 import {
   departments,
   financialPosition,
@@ -38,7 +49,7 @@ import {
   type Priority,
 } from "./data/mockData";
 
-type View = "overview" | "departments";
+type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
 
 type MetricCard = {
@@ -58,6 +69,9 @@ const formatPercent = (value: number) =>
 
 function App() {
   const [experience, setExperience] = useState<Experience | null>(null);
+  const [requests, setRequests] = useState<MunicipalRequest[]>(
+    initialMunicipalRequests,
+  );
   const [sourceOpen, setSourceOpen] = useState(false);
   const [view, setView] = useState<View>("overview");
   const [selectedDepartment, setSelectedDepartment] =
@@ -69,33 +83,42 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAllPriorities, setShowAllPriorities] = useState(false);
 
+  const departmentsWithRequestCounts = useMemo(
+    () =>
+      departments.map((department) => {
+        const counts = getDepartmentRequestCounts(requests, department.name);
+        return {
+          ...department,
+          openRequests: counts.open,
+          overdueRequests: counts.overdue,
+        };
+      }),
+    [requests],
+  );
+
   const statusCounts = useMemo(
     () => ({
-      okay: departments.filter((department) => department.status === "Em dia")
-        .length,
-      attention: departments.filter(
+      okay: departmentsWithRequestCounts.filter(
+        (department) => department.status === "Em dia",
+      ).length,
+      attention: departmentsWithRequestCounts.filter(
         (department) => department.status === "Atenção",
       ).length,
-      critical: departments.filter(
+      critical: departmentsWithRequestCounts.filter(
         (department) => department.status === "Crítico",
       ).length,
     }),
-    [],
+    [departmentsWithRequestCounts],
   );
 
-  const requestTotals = useMemo(
-    () => ({
-      open: departments.reduce(
-        (total, department) => total + department.openRequests,
-        0,
-      ),
-      overdue: departments.reduce(
-        (total, department) => total + department.overdueRequests,
-        0,
-      ),
-    }),
-    [],
-  );
+  const requestTotals = useMemo(() => getRequestCounts(requests), [requests]);
+
+  const requestMonthlyDifference =
+    municipalitySnapshot.previousMonthOpenRequests - requestTotals.open;
+  const requestMonthlyComparison =
+    requestMonthlyDifference >= 0
+      ? `${requestMonthlyDifference} a menos que em 31/out`
+      : `${Math.abs(requestMonthlyDifference)} a mais que em 31/out`;
 
   const revenueToDatePercent =
     (financialPosition.revenueReceivedMillions /
@@ -122,7 +145,7 @@ function App() {
       label: "Solicitações administrativas em aberto",
       value: requestTotals.open.toString(),
       change: `${requestTotals.overdue} fora do prazo`,
-      helper: `Central das 11 secretarias · ${municipalitySnapshot.previousMonthOpenRequests - requestTotals.open} a menos que em 31/out`,
+      helper: `Central das 11 secretarias · ${requestMonthlyComparison}`,
       tone: "amber",
       icon: "requests",
     },
@@ -158,6 +181,71 @@ function App() {
     setMobileMenuOpen(false);
   };
 
+  const createMunicipalRequest = (
+    input: Omit<
+      MunicipalRequest,
+      | "id"
+      | "protocol"
+      | "createdAt"
+      | "dueAt"
+      | "status"
+      | "assignedTo"
+      | "history"
+      | "simulated"
+    > & { createdBy: string },
+  ) => {
+    const now = new Date();
+    const dueAt = new Date(now);
+    dueAt.setDate(dueAt.getDate() + 5);
+    const protocol = nextProtocolNumber(requests);
+    const { createdBy, ...requestFields } = input;
+    const request: MunicipalRequest = {
+      ...requestFields,
+      id: `SIM-${protocol}`,
+      protocol,
+      createdAt: now.toISOString(),
+      dueAt: dueAt.toISOString(),
+      status: "Recebida",
+      assignedTo: "Triagem da secretaria",
+      simulated: true,
+      history: [
+        {
+          id: `SIM-${protocol}-H01`,
+          at: now.toISOString(),
+          actor: createdBy,
+          status: "Recebida",
+          note: "Demanda cadastrada e encaminhada para triagem da secretaria responsável.",
+          assignedTo: "Triagem da secretaria",
+        },
+      ],
+    };
+    setRequests((previous) => [request, ...previous]);
+    return request;
+  };
+
+  const updateMunicipalRequest = (
+    id: string,
+    update: { status: RequestStatus; assignedTo: string; note: string },
+    actor: string,
+  ) => {
+    setRequests((previous) =>
+      previous.map((request) => {
+        if (request.id !== id) return request;
+        const historyEntry = createHistoryEntry(request, {
+          ...update,
+          actor,
+          previousAssignee: request.assignedTo,
+        });
+        return {
+          ...request,
+          status: update.status,
+          assignedTo: update.assignedTo,
+          history: [...request.history, historyEntry],
+        };
+      }),
+    );
+  };
+
   const closeDepartment = () => setSelectedDepartment(null);
 
   const openNotice = (mode: NoticeMode) => {
@@ -175,7 +263,7 @@ function App() {
   };
 
   const openPriorityDepartment = (priority: Priority) => {
-    const department = departments.find(
+    const department = departmentsWithRequestCounts.find(
       (item) => item.name === priority.department,
     );
     if (department) openDepartment(department);
@@ -185,7 +273,7 @@ function App() {
     ? priorities
     : priorities.slice(0, 3);
   const searchResults = searchQuery.trim()
-    ? departments.filter((department) =>
+    ? departmentsWithRequestCounts.filter((department) =>
         `${department.name} ${department.summary} ${department.area}`
           .toLocaleLowerCase("pt-BR")
           .includes(searchQuery.trim().toLocaleLowerCase("pt-BR")),
@@ -225,6 +313,11 @@ function App() {
     return (
       <OperationalWorkspace
         experience={experience}
+        requests={requests}
+        onCreateRequest={createMunicipalRequest}
+        onUpdateRequest={(id, update) =>
+          updateMunicipalRequest(id, update, "Secretaria responsável")
+        }
         onSwitchExperience={() => setExperience(null)}
       />
     );
@@ -295,6 +388,18 @@ function App() {
             <span className="nav-count">{departments.length}</span>
           </button>
           <button
+            className={`nav-item ${view === "requests" ? "active" : ""}`}
+            onClick={() => {
+              setView("requests");
+              closeDepartment();
+              setMobileMenuOpen(false);
+            }}
+          >
+            <FilePlus2 size={18} />
+            <span>Solicitações</span>
+            <span className="nav-count">{requestTotals.open}</span>
+          </button>
+          <button
             className="nav-item"
             onClick={() =>
               document
@@ -320,7 +425,7 @@ function App() {
 
         <div className="nav-label nav-label-spaced">ACESSO RÁPIDO</div>
         <div className="quick-departments">
-          {departments.slice(0, 5).map((department) => (
+          {departmentsWithRequestCounts.slice(0, 5).map((department) => (
             <button
               key={department.name}
               className="quick-link"
@@ -406,7 +511,11 @@ function App() {
               <span className="crumb-slash">/</span>
               <strong>
                 {selectedDepartment?.shortName ??
-                  (view === "overview" ? "Visão do prefeito" : "Secretarias")}
+                  (view === "overview"
+                    ? "Visão do prefeito"
+                    : view === "requests"
+                      ? "Solicitações"
+                      : "Secretarias")}
               </strong>
             </div>
           </div>
@@ -487,7 +596,9 @@ function App() {
         )}
 
         <div className="content-wrap">
-          {view === "overview" && !selectedDepartment ? (
+          {view === "requests" && !selectedDepartment ? (
+            <RequestCenter requests={requests} mode="mayor" />
+          ) : view === "overview" && !selectedDepartment ? (
             <>
               <section className="welcome-row">
                 <div>
@@ -689,7 +800,7 @@ function App() {
                   </button>
                 </div>
                 <div className="department-grid">
-                  {departments.map((department) => (
+                  {departmentsWithRequestCounts.map((department) => (
                     <DepartmentCard
                       key={department.name}
                       department={department}
@@ -746,7 +857,7 @@ function App() {
                 </div>
               </div>
               <div className="directory-grid">
-                {departments.map((department) => (
+                {departmentsWithRequestCounts.map((department) => (
                   <DepartmentCard
                     key={department.name}
                     department={department}
