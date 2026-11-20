@@ -31,6 +31,8 @@ import {
 } from "../data/requests";
 import HealthTerritoryModule from "./HealthTerritoryModule";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
+import PeopleFamiliesDomicilesModule from "./PeopleFamiliesDomicilesModule";
+import type { PeopleRegistryDataset } from "../data/peopleRegistry";
 
 export type Experience = "mayor" | "secretary" | "operator";
 
@@ -40,6 +42,10 @@ type WorkspaceProps = {
   healthTerritory: HealthTerritoryDataset;
   onHealthTerritoryChange: (
     update: (current: HealthTerritoryDataset) => HealthTerritoryDataset,
+  ) => void;
+  peopleRegistry: PeopleRegistryDataset;
+  onPeopleRegistryChange: (
+    update: (current: PeopleRegistryDataset) => PeopleRegistryDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -125,6 +131,7 @@ const departmentModules: Record<string, string[]> = {
     "Aprovações e processos",
   ],
   "Saúde e Vigilância Sanitária": [
+    "Pessoas, Famílias e Domicílios",
     "Unidades e equipes",
     "Agenda e atendimentos",
     "Visitas e procedimentos",
@@ -381,6 +388,8 @@ export default function OperationalWorkspace({
   requests,
   healthTerritory,
   onHealthTerritoryChange,
+  peopleRegistry,
+  onPeopleRegistryChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -392,7 +401,7 @@ export default function OperationalWorkspace({
     operatorPersonas[3],
   );
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
-    "overview" | "services" | "records" | "requests" | "territory"
+    "overview" | "services" | "records" | "requests" | "territory" | "people"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -682,12 +691,22 @@ export default function OperationalWorkspace({
                 <span>{departmentRequestCounts.open}</span>
               </button>
               {selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
-                <button
-                  className={activeSecretaryTab === "territory" ? "active" : ""}
-                  onClick={() => setActiveSecretaryTab("territory")}
-                >
-                  <MapPinned size={14} /> Território
-                </button>
+                <>
+                  <button
+                    className={
+                      activeSecretaryTab === "territory" ? "active" : ""
+                    }
+                    onClick={() => setActiveSecretaryTab("territory")}
+                  >
+                    <MapPinned size={14} /> Território
+                  </button>
+                  <button
+                    className={activeSecretaryTab === "people" ? "active" : ""}
+                    onClick={() => setActiveSecretaryTab("people")}
+                  >
+                    <UsersRound size={14} /> Pessoas, Famílias e Domicílios
+                  </button>
+                </>
               )}
             </div>
             {activeSecretaryTab === "overview" && (
@@ -814,25 +833,46 @@ export default function OperationalWorkspace({
                   ))}
                 </div>
                 {selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
-                  <button
-                    type="button"
-                    className="health-module-launch-card"
-                    onClick={() => setActiveSecretaryTab("territory")}
-                  >
-                    <span className="health-module-launch-icon">
-                      <MapPinned size={19} />
-                    </span>
-                    <span className="health-module-launch-copy">
-                      <strong>Território, Unidades e Equipes</strong>
-                      <small>
-                        Mapa demonstrativo, áreas de atuação e cadastros
-                        relacionados da rede municipal de saúde.
-                      </small>
-                    </span>
-                    <span className="health-module-launch-action">
-                      Abrir módulo <ArrowRight size={14} />
-                    </span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => setActiveSecretaryTab("territory")}
+                    >
+                      <span className="health-module-launch-icon">
+                        <MapPinned size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Território, Unidades e Equipes</strong>
+                        <small>
+                          Mapa demonstrativo, áreas de atuação e cadastros
+                          relacionados da rede municipal de saúde.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => setActiveSecretaryTab("people")}
+                    >
+                      <span className="health-module-launch-icon">
+                        <UsersRound size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Pessoas, Famílias e Domicílios</strong>
+                        <small>
+                          Cadastro municipal fictício de referência, relações
+                          familiares, endereços compartilhados e mapa agregado.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
+                  </>
                 )}
                 <div className="workspace-cross-area">
                   <strong>Integração dentro da prefeitura</strong>
@@ -849,6 +889,14 @@ export default function OperationalWorkspace({
                 <HealthTerritoryModule
                   dataset={healthTerritory}
                   onChange={onHealthTerritoryChange}
+                />
+              )}
+            {activeSecretaryTab === "people" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <PeopleFamiliesDomicilesModule
+                  dataset={peopleRegistry}
+                  healthTerritory={healthTerritory}
+                  onChange={onPeopleRegistryChange}
                 />
               )}
             {activeSecretaryTab === "records" && (
