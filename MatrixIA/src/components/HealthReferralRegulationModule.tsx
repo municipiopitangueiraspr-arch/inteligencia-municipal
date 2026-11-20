@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ClipboardPlus,
   Clock3,
   FilePlus2,
   Filter,
@@ -42,6 +43,7 @@ type HealthReferralRegulationModuleProps = {
     update: (current: HealthReferralsDataset) => HealthReferralsDataset,
   ) => void;
   initialServiceRecordId?: string;
+  onOpenDiagnostics?: (referralId: string) => void;
   onBack?: () => void;
 };
 
@@ -155,6 +157,7 @@ export default function HealthReferralRegulationModule({
   healthTerritory,
   onChange,
   initialServiceRecordId,
+  onOpenDiagnostics,
   onBack,
 }: HealthReferralRegulationModuleProps) {
   const [view, setView] = useState<ModuleView>(
@@ -717,6 +720,7 @@ export default function HealthReferralRegulationModule({
           onBack={returnToQueue}
           onSubmit={updateReferral}
           updateError={updateError}
+          onOpenDiagnostics={onOpenDiagnostics}
         />
       ) : (
         <>
@@ -924,6 +928,7 @@ function ReferralDetail({
   onBack,
   onSubmit,
   updateError,
+  onOpenDiagnostics,
 }: {
   referral: HealthReferralRecord;
   mode: ModuleMode;
@@ -932,6 +937,7 @@ function ReferralDetail({
   onBack: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   updateError: string;
+  onOpenDiagnostics?: (referralId: string) => void;
 }) {
   return (
     <section className="health-referral-detail-view">
@@ -953,6 +959,31 @@ function ReferralDetail({
           </span>
         </div>
       </div>
+      {onOpenDiagnostics && (
+        <div className="health-referral-diagnostics-action">
+          <div className="health-referral-diagnostics-copy">
+            <ClipboardPlus size={17} />
+            <span>
+              <strong>Exames, procedimentos e resultados</strong>
+              <small>
+                Inicie um pedido clínico para a mesma pessoa, relacionado a este
+                encaminhamento de regulação.
+              </small>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="health-referral-secondary"
+            disabled={referral.status === "Cancelado"}
+            onClick={() => onOpenDiagnostics(referral.id)}
+          >
+            <ArrowRight size={14} />
+            {referral.status === "Cancelado"
+              ? "Encaminhamento cancelado"
+              : "Criar pedido vinculado"}
+          </button>
+        </div>
+      )}
       <div className="health-referral-detail-grid">
         <article>
           <span>Data e tempo desde o encaminhamento</span>

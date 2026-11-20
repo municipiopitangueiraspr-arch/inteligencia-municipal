@@ -622,6 +622,47 @@
   font-size: 13px;
 }
 
+.health-referral-diagnostics-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 15px;
+  padding: 12px 14px;
+  border: 1px solid #c9dfe8;
+  border-radius: 9px;
+  background: #edf6fa;
+}
+
+.health-referral-diagnostics-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #24536a;
+}
+
+.health-referral-diagnostics-copy svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.health-referral-diagnostics-copy span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.health-referral-diagnostics-copy strong {
+  color: #254c60;
+  font-size: 12px;
+}
+
+.health-referral-diagnostics-copy small {
+  color: #59717d;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .health-referral-detail-badges {
   justify-content: flex-end;
   flex-wrap: wrap;

@@ -52,6 +52,7 @@ type HealthVisitsAttendanceModuleProps = {
     update: (current: HealthActivitiesDataset) => HealthActivitiesDataset,
   ) => void;
   onOpenRegulation?: (serviceRecordId: string) => void;
+  onOpenDiagnostics?: (serviceRecordId: string) => void;
   onBack?: () => void;
 };
 
@@ -182,6 +183,7 @@ export default function HealthVisitsAttendanceModule({
   healthTerritory,
   onChange,
   onOpenRegulation,
+  onOpenDiagnostics,
   onBack,
 }: HealthVisitsAttendanceModuleProps) {
   const initialView: ModuleView =
@@ -1328,6 +1330,26 @@ export default function HealthVisitsAttendanceModule({
                       {selectedAttendance.status === "Realizado"
                         ? "Criar encaminhamento vinculado"
                         : "Conclua o atendimento para encaminhar"}
+                    </button>
+                  </div>
+                )}
+                {onOpenDiagnostics && (
+                  <div className="health-detail-field health-detail-wide">
+                    <span>Exames, procedimentos e resultados</span>
+                    <p>
+                      Registre um pedido clínico reaproveitando a pessoa e este
+                      atendimento como origem, sem duplicar os cadastros.
+                    </p>
+                    <button
+                      type="button"
+                      className="health-action-secondary"
+                      disabled={selectedAttendance.status !== "Realizado"}
+                      onClick={() => onOpenDiagnostics(selectedAttendance.id)}
+                    >
+                      <ArrowRight size={14} />
+                      {selectedAttendance.status === "Realizado"
+                        ? "Criar pedido vinculado"
+                        : "Conclua o atendimento para criar um pedido"}
                     </button>
                   </div>
                 )}

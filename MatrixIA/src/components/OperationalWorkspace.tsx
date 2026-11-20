@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ClipboardPlus,
   Clock3,
   ClipboardList,
   FilePlus2,
@@ -40,6 +41,8 @@ import {
   getHealthReferralSummary,
   type HealthReferralsDataset,
 } from "../data/healthReferrals";
+import HealthExamsProceduresModule from "./HealthExamsProceduresModule";
+import type { HealthDiagnosticsDataset } from "../data/healthDiagnostics";
 import PeopleFamiliesDomicilesModule from "./PeopleFamiliesDomicilesModule";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
 
@@ -63,6 +66,10 @@ type WorkspaceProps = {
   healthReferrals: HealthReferralsDataset;
   onHealthReferralsChange: (
     update: (current: HealthReferralsDataset) => HealthReferralsDataset,
+  ) => void;
+  healthDiagnostics: HealthDiagnosticsDataset;
+  onHealthDiagnosticsChange: (
+    update: (current: HealthDiagnosticsDataset) => HealthDiagnosticsDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -411,6 +418,8 @@ export default function OperationalWorkspace({
   onHealthActivitiesChange,
   healthReferrals,
   onHealthReferralsChange,
+  healthDiagnostics,
+  onHealthDiagnosticsChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -430,10 +439,21 @@ export default function OperationalWorkspace({
     | "people"
     | "health-activities"
     | "health-referrals"
+    | "health-diagnostics"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
   const [healthReferralOpen, setHealthReferralOpen] = useState(false);
+  const [healthDiagnosticsOpen, setHealthDiagnosticsOpen] = useState(false);
+  const [diagnosticsSourceServiceId, setDiagnosticsSourceServiceId] = useState<
+    string | undefined
+  >();
+  const [diagnosticsSourceReferralId, setDiagnosticsSourceReferralId] = useState<
+    string | undefined
+  >();
+  const [diagnosticsReturnTab, setDiagnosticsReturnTab] = useState<
+    "services" | "health-activities" | "health-referrals"
+  >("services");
   const [referralSourceServiceId, setReferralSourceServiceId] = useState<
     string | undefined
   >();
@@ -495,6 +515,27 @@ export default function OperationalWorkspace({
     }
     setHealthWorkflowOpen(false);
     setHealthReferralOpen(true);
+  };
+  const openHealthDiagnostics = (source?: {
+    serviceRecordId?: string;
+    referralId?: string;
+  }) => {
+    setDiagnosticsSourceServiceId(source?.serviceRecordId);
+    setDiagnosticsSourceReferralId(source?.referralId);
+    if (isSecretary) {
+      setDiagnosticsReturnTab(
+        source?.referralId
+          ? "health-referrals"
+          : source?.serviceRecordId
+            ? "health-activities"
+            : "services",
+      );
+      setActiveSecretaryTab("health-diagnostics");
+      return;
+    }
+    setHealthWorkflowOpen(false);
+    setHealthReferralOpen(false);
+    setHealthDiagnosticsOpen(true);
   };
   const selectedDepartmentSummary =
     selectedDepartment.name === "Saúde e Vigilância Sanitária"
@@ -694,7 +735,10 @@ export default function OperationalWorkspace({
                 );
                 setHealthWorkflowOpen(false);
                 setHealthReferralOpen(false);
+                setHealthDiagnosticsOpen(false);
                 setReferralSourceServiceId(undefined);
+                setDiagnosticsSourceServiceId(undefined);
+                setDiagnosticsSourceReferralId(undefined);
               }}
             >
               {operatorPersonas.map((persona) => (
@@ -818,6 +862,17 @@ export default function OperationalWorkspace({
                     }}
                   >
                     <ArrowRight size={14} /> Encaminhamentos e Regulação
+                  </button>
+                  <button
+                    className={activeSecretaryTab === "health-diagnostics" ? "active" : ""}
+                    onClick={() => {
+                      setDiagnosticsReturnTab("services");
+                      setDiagnosticsSourceServiceId(undefined);
+                      setDiagnosticsSourceReferralId(undefined);
+                      setActiveSecretaryTab("health-diagnostics");
+                    }}
+                  >
+                    <ClipboardPlus size={14} /> Exames, Procedimentos e Resultados
                   </button>
                 </>
               )}
@@ -1026,6 +1081,29 @@ export default function OperationalWorkspace({
                         Abrir módulo <ArrowRight size={14} />
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => {
+                        setDiagnosticsReturnTab("services");
+                        setDiagnosticsSourceServiceId(undefined);
+                        setDiagnosticsSourceReferralId(undefined);
+                        setActiveSecretaryTab("health-diagnostics");
+                      }}
+                    >
+                      <span className="health-module-launch-icon">
+                        <ClipboardPlus size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Exames, Procedimentos e Resultados</strong>
+                        <small>
+                          Pedidos clínicos vinculados a pessoas e eventos existentes, com agenda, execução, resultados e histórico.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
                   </>
                 )}
                 <div className="workspace-cross-area">
@@ -1062,6 +1140,9 @@ export default function OperationalWorkspace({
                   healthTerritory={healthTerritory}
                   onChange={onHealthActivitiesChange}
                   onOpenRegulation={openHealthRegulation}
+                  onOpenDiagnostics={(serviceRecordId) =>
+                    openHealthDiagnostics({ serviceRecordId })
+                  }
                 />
               )}
             {activeSecretaryTab === "health-referrals" &&
@@ -1074,9 +1155,31 @@ export default function OperationalWorkspace({
                   healthTerritory={healthTerritory}
                   onChange={onHealthReferralsChange}
                   initialServiceRecordId={referralSourceServiceId}
+                  onOpenDiagnostics={(referralId) =>
+                    openHealthDiagnostics({ referralId })
+                  }
                   onBack={() => {
                     setReferralSourceServiceId(undefined);
                     setActiveSecretaryTab("health-activities");
+                  }}
+                />
+              )}
+            {activeSecretaryTab === "health-diagnostics" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthExamsProceduresModule
+                  mode="secretary"
+                  dataset={healthDiagnostics}
+                  healthActivities={healthActivities}
+                  healthReferrals={healthReferrals}
+                  peopleRegistry={peopleRegistry}
+                  healthTerritory={healthTerritory}
+                  onChange={onHealthDiagnosticsChange}
+                  initialServiceRecordId={diagnosticsSourceServiceId}
+                  initialReferralId={diagnosticsSourceReferralId}
+                  onBack={() => {
+                    setActiveSecretaryTab(diagnosticsReturnTab);
+                    setDiagnosticsSourceServiceId(undefined);
+                    setDiagnosticsSourceReferralId(undefined);
                   }}
                 />
               )}
@@ -1191,6 +1294,14 @@ export default function OperationalWorkspace({
                   <Activity size={16} /> Abrir fila de encaminhamentos
                 </button>
               )}
+              {healthOperatorPersona === "ubs" && (
+                <button
+                  className="workspace-secondary-button"
+                  onClick={() => openHealthDiagnostics()}
+                >
+                  <ClipboardPlus size={16} /> Exames, procedimentos e resultados
+                </button>
+              )}
               <button
                 className="workspace-secondary-button"
                 onClick={() => {
@@ -1211,6 +1322,9 @@ export default function OperationalWorkspace({
                 healthTerritory={healthTerritory}
                 onChange={onHealthActivitiesChange}
                 onOpenRegulation={openHealthRegulation}
+                onOpenDiagnostics={(serviceRecordId) =>
+                  openHealthDiagnostics({ serviceRecordId })
+                }
                 onBack={() => setHealthWorkflowOpen(false)}
               />
             )}
@@ -1223,9 +1337,33 @@ export default function OperationalWorkspace({
                 healthTerritory={healthTerritory}
                 onChange={onHealthReferralsChange}
                 initialServiceRecordId={referralSourceServiceId}
+                onOpenDiagnostics={(referralId) =>
+                  openHealthDiagnostics({ referralId })
+                }
                 onBack={() => {
                   setHealthReferralOpen(false);
                   setReferralSourceServiceId(undefined);
+                }}
+              />
+            )}
+            {healthDiagnosticsOpen && healthOperatorPersona === "ubs" && (
+              <HealthExamsProceduresModule
+                key={`${selectedPersona.id}-${diagnosticsSourceServiceId ?? ""}-${diagnosticsSourceReferralId ?? ""}`}
+                mode="operator"
+                dataset={healthDiagnostics}
+                healthActivities={healthActivities}
+                healthReferrals={healthReferrals}
+                peopleRegistry={peopleRegistry}
+                healthTerritory={healthTerritory}
+                onChange={onHealthDiagnosticsChange}
+                initialServiceRecordId={diagnosticsSourceServiceId}
+                initialReferralId={diagnosticsSourceReferralId}
+                onBack={() => {
+                  setHealthDiagnosticsOpen(false);
+                  if (diagnosticsSourceReferralId) setHealthReferralOpen(true);
+                  else if (diagnosticsSourceServiceId) setHealthWorkflowOpen(true);
+                  setDiagnosticsSourceServiceId(undefined);
+                  setDiagnosticsSourceReferralId(undefined);
                 }}
               />
             )}

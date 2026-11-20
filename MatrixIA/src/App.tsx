@@ -65,6 +65,10 @@ import {
   initialPeopleRegistry,
   type PeopleRegistryDataset,
 } from "./data/peopleRegistry";
+import {
+  initialHealthDiagnostics,
+  type HealthDiagnosticsDataset,
+} from "./data/healthDiagnostics";
 
 type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -95,6 +99,8 @@ function App() {
     useState<HealthActivitiesDataset>(initialHealthActivities);
   const [healthReferrals, setHealthReferrals] =
     useState<HealthReferralsDataset>(initialHealthReferrals);
+  const [healthDiagnostics, setHealthDiagnostics] =
+    useState<HealthDiagnosticsDataset>(initialHealthDiagnostics);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -398,6 +404,8 @@ function App() {
         onHealthActivitiesChange={setHealthActivities}
         healthReferrals={healthReferrals}
         onHealthReferralsChange={setHealthReferrals}
+        healthDiagnostics={healthDiagnostics}
+        onHealthDiagnosticsChange={setHealthDiagnostics}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}
