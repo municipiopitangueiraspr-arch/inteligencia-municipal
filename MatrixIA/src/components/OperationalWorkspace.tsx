@@ -29,8 +29,12 @@ import {
   type MunicipalRequestDraft,
   type RequestStatus,
 } from "../data/requests";
+import HealthVisitsAttendanceModule, {
+  type HealthOperatorPersona,
+} from "./HealthVisitsAttendanceModule";
 import HealthTerritoryModule from "./HealthTerritoryModule";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
+import type { HealthActivitiesDataset } from "../data/healthActivities";
 import PeopleFamiliesDomicilesModule from "./PeopleFamiliesDomicilesModule";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
 
@@ -46,6 +50,10 @@ type WorkspaceProps = {
   peopleRegistry: PeopleRegistryDataset;
   onPeopleRegistryChange: (
     update: (current: PeopleRegistryDataset) => PeopleRegistryDataset,
+  ) => void;
+  healthActivities: HealthActivitiesDataset;
+  onHealthActivitiesChange: (
+    update: (current: HealthActivitiesDataset) => HealthActivitiesDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -390,6 +398,8 @@ export default function OperationalWorkspace({
   onHealthTerritoryChange,
   peopleRegistry,
   onPeopleRegistryChange,
+  healthActivities,
+  onHealthActivitiesChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -401,9 +411,16 @@ export default function OperationalWorkspace({
     operatorPersonas[3],
   );
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
-    "overview" | "services" | "records" | "requests" | "territory" | "people"
+    | "overview"
+    | "services"
+    | "records"
+    | "requests"
+    | "territory"
+    | "people"
+    | "health-activities"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
+  const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestValidationError, setRequestValidationError] = useState<
     string | null
@@ -426,6 +443,11 @@ export default function OperationalWorkspace({
     [selectedDepartment],
   );
   const isSecretary = experience === "secretary";
+  const healthOperatorPersona = (["acs", "ace", "ubs"] as const).includes(
+    selectedPersona.id as HealthOperatorPersona,
+  )
+    ? (selectedPersona.id as HealthOperatorPersona)
+    : undefined;
   const departmentRequestCounts = getDepartmentRequestCounts(
     requests,
     selectedDepartment.name,
@@ -595,13 +617,14 @@ export default function OperationalWorkspace({
               id="persona-picker"
               className="persona-picker"
               value={selectedPersona.id}
-              onChange={(event) =>
+              onChange={(event) => {
                 setSelectedPersona(
                   operatorPersonas.find(
                     (persona) => persona.id === event.target.value,
                   )!,
-                )
-              }
+                );
+                setHealthWorkflowOpen(false);
+              }}
             >
               {operatorPersonas.map((persona) => (
                 <option value={persona.id} key={persona.id}>
@@ -705,6 +728,14 @@ export default function OperationalWorkspace({
                     onClick={() => setActiveSecretaryTab("people")}
                   >
                     <UsersRound size={14} /> Pessoas, Famílias e Domicílios
+                  </button>
+                  <button
+                    className={
+                      activeSecretaryTab === "health-activities" ? "active" : ""
+                    }
+                    onClick={() => setActiveSecretaryTab("health-activities")}
+                  >
+                    <Activity size={14} /> Visitas e Atendimentos
                   </button>
                 </>
               )}
@@ -872,6 +903,25 @@ export default function OperationalWorkspace({
                         Abrir módulo <ArrowRight size={14} />
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      className="health-module-launch-card"
+                      onClick={() => setActiveSecretaryTab("health-activities")}
+                    >
+                      <span className="health-module-launch-icon">
+                        <Activity size={19} />
+                      </span>
+                      <span className="health-module-launch-copy">
+                        <strong>Visitas e Atendimentos</strong>
+                        <small>
+                          Roteiros de ACS/ACE, registros da UBS, resultados,
+                          retornos e histórico vinculados ao cadastro territorial.
+                        </small>
+                      </span>
+                      <span className="health-module-launch-action">
+                        Abrir módulo <ArrowRight size={14} />
+                      </span>
+                    </button>
                   </>
                 )}
                 <div className="workspace-cross-area">
@@ -897,6 +947,16 @@ export default function OperationalWorkspace({
                   dataset={peopleRegistry}
                   healthTerritory={healthTerritory}
                   onChange={onPeopleRegistryChange}
+                />
+              )}
+            {activeSecretaryTab === "health-activities" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthVisitsAttendanceModule
+                  mode="secretary"
+                  dataset={healthActivities}
+                  peopleRegistry={peopleRegistry}
+                  healthTerritory={healthTerritory}
+                  onChange={onHealthActivitiesChange}
                 />
               )}
             {activeSecretaryTab === "records" && (
@@ -994,9 +1054,13 @@ export default function OperationalWorkspace({
               </div>
               <button
                 className="workspace-primary-button"
-                onClick={() => setEntryOpen(true)}
+                onClick={() => {
+                  if (healthOperatorPersona) setHealthWorkflowOpen(true);
+                  else setEntryOpen(true);
+                }}
               >
-                <FilePlus2 size={16} /> Registrar atividade
+                <FilePlus2 size={16} />
+                {healthOperatorPersona ? "Abrir módulo de Saúde" : "Registrar atividade"}
               </button>
               <button
                 className="workspace-secondary-button"
@@ -1008,6 +1072,18 @@ export default function OperationalWorkspace({
                 <ClipboardList size={16} /> Registrar demanda
               </button>
             </div>
+            {healthWorkflowOpen && healthOperatorPersona && (
+              <HealthVisitsAttendanceModule
+                key={selectedPersona.id}
+                mode="operator"
+                personaId={healthOperatorPersona}
+                dataset={healthActivities}
+                peopleRegistry={peopleRegistry}
+                healthTerritory={healthTerritory}
+                onChange={onHealthActivitiesChange}
+                onBack={() => setHealthWorkflowOpen(false)}
+              />
+            )}
             {latestProtocol && (
               <div className="request-confirmation" role="status">
                 <span>
@@ -1088,7 +1164,12 @@ export default function OperationalWorkspace({
                         e próxima providência. O registro atualiza a fila da
                         equipe e os resumos relacionados nesta simulação.
                       </p>
-                      <button onClick={() => setEntryOpen(true)}>
+                      <button
+                        onClick={() => {
+                          if (healthOperatorPersona) setHealthWorkflowOpen(true);
+                          else setEntryOpen(true);
+                        }}
+                      >
                         Registrar atividade vinculada <ArrowRight size={13} />
                       </button>
                     </div>

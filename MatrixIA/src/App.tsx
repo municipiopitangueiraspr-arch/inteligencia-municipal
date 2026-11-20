@@ -53,6 +53,10 @@ import {
   type HealthTerritoryDataset,
 } from "./data/healthTerritory";
 import {
+  initialHealthActivities,
+  type HealthActivitiesDataset,
+} from "./data/healthActivities";
+import {
   initialPeopleRegistry,
   type PeopleRegistryDataset,
 } from "./data/peopleRegistry";
@@ -82,6 +86,8 @@ function App() {
   );
   const [healthTerritory, setHealthTerritory] =
     useState<HealthTerritoryDataset>(initialHealthTerritory);
+  const [healthActivities, setHealthActivities] =
+    useState<HealthActivitiesDataset>(initialHealthActivities);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -329,6 +335,8 @@ function App() {
         requests={requests}
         healthTerritory={healthTerritory}
         onHealthTerritoryChange={setHealthTerritory}
+        healthActivities={healthActivities}
+        onHealthActivitiesChange={setHealthActivities}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}
