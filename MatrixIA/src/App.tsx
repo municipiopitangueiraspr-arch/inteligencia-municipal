@@ -48,6 +48,10 @@ import {
   type Department,
   type Priority,
 } from "./data/mockData";
+import {
+  initialHealthTerritory,
+  type HealthTerritoryDataset,
+} from "./data/healthTerritory";
 
 type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -72,6 +76,8 @@ function App() {
   const [requests, setRequests] = useState<MunicipalRequest[]>(
     initialMunicipalRequests,
   );
+  const [healthTerritory, setHealthTerritory] =
+    useState<HealthTerritoryDataset>(initialHealthTerritory);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [view, setView] = useState<View>("overview");
   const [selectedDepartment, setSelectedDepartment] =
@@ -314,6 +320,8 @@ function App() {
       <OperationalWorkspace
         experience={experience}
         requests={requests}
+        healthTerritory={healthTerritory}
+        onHealthTerritoryChange={setHealthTerritory}
         onCreateRequest={createMunicipalRequest}
         onUpdateRequest={(id, update) =>
           updateMunicipalRequest(id, update, "Secretaria responsável")

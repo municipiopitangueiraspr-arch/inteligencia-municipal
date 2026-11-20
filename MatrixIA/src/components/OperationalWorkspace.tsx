@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FilePlus2,
   LogOut,
+  MapPinned,
   MapPin,
   UsersRound,
 } from "lucide-react";
@@ -28,12 +29,18 @@ import {
   type MunicipalRequestDraft,
   type RequestStatus,
 } from "../data/requests";
+import HealthTerritoryModule from "./HealthTerritoryModule";
+import type { HealthTerritoryDataset } from "../data/healthTerritory";
 
 export type Experience = "mayor" | "secretary" | "operator";
 
 type WorkspaceProps = {
   experience: Exclude<Experience, "mayor">;
   requests: MunicipalRequest[];
+  healthTerritory: HealthTerritoryDataset;
+  onHealthTerritoryChange: (
+    update: (current: HealthTerritoryDataset) => HealthTerritoryDataset,
+  ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
     id: string,
@@ -372,6 +379,8 @@ type LocalSecretaryUpdate = {
 export default function OperationalWorkspace({
   experience,
   requests,
+  healthTerritory,
+  onHealthTerritoryChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -383,7 +392,7 @@ export default function OperationalWorkspace({
     operatorPersonas[3],
   );
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
-    "overview" | "services" | "records" | "requests"
+    "overview" | "services" | "records" | "requests" | "territory"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -546,7 +555,10 @@ export default function OperationalWorkspace({
                       ? "selected"
                       : ""
                   }
-                  onClick={() => setSelectedDepartment(department)}
+                  onClick={() => {
+                    setSelectedDepartment(department);
+                    setActiveSecretaryTab("overview");
+                  }}
                 >
                   <span
                     className={`workspace-dot workspace-dot-${department.status === "Em dia" ? "green" : department.status === "Atenção" ? "amber" : "red"}`}
@@ -669,6 +681,14 @@ export default function OperationalWorkspace({
                 Solicitações
                 <span>{departmentRequestCounts.open}</span>
               </button>
+              {selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <button
+                  className={activeSecretaryTab === "territory" ? "active" : ""}
+                  onClick={() => setActiveSecretaryTab("territory")}
+                >
+                  <MapPinned size={14} /> Território
+                </button>
+              )}
             </div>
             {activeSecretaryTab === "overview" && (
               <>
@@ -793,6 +813,27 @@ export default function OperationalWorkspace({
                     </article>
                   ))}
                 </div>
+                {selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                  <button
+                    type="button"
+                    className="health-module-launch-card"
+                    onClick={() => setActiveSecretaryTab("territory")}
+                  >
+                    <span className="health-module-launch-icon">
+                      <MapPinned size={19} />
+                    </span>
+                    <span className="health-module-launch-copy">
+                      <strong>Território, Unidades e Equipes</strong>
+                      <small>
+                        Mapa demonstrativo, áreas de atuação e cadastros
+                        relacionados da rede municipal de saúde.
+                      </small>
+                    </span>
+                    <span className="health-module-launch-action">
+                      Abrir módulo <ArrowRight size={14} />
+                    </span>
+                  </button>
+                )}
                 <div className="workspace-cross-area">
                   <strong>Integração dentro da prefeitura</strong>
                   <p>
@@ -803,6 +844,13 @@ export default function OperationalWorkspace({
                 </div>
               </>
             )}
+            {activeSecretaryTab === "territory" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthTerritoryModule
+                  dataset={healthTerritory}
+                  onChange={onHealthTerritoryChange}
+                />
+              )}
             {activeSecretaryTab === "records" && (
               <div className="secretary-records-page">
                 <div className="workspace-section-heading">
