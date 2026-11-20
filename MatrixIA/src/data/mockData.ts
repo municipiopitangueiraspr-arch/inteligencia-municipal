@@ -1,3 +1,8 @@
+import {
+  clinicalReferralSummary,
+  simulatedTransportRecords,
+} from "./dataLineage";
+
 export type Status = "Em dia" | "Atenção" | "Crítico";
 export type Severity = "Crítico" | "Atenção";
 
@@ -27,6 +32,7 @@ export type Priority = {
   reference: string;
   action: string;
   impact: string;
+  sourceId: string;
 };
 
 export const municipalityProfile = {
@@ -131,10 +137,10 @@ export const departments: Department[] = [
     shortName: "Educação",
     area: "Rede de ensino",
     status: "Crítico",
-    summary: "Um dos três micro-ônibus está parado; uma rota foi reorganizada.",
-    metric: "32 alunos",
+    summary: `Um de ${simulatedTransportRecords.vehicles.length} micro-ônibus está parado; uma rota foi reorganizada.`,
+    metric: `${simulatedTransportRecords.route.activeStudentCount} alunos`,
     metricLabel: "com rota escolar readequada",
-    trend: "Micro-ônibus 02 aguarda reparo nos freios",
+    trend: `Micro-ônibus ${simulatedTransportRecords.maintenanceOrder.vehicleId} aguarda peça para os freios`,
     icon: "ED",
     openRequests: 4,
     overdueRequests: 0,
@@ -200,11 +206,10 @@ export const departments: Department[] = [
     shortName: "Saúde",
     area: "Atenção à saúde",
     status: "Atenção",
-    summary:
-      "Oito pessoas esperam há mais de 60 dias por consulta especializada.",
-    metric: "8 pessoas",
+    summary: `${clinicalReferralSummary.waitingOver60Days} pessoas esperam há mais de 60 dias por consulta especializada.`,
+    metric: `${clinicalReferralSummary.waitingOver60Days} pessoas`,
     metricLabel: "na fila clínica há mais de 60 dias",
-    trend: "36 encaminhamentos clínicos aguardam consulta",
+    trend: `${clinicalReferralSummary.waiting} encaminhamentos clínicos aguardam consulta`,
     icon: "SV",
     openRequests: 5,
     overdueRequests: 2,
@@ -237,26 +242,26 @@ export const priorities: Priority[] = [
   {
     level: "Crítico",
     title: "Transporte escolar com rota readequada",
-    description:
-      "O micro-ônibus 02 está parado desde 18/nov aguardando reparo nos freios. A equipe reorganizou a rota para manter o atendimento a 32 alunos.",
+    description: `O micro-ônibus ${simulatedTransportRecords.maintenanceOrder.vehicleId} está em manutenção desde 18/nov aguardando peça para os freios. A rota ${simulatedTransportRecords.route.id.replace("SIM-EDU-", "")} está em contingência, com ${simulatedTransportRecords.route.activeStudentCount} vínculos ativos de estudantes.`,
     department: "Educação",
     owner: "Educação + Gestão de Frota da Administração",
     reference: "Registro atualizado em 19/nov, 15h20",
     action:
       "Cobrar a oficina antes do fechamento de hoje, às 17h. Se o reparo não estiver concluído, manter a rota alternativa amanhã.",
-    impact: "32 estudantes · 1 de 3 micro-ônibus indisponível",
+    impact: `${simulatedTransportRecords.route.activeStudentCount} estudantes · ${simulatedTransportRecords.vehicles.filter((vehicle) => vehicle.status !== "Disponível").length} de ${simulatedTransportRecords.vehicles.length} micro-ônibus indisponível`,
+    sourceId: "school-transport",
   },
   {
     level: "Atenção",
-    title: "Oito pessoas aguardam consulta especializada há mais de 60 dias",
-    description:
-      "São 36 encaminhamentos clínicos na regulação. Essa fila é separada das 36 solicitações administrativas exibidas no cartão do município.",
+    title: `${clinicalReferralSummary.waitingOver60Days} pessoas aguardam consulta especializada há mais de 60 dias`,
+    description: `São ${clinicalReferralSummary.waiting} encaminhamentos clínicos na regulação. Essa fila é separada das solicitações administrativas exibidas no cartão do município.`,
     department: "Saúde e Vigilância Sanitária",
     owner: "Regulação da Secretaria de Saúde",
     reference: "Posição simulada em 19/nov",
     action:
       "Revisar os oito casos com maior espera e confirmar a próxima oferta de vagas regionais.",
-    impact: "8 pessoas na faixa de maior espera",
+    impact: `${clinicalReferralSummary.waitingOver60Days} pessoas na faixa de maior espera`,
+    sourceId: "clinical-referrals",
   },
   {
     level: "Atenção",
@@ -268,6 +273,7 @@ export const priorities: Priority[] = [
     reference: "Ordens de serviço atualizadas em 19/nov, 14h10",
     action: "Informar a sequência da equipe e uma previsão para cada trecho.",
     impact: "2 ordens de serviço fora do prazo",
+    sourceId: "works-orders",
   },
   {
     level: "Atenção",
@@ -280,6 +286,7 @@ export const priorities: Priority[] = [
     action:
       "Agendar as visitas ou informar aos solicitantes quando serão atendidos.",
     impact: "2 solicitações vencidas",
+    sourceId: "rural-visits",
   },
   {
     level: "Atenção",
@@ -291,16 +298,20 @@ export const priorities: Priority[] = [
     reference: "Atendimento atualizado em 19/nov, 11h05",
     action: "Registrar responsável pelo retorno e a providência combinada.",
     impact: "1 solicitação vencida",
+    sourceId: "business-guidance",
   },
 ];
 
 export const municipalitySnapshot = {
   previousMonthOpenRequests: 42,
-  schoolBusesAvailable: 2,
-  schoolBusesTotal: 3,
-  studentsAffectedByTransportChange: 32,
-  specialtyReferralsWaiting: 36,
-  specialtyReferralsOver60Days: 8,
+  schoolBusesAvailable: simulatedTransportRecords.vehicles.filter(
+    (vehicle) => vehicle.status === "Disponível",
+  ).length,
+  schoolBusesTotal: simulatedTransportRecords.vehicles.length,
+  studentsAffectedByTransportChange:
+    simulatedTransportRecords.route.activeStudentCount,
+  specialtyReferralsWaiting: clinicalReferralSummary.waiting,
+  specialtyReferralsOver60Days: clinicalReferralSummary.waitingOver60Days,
   primaryCareVisitsOctober: 1126,
   studentsEnrolled: 418,
   schoolAttendanceOctoberPercent: 94.2,

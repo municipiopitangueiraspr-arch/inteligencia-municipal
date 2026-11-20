@@ -11,16 +11,22 @@ import {
   ChevronDown,
   CircleHelp,
   Command,
+  LogOut,
   LayoutDashboard,
   MapPin,
   Menu,
   Search,
-  Settings2,
   ShieldCheck,
   Sparkles,
   Wallet,
   X,
 } from "lucide-react";
+import AccessScreen from "./components/AccessScreen";
+import DataOriginDialog from "./components/DataOriginDialog";
+import OperationalWorkspace, {
+  type Experience,
+} from "./components/OperationalWorkspace";
+import { dataLineage, simulatedTransportRecords } from "./data/dataLineage";
 import {
   departments,
   financialPosition,
@@ -33,6 +39,7 @@ import {
 } from "./data/mockData";
 
 type View = "overview" | "departments";
+type NoticeMode = "executive" | "help" | "notifications";
 
 type MetricCard = {
   label: string;
@@ -50,12 +57,16 @@ const formatPercent = (value: number) =>
   `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 
 function App() {
+  const [experience, setExperience] = useState<Experience | null>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [view, setView] = useState<View>("overview");
   const [selectedDepartment, setSelectedDepartment] =
     useState<Department | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeMode, setNoticeMode] = useState<NoticeMode>("executive");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [showAllPriorities, setShowAllPriorities] = useState(false);
 
   const statusCounts = useMemo(
@@ -134,8 +145,8 @@ function App() {
     {
       label: "Transporte escolar em contingência",
       value: `${municipalitySnapshot.studentsAffectedByTransportChange} alunos`,
-      change: `${municipalitySnapshot.schoolBusesTotal - municipalitySnapshot.schoolBusesAvailable} de ${municipalitySnapshot.schoolBusesTotal} veículos parado`,
-      helper: "Rota reorganizada durante o reparo do micro-ônibus 02",
+      change: `${municipalitySnapshot.schoolBusesTotal - municipalitySnapshot.schoolBusesAvailable} de ${municipalitySnapshot.schoolBusesTotal} veículos indisponíveis`,
+      helper: `Rota vinculada ao veículo ${simulatedTransportRecords.maintenanceOrder.vehicleId} e à ordem de manutenção`,
       tone: "red",
       icon: "transport",
     },
@@ -149,6 +160,20 @@ function App() {
 
   const closeDepartment = () => setSelectedDepartment(null);
 
+  const openNotice = (mode: NoticeMode) => {
+    setNoticeMode(mode);
+    setNoticeOpen(true);
+  };
+
+  const closeNotice = () => {
+    setNoticeOpen(false);
+    if (noticeMode === "notifications") {
+      document
+        .getElementById("priorities")
+        ?.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   const openPriorityDepartment = (priority: Priority) => {
     const department = departments.find(
       (item) => item.name === priority.department,
@@ -159,6 +184,51 @@ function App() {
   const visiblePriorities = showAllPriorities
     ? priorities
     : priorities.slice(0, 3);
+  const searchResults = searchQuery.trim()
+    ? departments.filter((department) =>
+        `${department.name} ${department.summary} ${department.area}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(searchQuery.trim().toLocaleLowerCase("pt-BR")),
+      )
+    : [];
+  const noticeContent = {
+    executive: {
+      eyebrow: "RESUMO EXECUTIVO · DADOS SIMULADOS",
+      title: "O que merece decisão hoje",
+      body: `${requestTotals.open} solicitações administrativas estão abertas, ${requestTotals.overdue} fora do prazo. ${statusCounts.critical} secretaria está em estado crítico e ${statusCounts.attention} em atenção. Rota escolar, fila clínica e ordens de Obras têm origem e regra de cálculo nos detalhes.`,
+      action: "Voltar à visão do município",
+    },
+    notifications: {
+      eyebrow: "ACOMPANHAMENTOS DO MUNICÍPIO · SIMULADOS",
+      title: `${priorities.length} pontos com próximo passo definido`,
+      body: priorities
+        .map(
+          (priority) =>
+            `${priority.level}: ${priority.title} — próximo passo: ${priority.action}`,
+        )
+        .join(" "),
+      action: "Ver prioridades no painel",
+    },
+    help: {
+      eyebrow: "GUIA RÁPIDO MATRIXIA",
+      title: "Como ler esta visão",
+      body: "Comece pelas prioridades; abra ‘Origem e regra do alerta’ para ver módulos e registros que sustentam cada resumo. Use Indicadores para os cartões executivos, Acompanhamentos para ir à fila de decisões e Secretarias para navegar até a operação de cada área. Todos os dados desta demonstração são fictícios.",
+      action: "Entendi",
+    },
+  }[noticeMode];
+
+  if (!experience) {
+    return <AccessScreen onEnter={setExperience} />;
+  }
+
+  if (experience !== "mayor") {
+    return (
+      <OperationalWorkspace
+        experience={experience}
+        onSwitchExperience={() => setExperience(null)}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -184,9 +254,9 @@ function App() {
           </button>
         </div>
 
-        <button
+        <div
           className="municipality-switch"
-          aria-label="Município selecionado"
+          aria-label="Município demonstrativo"
         >
           <span className="municipality-symbol">
             <Building2 size={17} />
@@ -196,7 +266,7 @@ function App() {
             <small>{municipalityProfile.state} · Município piloto</small>
           </span>
           <ChevronDown size={15} className="muted-icon" />
-        </button>
+        </div>
 
         <div className="nav-label">GESTÃO MUNICIPAL</div>
         <nav className="main-nav" aria-label="Navegação principal">
@@ -224,14 +294,27 @@ function App() {
             <span>Secretarias</span>
             <span className="nav-count">{departments.length}</span>
           </button>
-          <button className="nav-item" onClick={() => setNoticeOpen(true)}>
+          <button
+            className="nav-item"
+            onClick={() =>
+              document
+                .getElementById("metrics-summary")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
             <Activity size={18} />
             <span>Indicadores</span>
-            <span className="nav-soon">em construção</span>
           </button>
-          <button className="nav-item" onClick={() => setNoticeOpen(true)}>
+          <button
+            className="nav-item"
+            onClick={() =>
+              document
+                .getElementById("priorities")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
             <CalendarDays size={18} />
-            <span>Agenda municipal</span>
+            <span>Acompanhamentos</span>
           </button>
         </nav>
 
@@ -265,11 +348,11 @@ function App() {
           <div className="ai-card">
             <div className="ai-card-heading">
               <Sparkles size={15} />
-              <span>Inteligência em construção</span>
+              <span>Base municipal integrada</span>
             </div>
             <p>
-              Primeiro, uma visão comum dos serviços e das pendências. A IA vem
-              depois, quando os dados forem confiáveis.
+              Uma visão comum dos serviços e das pendências. Recursos analíticos
+              avançados são uma etapa futura, apoiada por dados confiáveis.
             </p>
             <span className="ai-card-status">
               <span /> Protótipo com dados fictícios
@@ -277,7 +360,7 @@ function App() {
           </div>
           <button
             className="nav-item secondary-nav"
-            onClick={() => setNoticeOpen(true)}
+            onClick={() => openNotice("help")}
           >
             <CircleHelp size={18} />
             <span>Ajuda e orientações</span>
@@ -288,7 +371,14 @@ function App() {
               <strong>Samuel Teixeira</strong>
               <small>Visão demonstrativa · Prefeito</small>
             </div>
-            <Settings2 size={16} className="profile-settings" />
+            <button
+              className="profile-signout"
+              aria-label="Trocar experiência"
+              title="Trocar experiência"
+              onClick={() => setExperience(null)}
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </aside>
@@ -334,13 +424,13 @@ function App() {
             <button
               className="icon-button notification-button"
               aria-label="Notificações"
-              onClick={() => setNoticeOpen(true)}
+              onClick={() => openNotice("notifications")}
             >
               <Bell size={18} />
               <i />
             </button>
             <div className="topbar-divider" />
-            <button className="help-button" onClick={() => setNoticeOpen(true)}>
+            <button className="help-button" onClick={() => openNotice("help")}>
               <CircleHelp size={17} />
               <span>Ajuda</span>
             </button>
@@ -352,17 +442,47 @@ function App() {
             <Search size={17} />
             <input
               autoFocus
-              placeholder="Buscar secretaria ou assunto..."
+              placeholder="Buscar secretaria ou área..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") setSearchOpen(false);
               }}
             />
             <button
               aria-label="Fechar busca"
-              onClick={() => setSearchOpen(false)}
+              onClick={() => {
+                setSearchOpen(false);
+                setSearchQuery("");
+              }}
             >
               <X size={16} />
             </button>
+            {searchQuery.trim() && (
+              <div className="search-results">
+                {searchResults.length ? (
+                  searchResults.map((department) => (
+                    <button
+                      key={department.name}
+                      onClick={() => {
+                        openDepartment(department);
+                        setSearchOpen(false);
+                        setSearchQuery("");
+                      }}
+                    >
+                      <Building2 size={15} />
+                      <span>
+                        <strong>{department.name}</strong>
+                        <small>{department.summary}</small>
+                      </span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ))
+                ) : (
+                  <p>Nenhuma secretaria encontrada. Tente outro termo.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -387,7 +507,7 @@ function App() {
                   </div>
                   <button
                     className="outline-button"
-                    onClick={() => setNoticeOpen(true)}
+                    onClick={() => openNotice("executive")}
                   >
                     <Command size={15} />
                     <span>Resumo executivo</span>
@@ -414,10 +534,17 @@ function App() {
                     <span>Saúde e estradas também pedem ação.</span>
                   </h2>
                   <p>
-                    Um dos três micro-ônibus está parado e a rota de 32 alunos
-                    foi reorganizada. O painel destaca cinco pontos de
-                    acompanhamento em cinco secretarias.
+                    Neste cenário fictício, a indisponibilidade de um veículo e
+                    a contingência de uma rota são relacionadas aos registros de
+                    frota, manutenção e estudantes vinculados.
                   </p>
+                  <button
+                    className="banner-source-link"
+                    onClick={() => setSourceOpen(true)}
+                  >
+                    De quais cadastros viria esse alerta?
+                    <ArrowRight size={13} />
+                  </button>
                   <button
                     className="banner-button"
                     onClick={() =>
@@ -459,6 +586,7 @@ function App() {
               </section>
 
               <section
+                id="metrics-summary"
                 className="metrics-grid"
                 aria-label="Resumo para o prefeito"
               >
@@ -644,7 +772,7 @@ function App() {
         <div
           className="modal-backdrop"
           role="presentation"
-          onClick={() => setNoticeOpen(false)}
+          onClick={closeNotice}
         >
           <section
             className="notice-modal"
@@ -655,7 +783,7 @@ function App() {
           >
             <button
               className="icon-button modal-close"
-              onClick={() => setNoticeOpen(false)}
+              onClick={closeNotice}
               aria-label="Fechar"
             >
               <X size={18} />
@@ -663,22 +791,16 @@ function App() {
             <div className="modal-icon">
               <Sparkles size={21} />
             </div>
-            <div className="section-eyebrow">PROTÓTIPO EM CONSTRUÇÃO</div>
-            <h2 id="modal-title">Esta função vem depois.</h2>
-            <p>
-              Os valores, pessoas, veículos e ocorrências são inventados para
-              validar a interface. O protótipo não se conecta ao Supabase e não
-              representa dados oficiais do município.
-            </p>
-            <button
-              className="modal-action"
-              onClick={() => setNoticeOpen(false)}
-            >
-              Entendi
+            <div className="section-eyebrow">{noticeContent.eyebrow}</div>
+            <h2 id="modal-title">{noticeContent.title}</h2>
+            <p>{noticeContent.body}</p>
+            <button className="modal-action" onClick={closeNotice}>
+              {noticeContent.action}
             </button>
           </section>
         </div>
       )}
+      {sourceOpen && <DataOriginDialog onClose={() => setSourceOpen(false)} />}
     </div>
   );
 }
@@ -691,6 +813,7 @@ function PriorityItem({
   onOpen: () => void;
 }) {
   const severity = priority.level === "Crítico" ? "critical" : "attention";
+  const source = dataLineage[priority.sourceId];
   return (
     <article className="priority-item">
       <div className={`priority-marker priority-marker-${severity}`}>
@@ -710,6 +833,19 @@ function PriorityItem({
         <div className="priority-action">
           <strong>Próximo passo:</strong> {priority.action}
         </div>
+        <details className="priority-origin">
+          <summary>Origem e regra do alerta · simulado</summary>
+          <div className="priority-origin-content">
+            <strong>{source.modules.join(" · ")}</strong>
+            <ul>
+              {source.records.map((record) => (
+                <li key={record}>{record}</li>
+              ))}
+            </ul>
+            <p>{source.calculation}</p>
+            <small>{source.note}</small>
+          </div>
+        </details>
         <button onClick={onOpen}>
           Ver resumo de {priority.department} <ArrowRight size={13} />
         </button>
