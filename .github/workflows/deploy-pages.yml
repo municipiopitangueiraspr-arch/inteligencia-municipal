@@ -31,6 +31,13 @@ jobs:
         run: cp index.source.html index.html
       - name: Build
         run: npm run build
+      - name: Build MatrixIA demo under its own path
+        run: |
+          cd MatrixIA
+          npm ci
+          npm run build
+          mkdir -p ../dist/MatrixIA
+          cp -R dist/. ../dist/MatrixIA/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
