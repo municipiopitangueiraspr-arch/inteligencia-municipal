@@ -1,0 +1,681 @@
+.health-epidemiology-module {
+  margin-top: 24px;
+  padding: 23px;
+  border: 1px solid #dfe7eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(19, 50, 67, 0.045);
+  color: var(--ink, #1d3544);
+}
+
+.epidemiology-header,
+.epidemiology-header-actions,
+.epidemiology-record-title,
+.epidemiology-record-meta,
+.epidemiology-form-actions,
+.epidemiology-detail-heading,
+.epidemiology-section-title,
+.epidemiology-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.epidemiology-header {
+  align-items: flex-start;
+  margin-bottom: 17px;
+}
+.epidemiology-header h2 {
+  max-width: 800px;
+  margin: 6px 0 5px;
+  color: var(--navy, #102e40);
+  font:
+    800 23px/1.2 Manrope,
+    sans-serif;
+  letter-spacing: -0.55px;
+}
+.epidemiology-header p {
+  max-width: 760px;
+  margin: 0;
+  color: #6c808a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.epidemiology-eyebrow,
+.epidemiology-list-heading > div > span,
+.epidemiology-section-title > div > span {
+  display: block;
+  color: #547181;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.epidemiology-header-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.epidemiology-primary,
+.epidemiology-secondary,
+.epidemiology-open,
+.epidemiology-clear,
+.epidemiology-back-link,
+.epidemiology-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.epidemiology-primary {
+  background: #176a91;
+  color: #fff;
+}
+.epidemiology-primary:hover {
+  background: #0d5578;
+  transform: translateY(-1px);
+}
+.epidemiology-secondary,
+.epidemiology-back-link {
+  border-color: #dce6ea;
+  background: #fff;
+  color: #365565;
+}
+.epidemiology-secondary:hover,
+.epidemiology-back-link:hover {
+  border-color: #b7ccd5;
+  background: #f4f8fa;
+}
+.epidemiology-demo-note,
+.epidemiology-terminal-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #c9dfe8;
+  border-radius: 9px;
+  background: #edf6fa;
+  color: #24536a;
+}
+.epidemiology-demo-note {
+  margin-bottom: 16px;
+}
+.epidemiology-demo-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.epidemiology-demo-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.epidemiology-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+  padding: 10px 12px;
+  border: 1px solid #b7dfcd;
+  border-radius: 8px;
+  background: #e5f6ec;
+  color: #176b43;
+  font-size: 12px;
+  font-weight: 700;
+}
+.epidemiology-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 17px 0 20px;
+}
+.epidemiology-metric-grid button {
+  min-height: 103px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #607783;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.epidemiology-metric-grid button:hover {
+  transform: translateY(-1px);
+  border-color: #a8c9d8;
+}
+.epidemiology-metric-grid button span {
+  font-size: 11px;
+  font-weight: 700;
+}
+.epidemiology-metric-grid button strong {
+  color: #173c51;
+  font:
+    800 25px/1 Manrope,
+    sans-serif;
+}
+.epidemiology-metric-grid button small {
+  color: #7b8d95;
+  font-size: 10px;
+}
+.epidemiology-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.epidemiology-overview-card {
+  padding: 16px;
+  border: 1px solid #e3eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+.epidemiology-section-title {
+  justify-content: flex-start;
+  color: #176a91;
+}
+.epidemiology-section-title > svg {
+  flex: 0 0 auto;
+}
+.epidemiology-section-title h3 {
+  margin: 4px 0 0;
+  color: #173c51;
+  font:
+    750 16px/1.25 Manrope,
+    sans-serif;
+}
+.epidemiology-overview-card > p {
+  min-height: 52px;
+  margin: 13px 0;
+  color: #6c808a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.epidemiology-link {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #176a91;
+}
+.epidemiology-link:hover {
+  color: #0d5578;
+}
+.epidemiology-list-heading {
+  margin: 18px 0 10px;
+}
+.epidemiology-list-heading h3 {
+  margin: 4px 0 0;
+  color: #173c51;
+  font:
+    750 17px/1.2 Manrope,
+    sans-serif;
+}
+.epidemiology-list-heading > span {
+  color: #71858f;
+  font-size: 11px;
+}
+.epidemiology-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0 18px;
+}
+.epidemiology-filters label {
+  min-height: 37px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid #dfe7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #70838d;
+}
+.epidemiology-filters select,
+.epidemiology-filters input {
+  max-width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #355464;
+  font: inherit;
+  font-size: 11px;
+}
+.epidemiology-search {
+  flex: 1 1 250px;
+}
+.epidemiology-search input {
+  width: 100%;
+  min-width: 120px;
+}
+.epidemiology-clear {
+  min-height: 35px;
+  border-color: #dce6ea;
+  background: #fff;
+  color: #365565;
+}
+.epidemiology-record-list {
+  display: grid;
+  gap: 9px;
+}
+.epidemiology-record-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid #e3eaed;
+  border-radius: 10px;
+  background: #fff;
+}
+.epidemiology-record-main {
+  min-width: 0;
+  flex: 1;
+}
+.epidemiology-record-title {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.epidemiology-record-title > strong {
+  color: #193e52;
+  font-size: 13px;
+}
+.epidemiology-record-main > p {
+  margin: 6px 0 7px;
+  color: #627986;
+  font-size: 11px;
+}
+.epidemiology-record-main > p > span {
+  color: #8698a0;
+}
+.epidemiology-record-meta {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  color: #71858f;
+  font-size: 10px;
+}
+.epidemiology-record-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.epidemiology-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+}
+.epidemiology-status.status-amber {
+  background: #fff3d9;
+  color: #936312;
+}
+.epidemiology-status.status-red {
+  background: #fde6e4;
+  color: #a63831;
+}
+.epidemiology-status.status-blue {
+  background: #e5f2f8;
+  color: #176a91;
+}
+.epidemiology-status.status-green {
+  background: #e4f5eb;
+  color: #1c7149;
+}
+.epidemiology-open {
+  flex: 0 0 auto;
+  border-color: #dce6ea;
+  background: #fff;
+  color: #176a91;
+}
+.epidemiology-open:hover {
+  border-color: #a8c9d8;
+  background: #f3f9fb;
+}
+.epidemiology-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  border: 1px dashed #ccd9df;
+  border-radius: 10px;
+  color: #6e838d;
+  text-align: center;
+}
+.epidemiology-empty > svg {
+  color: #5d8da2;
+}
+.epidemiology-empty strong {
+  color: #244758;
+  font-size: 13px;
+}
+.epidemiology-empty p {
+  max-width: 440px;
+  margin: 0 0 5px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.epidemiology-form-view,
+.epidemiology-detail-view {
+  padding: 5px 0;
+}
+.epidemiology-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+.epidemiology-section-heading h3 {
+  margin: 5px 0;
+  color: #173c51;
+  font:
+    780 19px/1.25 Manrope,
+    sans-serif;
+}
+.epidemiology-section-heading p {
+  margin: 0;
+  color: #70838d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.epidemiology-section-heading > svg {
+  color: #176a91;
+}
+.epidemiology-form,
+.epidemiology-update-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+  background: #fbfdfe;
+}
+.epidemiology-form label,
+.epidemiology-update-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #3c5d6d;
+  font-size: 11px;
+  font-weight: 700;
+}
+.epidemiology-form label > span,
+.epidemiology-update-form label > span {
+  color: #b0443e;
+}
+.epidemiology-form input,
+.epidemiology-form select,
+.epidemiology-form textarea,
+.epidemiology-update-form input,
+.epidemiology-update-form select,
+.epidemiology-update-form textarea {
+  width: 100%;
+  min-height: 37px;
+  padding: 8px 10px;
+  border: 1px solid #dce6ea;
+  border-radius: 7px;
+  background: #fff;
+  color: #28495a;
+  font: inherit;
+  font-size: 12px;
+}
+.epidemiology-form textarea,
+.epidemiology-update-form textarea {
+  resize: vertical;
+}
+.epidemiology-form input:focus,
+.epidemiology-form select:focus,
+.epidemiology-form textarea:focus,
+.epidemiology-update-form input:focus,
+.epidemiology-update-form select:focus,
+.epidemiology-update-form textarea:focus,
+.epidemiology-filters input:focus,
+.epidemiology-filters select:focus {
+  outline: 2px solid #b6dce9;
+  border-color: #71a9bf;
+}
+.epidemiology-form small {
+  color: #7d9098;
+  font-size: 10px;
+  font-weight: 500;
+}
+.epidemiology-field-wide,
+.epidemiology-error,
+.epidemiology-form-actions,
+.epidemiology-update-form .epidemiology-section-heading,
+.epidemiology-update-form > button {
+  grid-column: 1 / -1;
+}
+.epidemiology-form-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.epidemiology-error {
+  margin: 0;
+  color: #a63831;
+  font-size: 11px;
+  font-weight: 700;
+}
+.epidemiology-back-link {
+  min-height: 33px;
+  margin-bottom: 14px;
+  padding: 0 10px;
+}
+.epidemiology-detail-heading {
+  align-items: flex-start;
+  margin: 10px 0 16px;
+}
+.epidemiology-detail-heading h3 {
+  margin: 5px 0 4px;
+  color: #173c51;
+  font:
+    800 21px/1.25 Manrope,
+    sans-serif;
+}
+.epidemiology-detail-heading p {
+  margin: 0;
+  color: #6c808a;
+  font-size: 12px;
+}
+.epidemiology-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 15px;
+}
+.epidemiology-detail-grid > article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e4eaed;
+  border-radius: 8px;
+  background: #fbfdfe;
+}
+.epidemiology-detail-grid > article > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #71858f;
+  font-size: 10px;
+  font-weight: 700;
+}
+.epidemiology-detail-grid > article > strong {
+  color: #27495a;
+  font-size: 12px;
+}
+.epidemiology-detail-grid > article > small {
+  display: block;
+  margin-top: 4px;
+  color: #83949c;
+  font-size: 10px;
+}
+.epidemiology-detail-grid > article > p {
+  margin: 0;
+  color: #385866;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.epidemiology-detail-wide {
+  grid-column: 1 / -1;
+}
+.epidemiology-update-form {
+  margin: 16px 0;
+  padding: 15px;
+  border-color: #dfe7eb;
+  background: #f8fbfc;
+}
+.epidemiology-update-form > button {
+  justify-self: start;
+}
+.epidemiology-history {
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid #e2e9ec;
+  border-radius: 10px;
+}
+.epidemiology-history .epidemiology-section-title {
+  justify-content: flex-start;
+  margin-bottom: 13px;
+}
+.epidemiology-history ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.epidemiology-history li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  padding: 0 0 13px;
+}
+.epidemiology-history li:not(:last-child)::before {
+  position: absolute;
+  top: 12px;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  background: #d8e4e9;
+  content: "";
+}
+.epidemiology-history-dot {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid #5c97b0;
+  border-radius: 50%;
+  background: #fff;
+}
+.epidemiology-history li strong {
+  color: #294b5a;
+  font-size: 11px;
+}
+.epidemiology-history li p {
+  margin: 3px 0;
+  color: #637a85;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.epidemiology-history li small {
+  color: #82949c;
+  font-size: 9px;
+}
+.epidemiology-terminal-note {
+  align-items: center;
+  margin: 12px 0;
+  border-color: #b9dfcb;
+  background: #eaf7ef;
+  color: #246743;
+  font-size: 11px;
+}
+.epidemiology-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #e8edef;
+  color: #7c8f97;
+  font-size: 10px;
+}
+.health-epidemiology-module button:focus-visible {
+  outline: 2px solid #71a9bf;
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .epidemiology-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .health-epidemiology-module {
+    padding: 15px;
+  }
+  .epidemiology-header,
+  .epidemiology-detail-heading {
+    flex-direction: column;
+  }
+  .epidemiology-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .epidemiology-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .epidemiology-record-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .epidemiology-open {
+    align-self: flex-end;
+  }
+  .epidemiology-form,
+  .epidemiology-detail-grid,
+  .epidemiology-update-form {
+    grid-template-columns: 1fr;
+  }
+  .epidemiology-field-wide,
+  .epidemiology-error,
+  .epidemiology-form-actions,
+  .epidemiology-update-form .epidemiology-section-heading,
+  .epidemiology-update-form > button {
+    grid-column: 1;
+  }
+  .epidemiology-list-heading {
+    align-items: flex-start;
+  }
+  .epidemiology-filters label {
+    flex: 1 1 100%;
+  }
+  .epidemiology-filters label select {
+    width: 100%;
+  }
+  .epidemiology-detail-wide {
+    grid-column: 1;
+  }
+}
