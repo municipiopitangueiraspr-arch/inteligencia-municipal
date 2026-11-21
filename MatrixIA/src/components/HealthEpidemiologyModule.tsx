@@ -5,10 +5,12 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  CheckCircle2,
   Clock3,
   FilePlus2,
   Filter,
   History,
+  ListChecks,
   Search,
   ShieldAlert,
   UserRound,
@@ -21,9 +23,13 @@ import {
   epidemiologyStatusTransitions,
   epidemiologyThemes,
   getHealthEpidemiologySummary,
+  nextEpidemiologyPendingId,
   nextEpidemiologyNotificationId,
   type EpidemiologyHistoryEvent,
   type EpidemiologyNotification,
+  type EpidemiologyPending,
+  type EpidemiologyPendingHistoryEvent,
+  type EpidemiologyPendingStatus,
   type EpidemiologyPriority,
   type EpidemiologyStatus,
   type EpidemiologyTheme,
@@ -32,7 +38,7 @@ import {
 import "./HealthEpidemiologyModule.css";
 
 type ModuleView = "overview" | "list" | "create" | "detail";
-type StatusFilter = "Todas" | "Triagem" | EpidemiologyStatus;
+type StatusFilter = "Todas" | "Triagem" | "Com pendência" | EpidemiologyStatus;
 type Props = {
   dataset: HealthEpidemiologyDataset;
   peopleRegistry: PeopleRegistryDataset;
@@ -142,15 +148,22 @@ export default function HealthEpidemiologyModule({
       return (
         (!normalized || searchText.includes(normalized)) &&
         (statusFilter === "Todas" ||
-          (statusFilter === "Triagem"
-            ? item.status === "Nova" || item.status === "Em avaliação"
-            : item.status === statusFilter)) &&
+          (statusFilter === "Com pendência"
+            ? dataset.pendings.some(
+                (pending) =>
+                  pending.notificationId === item.id &&
+                  pending.status === "Aberta",
+              )
+            : statusFilter === "Triagem"
+              ? item.status === "Nova" || item.status === "Em avaliação"
+              : item.status === statusFilter)) &&
         (themeFilter === "Todos" || item.theme === themeFilter) &&
         (priorityFilter === "Todas" || item.priority === priorityFilter)
       );
     });
   }, [
     dataset.notifications,
+    dataset.pendings,
     peopleRegistry.people,
     priorityFilter,
     search,
@@ -238,6 +251,8 @@ export default function HealthEpidemiologyModule({
       originRecordId = sourceValue.slice(sourceValue.indexOf(":") + 1);
     }
     const id = nextEpidemiologyNotificationId(dataset.notifications);
+    const pendingId = nextEpidemiologyPendingId(dataset.pendings);
+    const createdAt = new Date().toISOString();
     const record: EpidemiologyNotification = {
       id,
       personId,
@@ -258,9 +273,26 @@ export default function HealthEpidemiologyModule({
         ),
       ],
     };
+    const pending: EpidemiologyPending = {
+      id: pendingId,
+      notificationId: id,
+      title: "Conferir campos administrativos do registro",
+      responsible: "Equipe de Vigilância · demonstração",
+      status: "Aberta",
+      history: [
+        {
+          id: `${pendingId}-H01`,
+          at: createdAt,
+          actor,
+          toStatus: "Aberta",
+          note: "Pendência administrativa fictícia criada junto ao registro.",
+        },
+      ],
+    };
     onChange((current) => ({
       ...current,
       notifications: [record, ...current.notifications],
+      pendings: [pending, ...current.pendings],
     }));
     form.reset();
     setFormPersonId("");
@@ -269,6 +301,41 @@ export default function HealthEpidemiologyModule({
     setView("detail");
     setSuccess("Notificação demonstrativa criada nesta sessão.");
     setFormError("");
+  };
+
+  const updatePendingStatus = (pendingId: string) => {
+    const target = dataset.pendings.find((item) => item.id === pendingId);
+    if (!target) return;
+    const toStatus: EpidemiologyPendingStatus =
+      target.status === "Aberta" ? "Concluída" : "Aberta";
+    const historyEvent: EpidemiologyPendingHistoryEvent = {
+      id: `${target.id}-H${String(target.history.length + 1).padStart(2, "0")}`,
+      at: new Date().toISOString(),
+      actor,
+      fromStatus: target.status,
+      toStatus,
+      note:
+        toStatus === "Concluída"
+          ? "Conferência administrativa concluída nesta demonstração."
+          : "Pendência administrativa reaberta nesta demonstração.",
+    };
+    onChange((current) => ({
+      ...current,
+      pendings: current.pendings.map((item) =>
+        item.id === target.id
+          ? {
+              ...item,
+              status: toStatus,
+              history: [...item.history, historyEvent],
+            }
+          : item,
+      ),
+    }));
+    setSuccess(
+      toStatus === "Concluída"
+        ? "Pendência administrativa concluída nesta sessão."
+        : "Pendência administrativa reaberta nesta sessão.",
+    );
   };
 
   const updateNotification = (event: FormEvent<HTMLFormElement>) => {
@@ -294,7 +361,7 @@ export default function HealthEpidemiologyModule({
     }
     if (nextStatus === "Em acompanhamento" && (!nextAction || !followUpAt)) {
       setUpdateError(
-        "Ao iniciar acompanhamento, informe a próxima ação e a data de retorno demonstrativa.",
+        "Ao iniciar a etapa demonstrativa, informe uma tarefa e um prazo administrativos fictícios.",
       );
       return;
     }
@@ -427,11 +494,11 @@ export default function HealthEpidemiologyModule({
         <ShieldAlert size={17} />
         <p>
           Protótipo exclusivamente demonstrativo: registros, pessoas, temas,
-          prazos e etapas são fictícios. Não insira dados reais. Os temas não
-          são definições de caso nem notificações oficiais; esta tela não
-          substitui avaliação profissional, protocolo vigente ou sistema de
-          vigilância e não envia dados externos. Alterações ficam somente nesta
-          sessão.
+          prazos e etapas são fictícios. Não insira dados reais nem informações
+          clínicas. Os temas não são definições de caso nem notificações
+          oficiais; esta tela não substitui avaliação profissional, protocolo
+          vigente ou sistema de vigilância e não envia dados externos.
+          Alterações ficam somente nesta sessão.
         </p>
       </div>
       {success && (
@@ -458,12 +525,84 @@ export default function HealthEpidemiologyModule({
               <strong>{summary.followUps}</strong>
               <small>etapas demonstrativas ativas</small>
             </button>
-            <button onClick={() => openList("Em acompanhamento")}>
-              <span>Retornos com data</span>
-              <strong>{summary.scheduledReturns}</strong>
-              <small>datas de referência na sessão</small>
+            <button onClick={() => openList("Com pendência")}>
+              <span>Pendências administrativas abertas</span>
+              <strong>{summary.openPendings}</strong>
+              <small>vinculadas a registros demonstrativos</small>
             </button>
           </div>
+          <section className="epidemiology-pendings-panel">
+            <div className="epidemiology-list-heading">
+              <div>
+                <span>PENDÊNCIAS · SOMENTE DEMONSTRAÇÃO</span>
+                <h3>Conferências administrativas em aberto</h3>
+              </div>
+              <button
+                className="epidemiology-link"
+                onClick={() => openList("Com pendência")}
+              >
+                Ver registros <ArrowRight size={14} />
+              </button>
+            </div>
+            <p className="epidemiology-pending-note">
+              Responsáveis e datas são exemplos administrativos fictícios; não
+              representam prazos assistenciais nem condutas de Saúde.
+            </p>
+            <div className="epidemiology-pending-list">
+              {dataset.pendings.filter((item) => item.status === "Aberta")
+                .length ? (
+                dataset.pendings
+                  .filter((item) => item.status === "Aberta")
+                  .map((pending) => {
+                    const linked = dataset.notifications.find(
+                      (item) => item.id === pending.notificationId,
+                    );
+                    return (
+                      <article
+                        className="epidemiology-pending-card"
+                        key={pending.id}
+                      >
+                        <div>
+                          <strong>{pending.title}</strong>
+                          <p>
+                            {pending.id} · {pending.responsible}
+                          </p>
+                          <small>
+                            Referência: {pending.notificationId} · Prazo
+                            administrativo: {dateLabel(pending.dueAt)}
+                          </small>
+                        </div>
+                        <div className="epidemiology-pending-actions">
+                          {linked && (
+                            <button
+                              className="epidemiology-secondary"
+                              onClick={() => openNotification(linked.id)}
+                            >
+                              Abrir origem
+                            </button>
+                          )}
+                          <button
+                            className="epidemiology-pending-complete"
+                            onClick={() => updatePendingStatus(pending.id)}
+                          >
+                            <CheckCircle2 size={14} /> Concluir
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })
+              ) : (
+                <div className="epidemiology-empty">
+                  <CheckCircle2 size={22} />
+                  <strong>Nenhuma pendência administrativa aberta</strong>
+                  <p>
+                    Novos registros fictícios recebem uma conferência
+                    administrativa vinculada.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
           <div className="epidemiology-overview-grid">
             <article className="epidemiology-overview-card">
               <div className="epidemiology-section-title">
@@ -516,15 +655,39 @@ export default function HealthEpidemiologyModule({
             </button>
           </div>
           <div className="epidemiology-record-list">
-            {dataset.notifications.slice(0, 3).map((item) => (
-              <NotificationCard
-                key={item.id}
-                item={item}
-                personName={getPersonName(item.personId)}
-                originLabel={getOriginLabel(item)}
-                onOpen={() => openNotification(item.id)}
-              />
-            ))}
+            {dataset.notifications.length ? (
+              dataset.notifications
+                .slice(0, 3)
+                .map((item) => (
+                  <NotificationCard
+                    key={item.id}
+                    item={item}
+                    personName={getPersonName(item.personId)}
+                    originLabel={getOriginLabel(item)}
+                    onOpen={() => openNotification(item.id)}
+                  />
+                ))
+            ) : (
+              <div className="epidemiology-empty">
+                <FilePlus2 size={22} />
+                <strong>Nenhum registro demonstrativo nesta sessão</strong>
+                <p>
+                  Cadastre um exemplo fictício para visualizar as etapas e as
+                  pendências administrativas vinculadas.
+                </p>
+                <button
+                  className="epidemiology-primary"
+                  onClick={() => {
+                    setFormPersonId("");
+                    setSourceValue("");
+                    setView("create");
+                    clearNotice();
+                  }}
+                >
+                  <FilePlus2 size={14} /> Registrar exemplo
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -552,6 +715,9 @@ export default function HealthEpidemiologyModule({
               >
                 <option value="Todas">Todas as situações</option>
                 <option value="Triagem">Novas ou em avaliação</option>
+                <option value="Com pendência">
+                  Com pendência administrativa
+                </option>
                 {epidemiologyStatuses.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
@@ -746,13 +912,13 @@ export default function HealthEpidemiologyModule({
               </small>
             </label>
             <label className="epidemiology-field-wide">
-              Nota inicial demonstrativa <span>*</span>
+              Nota administrativa demonstrativa <span>*</span>
               <textarea
                 name="initialNote"
                 rows={3}
                 maxLength={400}
                 required
-                placeholder="Use uma nota fictícia, sem dados reais ou identificadores oficiais."
+                placeholder="Use somente texto administrativo fictício; não inclua dados reais ou informações clínicas."
               />
             </label>
             {formError && (
@@ -835,15 +1001,82 @@ export default function HealthEpidemiologyModule({
               <small>Não é classificação de risco oficial</small>
             </article>
             <article>
-              <span>Próxima ação demonstrativa</span>
+              <span>Próxima tarefa administrativa</span>
               <strong>{selected.nextAction ?? "Nenhuma ação em aberto"}</strong>
-              <small>Retorno: {dateLabel(selected.followUpAt)}</small>
+              <small>
+                Prazo administrativo: {dateLabel(selected.followUpAt)}
+              </small>
             </article>
             <article className="epidemiology-detail-wide">
-              <span>Nota inicial</span>
+              <span>Nota administrativa</span>
               <p>{selected.initialNote}</p>
             </article>
           </div>
+
+          <section className="epidemiology-detail-pendings">
+            <div className="epidemiology-section-title">
+              <ListChecks size={17} />
+              <div>
+                <span>VÍNCULO OPERACIONAL</span>
+                <h3>Pendências administrativas</h3>
+              </div>
+            </div>
+            <p>
+              Itens de conferência da demonstração, sem orientação clínica,
+              prazos assistenciais ou envio a sistema oficial.
+            </p>
+            {dataset.pendings.filter(
+              (item) => item.notificationId === selected.id,
+            ).length ? (
+              dataset.pendings
+                .filter((item) => item.notificationId === selected.id)
+                .map((pending) => (
+                  <article
+                    className="epidemiology-pending-card"
+                    key={pending.id}
+                  >
+                    <div>
+                      <strong>{pending.title}</strong>
+                      <p>
+                        {pending.id} · {pending.responsible}
+                      </p>
+                      <small>
+                        Prazo administrativo: {dateLabel(pending.dueAt)} ·
+                        Situação: {pending.status}
+                      </small>
+                      <div className="epidemiology-pending-history">
+                        {pending.history.map((event) => (
+                          <small key={event.id}>
+                            {dateLabel(event.at)} · {event.note}
+                          </small>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      className="epidemiology-pending-complete"
+                      onClick={() => updatePendingStatus(pending.id)}
+                    >
+                      {pending.status === "Aberta" ? (
+                        <>
+                          <CheckCircle2 size={14} /> Concluir pendência
+                        </>
+                      ) : (
+                        "Reabrir pendência"
+                      )}
+                    </button>
+                  </article>
+                ))
+            ) : (
+              <div className="epidemiology-empty">
+                <ListChecks size={22} />
+                <strong>Nenhuma pendência vinculada</strong>
+                <p>
+                  Os registros novos recebem uma conferência administrativa
+                  fictícia.
+                </p>
+              </div>
+            )}
+          </section>
 
           {epidemiologyStatusTransitions[selected.status].length > 0 ? (
             <form
@@ -878,28 +1111,28 @@ export default function HealthEpidemiologyModule({
               {nextStatus === "Em acompanhamento" && (
                 <>
                   <label>
-                    Próxima ação demonstrativa <span>*</span>
+                    Próxima tarefa administrativa <span>*</span>
                     <input
                       name="nextAction"
                       maxLength={160}
                       required
-                      placeholder="Descreva uma próxima ação fictícia"
+                      placeholder="Descreva uma tarefa administrativa fictícia"
                     />
                   </label>
                   <label>
-                    Data de retorno demonstrativa <span>*</span>
+                    Prazo administrativo fictício <span>*</span>
                     <input name="followUpAt" type="date" required />
                   </label>
                 </>
               )}
               <label className="epidemiology-field-wide">
-                Nota da atualização <span>*</span>
+                Nota administrativa da atualização <span>*</span>
                 <textarea
                   name="updateNote"
                   rows={3}
                   maxLength={400}
                   required
-                  placeholder="Explique a mudança usando texto fictício."
+                  placeholder="Registre somente uma mudança administrativa fictícia, sem informação clínica."
                 />
               </label>
               {updateError && (

@@ -20,8 +20,8 @@ export const epidemiologyStatuses = [
 export type EpidemiologyStatus = (typeof epidemiologyStatuses)[number];
 
 export const epidemiologyPriorities = [
-  "Rotina demonstrativa",
-  "Prioridade de acompanhamento · ilustrativa",
+  "Rotina administrativa · demonstrativa",
+  "Prioridade administrativa · ilustrativa",
 ] as const;
 
 export type EpidemiologyPriority = (typeof epidemiologyPriorities)[number];
@@ -56,8 +56,30 @@ export type EpidemiologyNotification = {
   history: EpidemiologyHistoryEvent[];
 };
 
+export type EpidemiologyPendingStatus = "Aberta" | "Concluída";
+
+export type EpidemiologyPendingHistoryEvent = {
+  id: string;
+  at: string;
+  actor: string;
+  fromStatus?: EpidemiologyPendingStatus;
+  toStatus: EpidemiologyPendingStatus;
+  note: string;
+};
+
+export type EpidemiologyPending = {
+  id: string;
+  notificationId: string;
+  title: string;
+  responsible: string;
+  dueAt?: string;
+  status: EpidemiologyPendingStatus;
+  history: EpidemiologyPendingHistoryEvent[];
+};
+
 export type HealthEpidemiologyDataset = {
   notifications: EpidemiologyNotification[];
+  pendings: EpidemiologyPending[];
 };
 
 const event = (
@@ -85,13 +107,13 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
       theme: "Síndrome febril · exemplo didático",
       reportedAt: "2026-11-18",
       symptomOnsetAt: "2026-11-17",
-      priority: "Prioridade de acompanhamento · ilustrativa",
+      priority: "Prioridade administrativa · ilustrativa",
       originType: "Atendimento",
       originRecordId: "SIM-ATD-001",
       status: "Em acompanhamento",
       initialNote:
         "Registro inteiramente fictício para demonstrar a abertura de acompanhamento; não corresponde a uma notificação oficial.",
-      nextAction: "Revisar a evolução registrada na demonstração.",
+      nextAction: "Conferir o preenchimento administrativo do registro.",
       followUpAt: "2026-11-25",
       history: [
         event(
@@ -114,7 +136,7 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
           "2026-11-19T09:10:00-03:00",
           "Acompanhamento demonstrativo iniciado",
           "Em acompanhamento",
-          "Próxima ação e data são exemplos de interface, não uma conduta clínica.",
+          "Tarefa e prazo administrativos fictícios, sem indicação clínica.",
           "Em avaliação",
         ),
       ],
@@ -125,7 +147,7 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
       theme: "Arbovirose · exemplo didático",
       reportedAt: "2026-11-19",
       symptomOnsetAt: "2026-11-18",
-      priority: "Rotina demonstrativa",
+      priority: "Rotina administrativa · demonstrativa",
       originType: "Visita domiciliar",
       originRecordId: "SIM-VIS-003",
       status: "Em avaliação",
@@ -154,7 +176,7 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
       personId: "SIM-PES-005",
       theme: "Síndrome respiratória · exemplo didático",
       reportedAt: "2026-11-20",
-      priority: "Rotina demonstrativa",
+      priority: "Rotina administrativa · demonstrativa",
       originType: "Atendimento",
       originRecordId: "SIM-ATD-003",
       status: "Nova",
@@ -176,7 +198,7 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
       theme: "Outro agravo · tema demonstrativo",
       reportedAt: "2026-11-12",
       symptomOnsetAt: "2026-11-10",
-      priority: "Rotina demonstrativa",
+      priority: "Rotina administrativa · demonstrativa",
       originType: "Registro manual",
       status: "Encerrada",
       initialNote:
@@ -216,6 +238,67 @@ export const initialHealthEpidemiology: HealthEpidemiologyDataset = {
       ],
     },
   ],
+  pendings: [
+    {
+      id: "SIM-VEA-PND-001",
+      notificationId: "SIM-VEA-001",
+      title: "Conferir campos administrativos do registro",
+      responsible: "Equipe de Vigilância · demonstração",
+      dueAt: "2026-11-25",
+      status: "Aberta",
+      history: [
+        {
+          id: "SIM-VEA-PND-001-H01",
+          at: "2026-11-19T09:10:00-03:00",
+          actor: "Secretaria de Saúde · demonstração",
+          toStatus: "Aberta",
+          note: "Pendência administrativa fictícia vinculada ao registro demonstrativo.",
+        },
+      ],
+    },
+    {
+      id: "SIM-VEA-PND-002",
+      notificationId: "SIM-VEA-002",
+      title: "Registrar retorno administrativo da unidade",
+      responsible: "Unidade de Saúde · demonstração",
+      dueAt: "2026-11-24",
+      status: "Aberta",
+      history: [
+        {
+          id: "SIM-VEA-PND-002-H01",
+          at: "2026-11-19T15:00:00-03:00",
+          actor: "Secretaria de Saúde · demonstração",
+          toStatus: "Aberta",
+          note: "Prazo de referência fictício; não corresponde a prazo assistencial.",
+        },
+      ],
+    },
+    {
+      id: "SIM-VEA-PND-003",
+      notificationId: "SIM-VEA-004",
+      title: "Arquivar conferência administrativa",
+      responsible: "Equipe de Vigilância · demonstração",
+      dueAt: "2026-11-20",
+      status: "Concluída",
+      history: [
+        {
+          id: "SIM-VEA-PND-003-H01",
+          at: "2026-11-12T09:30:00-03:00",
+          actor: "Secretaria de Saúde · demonstração",
+          toStatus: "Aberta",
+          note: "Pendência administrativa fictícia criada na demonstração.",
+        },
+        {
+          id: "SIM-VEA-PND-003-H02",
+          at: "2026-11-20T10:15:00-03:00",
+          actor: "Secretaria de Saúde · demonstração",
+          fromStatus: "Aberta",
+          toStatus: "Concluída",
+          note: "Conclusão administrativa de exemplo; sem efeito oficial.",
+        },
+      ],
+    },
+  ],
 };
 
 export const epidemiologyStatusTransitions: Record<
@@ -234,6 +317,11 @@ export const getHealthEpidemiologySummary = (
   dataset: HealthEpidemiologyDataset,
 ) => ({
   total: dataset.notifications.length,
+  openPendings: dataset.pendings.filter((item) => item.status === "Aberta")
+    .length,
+  completedPendings: dataset.pendings.filter(
+    (item) => item.status === "Concluída",
+  ).length,
   triage: dataset.notifications.filter(
     (item) => item.status === "Nova" || item.status === "Em avaliação",
   ).length,
@@ -256,4 +344,12 @@ export const nextEpidemiologyNotificationId = (
     return Math.max(current, value);
   }, 0);
   return `SIM-VEA-${String(highest + 1).padStart(3, "0")}`;
+};
+
+export const nextEpidemiologyPendingId = (pendings: EpidemiologyPending[]) => {
+  const highest = pendings.reduce((current, item) => {
+    const value = Number(item.id.match(/(\d+)$/)?.[1] ?? 0);
+    return Math.max(current, value);
+  }, 0);
+  return `SIM-VEA-PND-${String(highest + 1).padStart(3, "0")}`;
 };
