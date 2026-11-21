@@ -253,18 +253,20 @@ export default function HealthSummaryModule({
         id: "epidemiology",
         label: "Pendências epidemiológicas",
         value: epidemiology.openPendings + epidemiology.triage,
-        detail: `${epidemiology.openPendings} tarefas abertas · ${epidemiology.triage} registros em triagem`,
+        detail: `${epidemiology.openPendings} tarefas abertas · ${epidemiology.triage} registros a conferir · coleção atual da sessão`,
         tone: epidemiology.openPendings ? "attention" : "normal",
         source: "epidemiology",
         sourceLabel: sourceNames.epidemiology,
-        rule: "Somar pendências administrativas abertas e notificações sintéticas em Nova ou Em avaliação.",
+        rule: "Somar pendências administrativas abertas e registros sintéticos Recebidos ou em conferência administrativa.",
         records: [
           ...healthEpidemiology.pendings
             .filter((item) => item.status === "Aberta")
             .slice(0, 2)
             .map((item) => item.id),
           ...healthEpidemiology.notifications
-            .filter((item) => ["Nova", "Em avaliação"].includes(item.status))
+            .filter((item) =>
+              ["Recebida", "Em conferência"].includes(item.status),
+            )
             .slice(0, 2)
             .map((item) => item.id),
         ],
@@ -433,7 +435,7 @@ export default function HealthSummaryModule({
           </p>
         </div>
         <span className="health-summary-date">
-          <CalendarDays size={15} /> Referência: 19/nov/2026
+          <CalendarDays size={15} /> Base de cálculos com prazo: 19/nov/2026
         </span>
       </div>
 

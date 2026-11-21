@@ -1720,6 +1720,7 @@ export default function OperationalWorkspace({
                     dataset={healthEpidemiology}
                     peopleRegistry={peopleRegistry}
                     healthActivities={healthActivities}
+                    healthTerritory={healthTerritory}
                     onChange={onHealthEpidemiologyChange}
                     onBack={() => setActiveSecretaryTab("services")}
                   />

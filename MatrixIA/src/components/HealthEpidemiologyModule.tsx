@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import type { HealthActivitiesDataset } from "../data/healthActivities";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
+import type { HealthTerritoryDataset } from "../data/healthTerritory";
 import {
-  epidemiologyPriorities,
   epidemiologyStatuses,
   epidemiologyStatusTransitions,
   epidemiologyThemes,
@@ -30,7 +30,6 @@ import {
   type EpidemiologyPending,
   type EpidemiologyPendingHistoryEvent,
   type EpidemiologyPendingStatus,
-  type EpidemiologyPriority,
   type EpidemiologyStatus,
   type EpidemiologyTheme,
   type HealthEpidemiologyDataset,
@@ -38,11 +37,16 @@ import {
 import "./HealthEpidemiologyModule.css";
 
 type ModuleView = "overview" | "list" | "create" | "detail";
-type StatusFilter = "Todas" | "Triagem" | "Com pendência" | EpidemiologyStatus;
+type StatusFilter =
+  | "Todas"
+  | "A conferir"
+  | "Com pendência"
+  | EpidemiologyStatus;
 type Props = {
   dataset: HealthEpidemiologyDataset;
   peopleRegistry: PeopleRegistryDataset;
   healthActivities: HealthActivitiesDataset;
+  healthTerritory: HealthTerritoryDataset;
   onChange: (
     update: (current: HealthEpidemiologyDataset) => HealthEpidemiologyDataset,
   ) => void;
@@ -53,13 +57,34 @@ type OriginOption = {
   value: string;
   label: string;
   type: "Atendimento" | "Visita domiciliar";
+  id: string;
+  unitId: string;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const actor = "Secretaria de Saúde · demonstração";
+const pendingActions = [
+  "Conferir dados mínimos do registro",
+  "Confirmar unidade de referência",
+  "Registrar retorno administrativo da unidade",
+] as const;
+type PendingAction = (typeof pendingActions)[number];
+
+const today = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+};
+const isValidDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+};
 const dateLabel = (value?: string) => {
-  if (!value) return "Não informado";
+  if (!value || !isValidDate(value.slice(0, 10))) return "Não informado";
   const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  if (!year || !month || !day) return "Não informado";
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
     new Date(Date.UTC(year, month - 1, day)),
   );
@@ -71,19 +96,50 @@ const dateTimeLabel = (value: string) =>
     timeZone: "America/Sao_Paulo",
   }).format(new Date(value));
 const statusTone = (status: EpidemiologyStatus) =>
-  status === "Em acompanhamento" || status === "Em avaliação"
-    ? "amber"
-    : status === "Cancelada" || status === "Descartada"
-      ? "red"
-      : status === "Nova"
-        ? "blue"
-        : "green";
-const actor = "Secretaria de Saúde · demonstração";
+  status === "Recebida"
+    ? "blue"
+    : status === "Em conferência" || status === "Aguardando retorno"
+      ? "amber"
+      : status === "Concluída administrativamente"
+        ? "green"
+        : "red";
+const isTerminalStatus = (status: EpidemiologyStatus) =>
+  status === "Concluída administrativamente" ||
+  status === "Cancelada administrativamente";
+const statusAction = (status: EpidemiologyStatus) => {
+  switch (status) {
+    case "Em conferência":
+      return "Conferência administrativa iniciada";
+    case "Aguardando retorno":
+      return "Retorno administrativo solicitado";
+    case "Concluída administrativamente":
+      return "Fluxo administrativo concluído";
+    case "Cancelada administrativamente":
+      return "Registro cancelado administrativamente";
+    default:
+      return "Registro demonstrativo atualizado";
+  }
+};
+const statusNote = (status: EpidemiologyStatus) => {
+  switch (status) {
+    case "Em conferência":
+      return "Etapa administrativa demonstrativa; não representa avaliação clínica ou classificação de caso.";
+    case "Aguardando retorno":
+      return "Acompanhamento administrativo fictício; não constitui prazo ou orientação clínica.";
+    case "Concluída administrativamente":
+      return "Conclusão administrativa demonstrativa; não representa desfecho clínico ou oficial.";
+    case "Cancelada administrativamente":
+      return "Cancelamento administrativo demonstrativo; não representa decisão sobre condição de saúde.";
+    default:
+      return "Atualização local demonstrativa.";
+  }
+};
 
 export default function HealthEpidemiologyModule({
   dataset,
   peopleRegistry,
   healthActivities,
+  healthTerritory,
   onChange,
   onBack,
 }: Props) {
@@ -94,239 +150,384 @@ export default function HealthEpidemiologyModule({
   const [themeFilter, setThemeFilter] = useState<"Todos" | EpidemiologyTheme>(
     "Todos",
   );
-  const [priorityFilter, setPriorityFilter] = useState<
-    "Todas" | EpidemiologyPriority
-  >("Todas");
   const [formPersonId, setFormPersonId] = useState("");
+  const [formUnitId, setFormUnitId] = useState("");
   const [sourceValue, setSourceValue] = useState("");
   const [nextStatus, setNextStatus] = useState<EpidemiologyStatus | "">("");
   const [success, setSuccess] = useState("");
   const [formError, setFormError] = useState("");
   const [updateError, setUpdateError] = useState("");
+  const [pendingError, setPendingError] = useState("");
 
   const summary = useMemo(
     () => getHealthEpidemiologySummary(dataset),
     [dataset],
   );
-  const selected = dataset.notifications.find((item) => item.id === selectedId);
-  const activePeople = peopleRegistry.people.filter(
-    (item) => item.status === "Ativa",
+  const activePeople = useMemo(
+    () => peopleRegistry.people.filter((person) => person.status === "Ativa"),
+    [peopleRegistry.people],
   );
+  const activeUnits = useMemo(
+    () => healthTerritory.units.filter((unit) => unit.active),
+    [healthTerritory.units],
+  );
+  const selected = dataset.notifications.find((item) => item.id === selectedId);
+  const getPersonName = (personId: string) => {
+    const person = peopleRegistry.people.find((item) => item.id === personId);
+    return person?.preferredName || person?.fullName || "Pessoa não localizada";
+  };
+  const getUnitName = (unitId: string) =>
+    healthTerritory.units.find((item) => item.id === unitId)?.name ??
+    "Unidade não localizada";
+  const getOriginLabel = (item: EpidemiologyNotification) => {
+    if (!item.originRecordId) return "Registro manual";
+    const source =
+      item.originType === "Atendimento"
+        ? healthActivities.serviceRecords.find(
+            (record) => record.id === item.originRecordId,
+          )
+        : item.originType === "Visita domiciliar"
+          ? healthActivities.homeVisits.find(
+              (record) => record.id === item.originRecordId,
+            )
+          : undefined;
+    const date = source?.date ? ` · ${dateLabel(source.date)}` : "";
+    return `${item.originType} · ${item.originRecordId}${date}`;
+  };
   const originOptions = useMemo<OriginOption[]>(() => {
     if (!formPersonId) return [];
     const services = healthActivities.serviceRecords
       .filter((item) => item.personId === formPersonId)
       .map((item) => ({
         value: `service:${item.id}`,
-        label: `${item.id} · ${item.date} · ${item.serviceType}`,
+        label: `Atendimento · ${item.id} · ${dateLabel(item.date)}`,
         type: "Atendimento" as const,
+        id: item.id,
+        unitId: item.unitId,
       }));
     const visits = healthActivities.homeVisits
       .filter((item) => item.personId === formPersonId)
       .map((item) => ({
         value: `visit:${item.id}`,
-        label: `${item.id} · ${item.date} · ${item.activityType}`,
+        label: `Visita domiciliar · ${item.id} · ${dateLabel(item.date)}`,
         type: "Visita domiciliar" as const,
+        id: item.id,
+        unitId: item.unitId,
       }));
-    return [...services, ...visits];
+    return [...services, ...visits].sort((a, b) =>
+      b.label.localeCompare(a.label, "pt-BR"),
+    );
   }, [formPersonId, healthActivities]);
+  const openPendingRecords = dataset.pendings.filter(
+    (item) => item.status === "Aberta",
+  );
+  const selectedPendings = selected
+    ? dataset.pendings.filter((item) => item.notificationId === selected.id)
+    : [];
+  const hasOpenSelectedPendings = selectedPendings.some(
+    (item) => item.status === "Aberta",
+  );
+  const availableTransitions = selected
+    ? epidemiologyStatusTransitions[selected.status].filter(
+        (status) => !hasOpenSelectedPendings || !isTerminalStatus(status),
+      )
+    : [];
 
-  const getPersonName = (personId: string) =>
-    peopleRegistry.people.find((item) => item.id === personId)?.fullName ??
-    "Pessoa não encontrada";
-  const getOriginLabel = (item: EpidemiologyNotification) => {
-    if (!item.originRecordId) return "Registro manual sem vínculo de origem";
-    return `${item.originType} · ${item.originRecordId}`;
+  const startCreate = () => {
+    setFormPersonId("");
+    setFormUnitId(activeUnits[0]?.id ?? "");
+    setSourceValue("");
+    setFormError("");
+    setSuccess("");
+    setView("create");
   };
+  const openList = (filter: StatusFilter = "Todas") => {
+    setStatusFilter(filter);
+    setThemeFilter("Todos");
+    setSearch("");
+    setView("list");
+  };
+  const openRecord = (id: string) => {
+    setSelectedId(id);
+    setNextStatus("");
+    setUpdateError("");
+    setPendingError("");
+    setView("detail");
+  };
+
   const filteredNotifications = useMemo(() => {
-    const normalized = search.trim().toLocaleLowerCase("pt-BR");
-    return dataset.notifications.filter((item) => {
-      const searchText =
-        `${item.id} ${getPersonName(item.personId)} ${item.theme} ${item.originRecordId ?? ""}`.toLocaleLowerCase(
-          "pt-BR",
+    const query = search.trim().toLocaleLowerCase("pt-BR");
+    return [...dataset.notifications]
+      .filter((item) => {
+        const person = peopleRegistry.people.find(
+          (candidate) => candidate.id === item.personId,
         );
-      return (
-        (!normalized || searchText.includes(normalized)) &&
-        (statusFilter === "Todas" ||
-          (statusFilter === "Com pendência"
-            ? dataset.pendings.some(
-                (pending) =>
-                  pending.notificationId === item.id &&
-                  pending.status === "Aberta",
-              )
-            : statusFilter === "Triagem"
-              ? item.status === "Nova" || item.status === "Em avaliação"
-              : item.status === statusFilter)) &&
-        (themeFilter === "Todos" || item.theme === themeFilter) &&
-        (priorityFilter === "Todas" || item.priority === priorityFilter)
+        const origin = getOriginLabel(item);
+        const matchesQuery =
+          !query ||
+          [
+            item.id,
+            item.personId,
+            item.theme,
+            item.status,
+            person?.fullName,
+            person?.preferredName,
+            origin,
+          ]
+            .filter(Boolean)
+            .some((value) =>
+              String(value).toLocaleLowerCase("pt-BR").includes(query),
+            );
+        const matchesStatus =
+          statusFilter === "Todas" ||
+          (statusFilter === "A conferir" &&
+            (item.status === "Recebida" || item.status === "Em conferência")) ||
+          (statusFilter === "Com pendência" &&
+            dataset.pendings.some(
+              (pending) =>
+                pending.notificationId === item.id &&
+                pending.status === "Aberta",
+            )) ||
+          item.status === statusFilter;
+        const matchesTheme =
+          themeFilter === "Todos" || item.theme === themeFilter;
+        return matchesQuery && matchesStatus && matchesTheme;
+      })
+      .sort(
+        (a, b) =>
+          b.reportedAt.localeCompare(a.reportedAt) || a.id.localeCompare(b.id),
       );
-    });
   }, [
     dataset.notifications,
     dataset.pendings,
+    getOriginLabel,
     peopleRegistry.people,
-    priorityFilter,
     search,
     statusFilter,
     themeFilter,
   ]);
 
-  const clearNotice = () => {
-    setSuccess("");
-    setFormError("");
-    setUpdateError("");
-  };
-  const openList = (status: StatusFilter = "Todas") => {
-    setStatusFilter(status);
-    setSearch("");
-    setThemeFilter("Todos");
-    setPriorityFilter("Todas");
-    setView("list");
-    clearNotice();
-  };
-  const openNotification = (id: string) => {
-    setSelectedId(id);
-    setNextStatus("");
-    setView("detail");
-    clearNotice();
-  };
-  const eventFor = (
-    id: string,
-    action: string,
-    toStatus: EpidemiologyStatus,
-    note: string,
-    fromStatus?: EpidemiologyStatus,
-  ): EpidemiologyHistoryEvent => ({
-    id,
-    at: new Date().toISOString(),
-    actor,
-    action,
-    fromStatus,
-    toStatus,
-    note,
-  });
-
-  const createNotification = (event: FormEvent<HTMLFormElement>) => {
+  const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const values = new FormData(form);
-    const personId = String(values.get("personId") ?? "");
-    const theme = String(values.get("theme") ?? "") as EpidemiologyTheme;
-    const reportedAt = String(values.get("reportedAt") ?? "");
-    const symptomOnsetAt =
-      String(values.get("symptomOnsetAt") ?? "") || undefined;
-    const initialNote = String(values.get("initialNote") ?? "").trim();
-    const priority = String(
-      values.get("priority") ?? epidemiologyPriorities[0],
-    ) as EpidemiologyPriority;
-    if (!activePeople.some((item) => item.id === personId)) {
+    setFormError("");
+    const formData = new FormData(event.currentTarget);
+    const personId = String(formData.get("personId") ?? "");
+    const theme = String(formData.get("theme") ?? "") as EpidemiologyTheme;
+    const reportedAt = String(formData.get("reportedAt") ?? "");
+    const symptomOnsetAt = String(formData.get("symptomOnsetAt") ?? "");
+    const reportingUnitId = String(formData.get("reportingUnitId") ?? "");
+    const personExists = activePeople.some((item) => item.id === personId);
+    const unitExists = activeUnits.some((item) => item.id === reportingUnitId);
+    const origin = originOptions.find((item) => item.value === sourceValue);
+
+    if (!personExists) {
+      setFormError("Selecione uma pessoa ativa já cadastrada no município.");
+      return;
+    }
+    if (!epidemiologyThemes.includes(theme)) {
+      setFormError("Selecione uma categoria demonstrativa.");
+      return;
+    }
+    if (!isValidDate(reportedAt) || reportedAt > today()) {
       setFormError(
-        "Selecione uma pessoa ativa já cadastrada no módulo de referência.",
+        "Informe uma data de registro válida, não posterior a hoje.",
       );
       return;
     }
-    if (!epidemiologyThemes.includes(theme) || !reportedAt || !initialNote) {
+    if (
+      symptomOnsetAt &&
+      (!isValidDate(symptomOnsetAt) || symptomOnsetAt > reportedAt)
+    ) {
       setFormError(
-        "Informe pessoa, tema demonstrativo, data de notificação e nota inicial; campos só com espaços não são aceitos.",
+        "A data de início, quando informada, deve ser válida e não posterior à data do registro.",
       );
       return;
     }
-    if (symptomOnsetAt && symptomOnsetAt > reportedAt) {
-      setFormError(
-        "A data de início não pode ser posterior à data de notificação.",
-      );
+    if (!unitExists) {
+      setFormError("Selecione uma unidade ativa já cadastrada.");
       return;
     }
-    let originType: EpidemiologyNotification["originType"] = "Registro manual";
-    let originRecordId: string | undefined;
-    if (sourceValue) {
-      const origin = originOptions.find((item) => item.value === sourceValue);
-      if (!origin) {
-        setFormError(
-          "A origem selecionada não corresponde à pessoa escolhida.",
-        );
-        return;
-      }
-      originType = origin.type;
-      originRecordId = sourceValue.slice(sourceValue.indexOf(":") + 1);
+    if (sourceValue && !origin) {
+      setFormError("A origem escolhida não foi localizada para esta pessoa.");
+      return;
     }
-    const id = nextEpidemiologyNotificationId(dataset.notifications);
-    const pendingId = nextEpidemiologyPendingId(dataset.pendings);
-    const createdAt = new Date().toISOString();
+
+    const recordId = nextEpidemiologyNotificationId(dataset.notifications);
+    const now = new Date().toISOString();
+    const firstEvent: EpidemiologyHistoryEvent = {
+      id: `${recordId}-H01`,
+      at: now,
+      actor,
+      action: "Registro demonstrativo recebido",
+      toStatus: "Recebida",
+      note: "Registro fictício criado na sessão; não equivale a notificação oficial.",
+    };
     const record: EpidemiologyNotification = {
-      id,
+      id: recordId,
       personId,
       theme,
       reportedAt,
-      symptomOnsetAt,
-      priority,
-      originType,
-      originRecordId,
-      status: "Nova",
-      initialNote,
-      history: [
-        eventFor(
-          `${id}-H01`,
-          "Notificação demonstrativa registrada",
-          "Nova",
-          "Registro fictício criado somente para esta sessão; não é uma notificação oficial.",
-        ),
-      ],
+      ...(symptomOnsetAt ? { symptomOnsetAt } : {}),
+      reportingUnitId,
+      originType: origin?.type ?? "Registro manual",
+      ...(origin ? { originRecordId: origin.id } : {}),
+      status: "Recebida",
+      history: [firstEvent],
     };
-    const pending: EpidemiologyPending = {
+    const pendingId = nextEpidemiologyPendingId(dataset.pendings);
+    const initialPending: EpidemiologyPending = {
       id: pendingId,
-      notificationId: id,
-      title: "Conferir campos administrativos do registro",
-      responsible: "Equipe de Vigilância · demonstração",
+      notificationId: recordId,
+      title: "Conferir dados mínimos do registro",
+      responsibleUnitId: reportingUnitId,
       status: "Aberta",
       history: [
         {
           id: `${pendingId}-H01`,
-          at: createdAt,
+          at: now,
           actor,
           toStatus: "Aberta",
-          note: "Pendência administrativa fictícia criada junto ao registro.",
+          note: "Conferência administrativa criada com o registro demonstrativo.",
+        },
+      ],
+    };
+    onChange((current) => ({
+      notifications: [record, ...current.notifications],
+      pendings: [initialPending, ...current.pendings],
+    }));
+    setSelectedId(recordId);
+    setSuccess(
+      "Registro fictício criado. A pessoa e a unidade foram reutilizadas do cadastro compartilhado.",
+    );
+    setView("detail");
+  };
+
+  const handleStatusUpdate = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setUpdateError("");
+    if (!selected || !nextStatus) {
+      setUpdateError("Escolha uma etapa administrativa disponível.");
+      return;
+    }
+    if (!availableTransitions.includes(nextStatus)) {
+      setUpdateError("Essa transição administrativa não está disponível.");
+      return;
+    }
+    const historyEntry: EpidemiologyHistoryEvent = {
+      id: `${selected.id}-H${String(selected.history.length + 1).padStart(2, "0")}`,
+      at: new Date().toISOString(),
+      actor,
+      action: statusAction(nextStatus),
+      fromStatus: selected.status,
+      toStatus: nextStatus,
+      note: statusNote(nextStatus),
+    };
+    onChange((current) => ({
+      ...current,
+      notifications: current.notifications.map((item) =>
+        item.id === selected.id
+          ? {
+              ...item,
+              status: nextStatus,
+              history: [...item.history, historyEntry],
+            }
+          : item,
+      ),
+    }));
+    setNextStatus("");
+    setSuccess("Etapa administrativa atualizada nesta sessão.");
+  };
+
+  const addPending = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPendingError("");
+    if (!selected) return;
+    if (isTerminalStatus(selected.status)) {
+      setPendingError(
+        "Não é possível abrir novas pendências em um fluxo concluído ou cancelado.",
+      );
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("pendingAction") ?? "") as PendingAction;
+    const responsibleUnitId = String(formData.get("responsibleUnitId") ?? "");
+    const dueAt = String(formData.get("dueAt") ?? "");
+    if (!pendingActions.includes(title)) {
+      setPendingError("Selecione uma atividade administrativa da lista.");
+      return;
+    }
+    if (!activeUnits.some((item) => item.id === responsibleUnitId)) {
+      setPendingError("Selecione uma unidade ativa responsável.");
+      return;
+    }
+    if (dueAt && !isValidDate(dueAt)) {
+      setPendingError(
+        "Informe um prazo administrativo válido ou deixe-o em branco.",
+      );
+      return;
+    }
+    const id = nextEpidemiologyPendingId(dataset.pendings);
+    const now = new Date().toISOString();
+    const pending: EpidemiologyPending = {
+      id,
+      notificationId: selected.id,
+      title,
+      responsibleUnitId,
+      ...(dueAt ? { dueAt } : {}),
+      status: "Aberta",
+      history: [
+        {
+          id: `${id}-H01`,
+          at: now,
+          actor,
+          toStatus: "Aberta",
+          note: "Pendência administrativa demonstrativa criada nesta sessão.",
         },
       ],
     };
     onChange((current) => ({
       ...current,
-      notifications: [record, ...current.notifications],
       pendings: [pending, ...current.pendings],
     }));
-    form.reset();
-    setFormPersonId("");
-    setSourceValue("");
-    setSelectedId(id);
-    setView("detail");
-    setSuccess("Notificação demonstrativa criada nesta sessão.");
-    setFormError("");
+    event.currentTarget.reset();
+    setPendingError("");
+    setSuccess("Pendência administrativa adicionada nesta sessão.");
   };
 
-  const updatePendingStatus = (pendingId: string) => {
-    const target = dataset.pendings.find((item) => item.id === pendingId);
-    if (!target) return;
-    const toStatus: EpidemiologyPendingStatus =
-      target.status === "Aberta" ? "Concluída" : "Aberta";
-    const historyEvent: EpidemiologyPendingHistoryEvent = {
-      id: `${target.id}-H${String(target.history.length + 1).padStart(2, "0")}`,
+  const updatePendingStatus = (
+    pending: EpidemiologyPending,
+    toStatus: EpidemiologyPendingStatus,
+  ) => {
+    if (toStatus === "Aberta") {
+      const sourceRecord = dataset.notifications.find(
+        (item) => item.id === pending.notificationId,
+      );
+      if (sourceRecord && isTerminalStatus(sourceRecord.status)) {
+        setPendingError(
+          "Não é possível reabrir uma pendência após concluir ou cancelar o fluxo.",
+        );
+        return;
+      }
+    }
+    const historyEntry: EpidemiologyPendingHistoryEvent = {
+      id: `${pending.id}-H${String(pending.history.length + 1).padStart(2, "0")}`,
       at: new Date().toISOString(),
       actor,
-      fromStatus: target.status,
+      fromStatus: pending.status,
       toStatus,
       note:
         toStatus === "Concluída"
-          ? "Conferência administrativa concluída nesta demonstração."
-          : "Pendência administrativa reaberta nesta demonstração.",
+          ? "Atividade administrativa concluída na demonstração."
+          : "Atividade administrativa reaberta na demonstração.",
     };
     onChange((current) => ({
       ...current,
       pendings: current.pendings.map((item) =>
-        item.id === target.id
+        item.id === pending.id
           ? {
               ...item,
               status: toStatus,
-              history: [...item.history, historyEvent],
+              history: [...item.history, historyEntry],
             }
           : item,
       ),
@@ -338,607 +539,481 @@ export default function HealthEpidemiologyModule({
     );
   };
 
-  const updateNotification = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selected || !nextStatus) return;
-    const allowed = epidemiologyStatusTransitions[selected.status];
-    if (!allowed.includes(nextStatus)) {
-      setUpdateError(
-        "A transição escolhida não está disponível para esta etapa.",
-      );
-      return;
-    }
-    const form = event.currentTarget;
-    const values = new FormData(form);
-    const note = String(values.get("updateNote") ?? "").trim();
-    const nextAction = String(values.get("nextAction") ?? "").trim();
-    const followUpAt = String(values.get("followUpAt") ?? "") || undefined;
-    if (!note) {
-      setUpdateError(
-        "Informe uma nota para preservar o motivo da atualização.",
-      );
-      return;
-    }
-    if (nextStatus === "Em acompanhamento" && (!nextAction || !followUpAt)) {
-      setUpdateError(
-        "Ao iniciar a etapa demonstrativa, informe uma tarefa e um prazo administrativos fictícios.",
-      );
-      return;
-    }
-    const historyId = `${selected.id}-H${String(selected.history.length + 1).padStart(2, "0")}`;
-    const terminal = ["Encerrada", "Descartada", "Cancelada"].includes(
-      nextStatus,
-    );
-    onChange((current) => ({
-      ...current,
-      notifications: current.notifications.map((item) => {
-        if (item.id !== selected.id) return item;
-        return {
-          ...item,
-          status: nextStatus,
-          nextAction:
-            terminal || nextStatus !== "Em acompanhamento"
-              ? undefined
-              : nextAction,
-          followUpAt:
-            terminal || nextStatus !== "Em acompanhamento"
-              ? undefined
-              : followUpAt,
-          history: [
-            ...item.history,
-            eventFor(
-              historyId,
-              `Etapa demonstrativa atualizada para ${nextStatus}`,
-              nextStatus,
-              note,
-              item.status,
-            ),
-          ],
-        };
-      }),
-    }));
-    form.reset();
-    setNextStatus("");
-    setSuccess("Etapa atualizada; o histórico anterior foi preservado.");
-    setUpdateError("");
-  };
-
-  const renderHistory = (items: EpidemiologyHistoryEvent[]) => (
-    <section className="epidemiology-history">
-      <div className="epidemiology-section-title">
-        <History size={17} />
-        <div>
-          <span>TRILHA CRONOLÓGICA</span>
-          <h3>Histórico do registro</h3>
-        </div>
-      </div>
-      <ol>
-        {[...items].reverse().map((item) => (
-          <li key={item.id}>
-            <span className="epidemiology-history-dot" />
-            <div>
-              <strong>{item.action}</strong>
-              <p>{item.note}</p>
-              <small>
-                {dateTimeLabel(item.at)} · {item.actor} ·{" "}
-                {item.fromStatus ? `${item.fromStatus} → ` : ""}
-                {item.toStatus}
-              </small>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-
-  const pageTitle =
-    view === "list"
-      ? "Fila de notificações"
-      : view === "create"
-        ? "Nova notificação demonstrativa"
-        : view === "detail"
-          ? (selected?.id ?? "Detalhe da notificação")
-          : "Vigilância Epidemiológica e Acompanhamento de Agravos";
-
   return (
     <section className="health-epidemiology-module">
       <header className="epidemiology-header">
         <div>
           <span className="epidemiology-eyebrow">
-            SAÚDE · VIGILÂNCIA EPIDEMIOLÓGICA · DADOS FICTÍCIOS
+            SAÚDE · FLUXO DEMONSTRATIVO
           </span>
-          <h2>{pageTitle}</h2>
+          <h2>Vigilância Epidemiológica e Acompanhamento de Agravos</h2>
           <p>
-            Fila demonstrativa de notificações e acompanhamentos, vinculada a
-            pessoas e eventos já cadastrados.
+            Registros sintéticos com pessoa e unidade vinculadas ao cadastro
+            municipal já existente.
           </p>
         </div>
         <div className="epidemiology-header-actions">
           {view !== "overview" && (
             <button
+              className="epidemiology-back-link"
+              onClick={() => setView("overview")}
               type="button"
-              className="epidemiology-secondary"
-              onClick={() => {
-                setView("overview");
-                clearNotice();
-              }}
             >
-              <ArrowLeft size={15} /> Resumo
-            </button>
-          )}
-          {(view === "overview" || view === "list") && (
-            <button
-              type="button"
-              className="epidemiology-primary"
-              onClick={() => {
-                setFormPersonId("");
-                setSourceValue("");
-                setView("create");
-                clearNotice();
-              }}
-            >
-              <FilePlus2 size={15} /> Nova notificação
+              <ArrowLeft size={15} /> Visão geral
             </button>
           )}
           <button
-            type="button"
             className="epidemiology-secondary"
             onClick={onBack}
+            type="button"
           >
-            <ArrowLeft size={15} /> Catálogo
+            Voltar ao catálogo
           </button>
+          {view !== "create" && (
+            <button
+              className="epidemiology-primary"
+              onClick={startCreate}
+              type="button"
+            >
+              <FilePlus2 size={15} /> Novo registro
+            </button>
+          )}
         </div>
       </header>
 
       <div className="epidemiology-demo-note" role="note">
         <ShieldAlert size={17} />
         <p>
-          Protótipo exclusivamente demonstrativo: registros, pessoas, temas,
-          prazos e etapas são fictícios. Não insira dados reais nem informações
-          clínicas. Os temas não são definições de caso nem notificações
-          oficiais; esta tela não substitui avaliação profissional, protocolo
-          vigente ou sistema de vigilância e não envia dados externos.
-          Alterações ficam somente nesta sessão.
+          <strong>Somente demonstração com dados fictícios.</strong> Não insira
+          dados reais. As categorias e etapas são administrativas e didáticas;
+          não definem caso, diagnóstico ou notificação oficial, não orientam
+          condutas clínicas e não substituem profissionais, protocolos ou
+          sistemas oficiais. As alterações ficam apenas nesta sessão e não são
+          exportadas.
         </p>
       </div>
+
       {success && (
         <div className="epidemiology-success" role="status">
-          <Check size={15} /> {success}
+          <CheckCircle2 size={15} /> {success}
         </div>
       )}
 
       {view === "overview" && (
         <>
           <div className="epidemiology-metric-grid">
-            <button onClick={() => openList()}>
-              <span>Notificações demonstrativas</span>
+            <button onClick={() => openList("Todas")} type="button">
+              <span>Registros demonstrativos</span>
               <strong>{summary.total}</strong>
-              <small>registros na sessão</small>
+              <small>Total da coleção nesta sessão</small>
             </button>
-            <button onClick={() => openList("Triagem")}>
-              <span>Novas ou em avaliação</span>
+            <button onClick={() => openList("A conferir")} type="button">
+              <span>A conferir</span>
               <strong>{summary.triage}</strong>
-              <small>fila de avaliação</small>
+              <small>Recebidos ou em conferência administrativa</small>
             </button>
-            <button onClick={() => openList("Em acompanhamento")}>
-              <span>Em acompanhamento</span>
+            <button
+              onClick={() => openList("Aguardando retorno")}
+              type="button"
+            >
+              <span>Aguardando retorno</span>
               <strong>{summary.followUps}</strong>
-              <small>etapas demonstrativas ativas</small>
+              <small>Etapa administrativa local</small>
             </button>
-            <button onClick={() => openList("Com pendência")}>
-              <span>Pendências administrativas abertas</span>
+            <button onClick={() => openList("Com pendência")} type="button">
+              <span>Pendências abertas</span>
               <strong>{summary.openPendings}</strong>
-              <small>vinculadas a registros demonstrativos</small>
+              <small>Tarefas ligadas aos registros</small>
             </button>
           </div>
+
           <section className="epidemiology-pendings-panel">
             <div className="epidemiology-list-heading">
               <div>
-                <span>PENDÊNCIAS · SOMENTE DEMONSTRAÇÃO</span>
-                <h3>Conferências administrativas em aberto</h3>
+                <span>ACOMPANHAMENTO ADMINISTRATIVO</span>
+                <h3>Pendências abertas</h3>
               </div>
-              <button
-                className="epidemiology-link"
-                onClick={() => openList("Com pendência")}
-              >
-                Ver registros <ArrowRight size={14} />
-              </button>
+              <span>{openPendingRecords.length} abertas</span>
             </div>
             <p className="epidemiology-pending-note">
-              Responsáveis e datas são exemplos administrativos fictícios; não
-              representam prazos assistenciais nem condutas de Saúde.
+              Responsabilidade atribuída a unidade existente. Datas são apenas
+              prazos administrativos fictícios.
             </p>
-            <div className="epidemiology-pending-list">
-              {dataset.pendings.filter((item) => item.status === "Aberta")
-                .length ? (
-                dataset.pendings
-                  .filter((item) => item.status === "Aberta")
-                  .map((pending) => {
-                    const linked = dataset.notifications.find(
-                      (item) => item.id === pending.notificationId,
-                    );
-                    return (
-                      <article
-                        className="epidemiology-pending-card"
-                        key={pending.id}
-                      >
-                        <div>
-                          <strong>{pending.title}</strong>
-                          <p>
-                            {pending.id} · {pending.responsible}
-                          </p>
-                          <small>
-                            Referência: {pending.notificationId} · Prazo
-                            administrativo: {dateLabel(pending.dueAt)}
-                          </small>
-                        </div>
-                        <div className="epidemiology-pending-actions">
-                          {linked && (
-                            <button
-                              className="epidemiology-secondary"
-                              onClick={() => openNotification(linked.id)}
-                            >
-                              Abrir origem
-                            </button>
-                          )}
+            {openPendingRecords.length ? (
+              <div className="epidemiology-pending-list">
+                {openPendingRecords.slice(0, 4).map((pending) => {
+                  const record = dataset.notifications.find(
+                    (item) => item.id === pending.notificationId,
+                  );
+                  return (
+                    <article
+                      className="epidemiology-pending-card"
+                      key={pending.id}
+                    >
+                      <div>
+                        <strong>{pending.title}</strong>
+                        <p>
+                          {pending.id} ·{" "}
+                          {getUnitName(pending.responsibleUnitId)}
+                        </p>
+                        <small>
+                          {record
+                            ? `${record.id} · ${getPersonName(record.personId)}`
+                            : pending.notificationId}
+                          {pending.dueAt
+                            ? ` · Prazo ${dateLabel(pending.dueAt)}`
+                            : " · Sem prazo definido"}
+                        </small>
+                      </div>
+                      <div className="epidemiology-pending-actions">
+                        {record && (
                           <button
-                            className="epidemiology-pending-complete"
-                            onClick={() => updatePendingStatus(pending.id)}
+                            className="epidemiology-open"
+                            onClick={() => openRecord(record.id)}
+                            type="button"
                           >
-                            <CheckCircle2 size={14} /> Concluir
+                            Abrir registro <ArrowRight size={14} />
                           </button>
-                        </div>
-                      </article>
-                    );
-                  })
-              ) : (
-                <div className="epidemiology-empty">
-                  <CheckCircle2 size={22} />
-                  <strong>Nenhuma pendência administrativa aberta</strong>
-                  <p>
-                    Novos registros fictícios recebem uma conferência
-                    administrativa vinculada.
-                  </p>
-                </div>
-              )}
-            </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="epidemiology-empty">
+                <CheckCircle2 size={22} />
+                <strong>Nenhuma pendência aberta</strong>
+                <p>
+                  As tarefas administrativas vinculadas aos registros aparecerão
+                  aqui.
+                </p>
+              </div>
+            )}
           </section>
+
           <div className="epidemiology-overview-grid">
             <article className="epidemiology-overview-card">
               <div className="epidemiology-section-title">
                 <Activity size={18} />
                 <div>
-                  <span>FILA OPERACIONAL</span>
-                  <h3>Notificações e acompanhamentos</h3>
+                  <span>REGISTRO MÍNIMO</span>
+                  <h3>Referências sem recadastro</h3>
                 </div>
               </div>
               <p>
-                Consulte o histórico demonstrativo, filtre a fila ou abra um
-                novo registro vinculado a uma pessoa existente.
+                O registro usa o identificador da pessoa já cadastrada, uma
+                categoria demonstrativa, datas, unidade e origem opcional. Nome,
+                contatos e documentos não são copiados para esta coleção.
               </p>
-              <button className="epidemiology-link" onClick={() => openList()}>
-                Abrir fila <ArrowRight size={14} />
+              <button
+                className="epidemiology-link"
+                onClick={startCreate}
+                type="button"
+              >
+                Registrar sinal demonstrativo <ArrowRight size={14} />
               </button>
             </article>
             <article className="epidemiology-overview-card">
               <div className="epidemiology-section-title">
-                <UserRound size={18} />
+                <ListChecks size={18} />
                 <div>
-                  <span>REFERÊNCIAS EXISTENTES</span>
-                  <h3>Pessoa e evento de origem</h3>
+                  <span>FLUXO LOCAL</span>
+                  <h3>Etapas administrativas</h3>
                 </div>
               </div>
               <p>
-                Reutilize uma pessoa ativa e, quando houver, associe uma visita
-                ou atendimento já registrado, sem duplicar sua origem.
+                Recebida, Em conferência, Aguardando retorno, Concluída
+                administrativamente ou Cancelada administrativamente. As
+                transições ficam registradas no histórico da sessão.
               </p>
               <button
                 className="epidemiology-link"
-                onClick={() => {
-                  setFormPersonId("");
-                  setSourceValue("");
-                  setView("create");
-                  clearNotice();
-                }}
+                onClick={() => openList("Todas")}
+                type="button"
               >
-                Registrar notificação <ArrowRight size={14} />
+                Consultar registros <ArrowRight size={14} />
               </button>
             </article>
-          </div>
-          <div className="epidemiology-list-heading">
-            <div>
-              <span>ATUALIZAÇÕES RECENTES</span>
-              <h3>Registros desta sessão</h3>
-            </div>
-            <button className="epidemiology-link" onClick={() => openList()}>
-              Ver fila <ArrowRight size={14} />
-            </button>
-          </div>
-          <div className="epidemiology-record-list">
-            {dataset.notifications.length ? (
-              dataset.notifications
-                .slice(0, 3)
-                .map((item) => (
-                  <NotificationCard
-                    key={item.id}
-                    item={item}
-                    personName={getPersonName(item.personId)}
-                    originLabel={getOriginLabel(item)}
-                    onOpen={() => openNotification(item.id)}
-                  />
-                ))
-            ) : (
-              <div className="epidemiology-empty">
-                <FilePlus2 size={22} />
-                <strong>Nenhum registro demonstrativo nesta sessão</strong>
-                <p>
-                  Cadastre um exemplo fictício para visualizar as etapas e as
-                  pendências administrativas vinculadas.
-                </p>
-                <button
-                  className="epidemiology-primary"
-                  onClick={() => {
-                    setFormPersonId("");
-                    setSourceValue("");
-                    setView("create");
-                    clearNotice();
-                  }}
-                >
-                  <FilePlus2 size={14} /> Registrar exemplo
-                </button>
-              </div>
-            )}
           </div>
         </>
       )}
 
       {view === "list" && (
         <>
+          <div className="epidemiology-list-heading">
+            <div>
+              <span>COLEÇÃO EM MEMÓRIA</span>
+              <h3>Registros demonstrativos</h3>
+            </div>
+            <span>{filteredNotifications.length} encontrados</span>
+          </div>
           <div className="epidemiology-filters">
             <label className="epidemiology-search">
               <Search size={15} />
               <input
-                value={search}
+                aria-label="Buscar por código, pessoa, categoria ou origem"
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar código, pessoa, tema ou origem"
-                aria-label="Buscar notificações demonstrativas"
+                placeholder="Buscar por código, pessoa, categoria ou origem"
+                value={search}
               />
             </label>
             <label>
               <Filter size={14} />
               <select
-                aria-label="Filtrar por situação"
-                value={statusFilter}
+                aria-label="Filtrar por etapa administrativa"
                 onChange={(event) =>
                   setStatusFilter(event.target.value as StatusFilter)
                 }
+                value={statusFilter}
               >
-                <option value="Todas">Todas as situações</option>
-                <option value="Triagem">Novas ou em avaliação</option>
-                <option value="Com pendência">
-                  Com pendência administrativa
-                </option>
-                {epidemiologyStatuses.map((item) => (
-                  <option key={item}>{item}</option>
+                <option value="Todas">Todas as etapas</option>
+                <option value="A conferir">A conferir</option>
+                <option value="Com pendência">Com pendência</option>
+                {epidemiologyStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
                 ))}
               </select>
             </label>
             <label>
+              <Activity size={14} />
               <select
-                aria-label="Filtrar por tema demonstrativo"
-                value={themeFilter}
+                aria-label="Filtrar por categoria demonstrativa"
                 onChange={(event) =>
                   setThemeFilter(
                     event.target.value as "Todos" | EpidemiologyTheme,
                   )
                 }
+                value={themeFilter}
               >
-                <option value="Todos">Todos os temas</option>
-                {epidemiologyThemes.map((item) => (
-                  <option key={item}>{item}</option>
+                <option value="Todos">Todas as categorias</option>
+                {epidemiologyThemes.map((theme) => (
+                  <option key={theme} value={theme}>
+                    {theme}
+                  </option>
                 ))}
               </select>
             </label>
-            <label>
-              <select
-                aria-label="Filtrar por prioridade ilustrativa"
-                value={priorityFilter}
-                onChange={(event) =>
-                  setPriorityFilter(
-                    event.target.value as "Todas" | EpidemiologyPriority,
-                  )
-                }
-              >
-                <option value="Todas">Todas as prioridades</option>
-                {epidemiologyPriorities.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            {(search ||
-              statusFilter !== "Todas" ||
-              themeFilter !== "Todos" ||
-              priorityFilter !== "Todas") && (
-              <button
-                className="epidemiology-clear"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("Todas");
-                  setThemeFilter("Todos");
-                  setPriorityFilter("Todas");
-                }}
-              >
-                Limpar filtros
-              </button>
-            )}
+            <button
+              className="epidemiology-clear"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("Todas");
+                setThemeFilter("Todos");
+              }}
+              type="button"
+            >
+              Limpar filtros
+            </button>
           </div>
-          <div className="epidemiology-list-heading">
-            <div>
-              <span>FILA DE DEMONSTRAÇÃO</span>
-              <h3>Notificações por pessoa e tema</h3>
+
+          {filteredNotifications.length ? (
+            <div className="epidemiology-record-list">
+              {filteredNotifications.map((item) => {
+                const openCount = dataset.pendings.filter(
+                  (pending) =>
+                    pending.notificationId === item.id &&
+                    pending.status === "Aberta",
+                ).length;
+                return (
+                  <article className="epidemiology-record-card" key={item.id}>
+                    <div className="epidemiology-record-main">
+                      <div className="epidemiology-record-title">
+                        <strong>{item.id}</strong>
+                        <span
+                          className={`epidemiology-status status-${statusTone(item.status)}`}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+                      <p>
+                        {item.theme}{" "}
+                        <span>
+                          · {getPersonName(item.personId)} ({item.personId})
+                        </span>
+                      </p>
+                      <div className="epidemiology-record-meta">
+                        <span>
+                          <CalendarDays size={13} /> Registro:{" "}
+                          {dateLabel(item.reportedAt)}
+                        </span>
+                        <span>
+                          <UserRound size={13} />{" "}
+                          {getUnitName(item.reportingUnitId)}
+                        </span>
+                        <span>
+                          <Activity size={13} /> {getOriginLabel(item)}
+                        </span>
+                        <span>
+                          <ListChecks size={13} /> {openCount} pendência(s)
+                          aberta(s)
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className="epidemiology-open"
+                      onClick={() => openRecord(item.id)}
+                      type="button"
+                    >
+                      Abrir <ArrowRight size={14} />
+                    </button>
+                  </article>
+                );
+              })}
             </div>
-            <span>
-              {filteredNotifications.length} de {dataset.notifications.length}{" "}
-              registros
-            </span>
-          </div>
-          <div className="epidemiology-record-list">
-            {filteredNotifications.length ? (
-              filteredNotifications.map((item) => (
-                <NotificationCard
-                  key={item.id}
-                  item={item}
-                  personName={getPersonName(item.personId)}
-                  originLabel={getOriginLabel(item)}
-                  onOpen={() => openNotification(item.id)}
-                />
-              ))
-            ) : (
-              <div className="epidemiology-empty">
-                <Activity size={22} />
-                <strong>Nenhum registro encontrado</strong>
-                <p>Ajuste os filtros ou crie uma notificação fictícia.</p>
+          ) : (
+            <div className="epidemiology-empty">
+              <Search size={22} />
+              <strong>Nenhum registro encontrado</strong>
+              <p>
+                Altere os filtros ou crie um registro demonstrativo usando uma
+                pessoa já cadastrada.
+              </p>
+              {dataset.notifications.length === 0 && (
                 <button
-                  className="epidemiology-secondary"
-                  onClick={() => {
-                    setFormPersonId("");
-                    setSourceValue("");
-                    setView("create");
-                    clearNotice();
-                  }}
+                  className="epidemiology-primary"
+                  onClick={startCreate}
+                  type="button"
                 >
-                  <FilePlus2 size={14} /> Nova notificação
+                  <FilePlus2 size={15} /> Novo registro
                 </button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
       {view === "create" && (
         <section className="epidemiology-form-view">
+          <button
+            className="epidemiology-back-link"
+            onClick={() => setView("overview")}
+            type="button"
+          >
+            <ArrowLeft size={14} /> Voltar à visão geral
+          </button>
           <div className="epidemiology-section-heading">
             <div>
-              <span>NOVO REGISTRO FICTÍCIO</span>
-              <h3>Abrir notificação demonstrativa</h3>
-              <p>Use somente os cadastros sintéticos desta demonstração.</p>
+              <span className="epidemiology-eyebrow">
+                NOVO REGISTRO · DADOS MÍNIMOS
+              </span>
+              <h3>Registrar sinal demonstrativo</h3>
+              <p>
+                Selecione referências existentes. Nenhum dado pessoal é copiado
+                para o registro epidemiológico.
+              </p>
             </div>
-            <FilePlus2 size={19} />
+            <FilePlus2 size={22} />
           </div>
-          <form className="epidemiology-form" onSubmit={createNotification}>
+          <form className="epidemiology-form" onSubmit={handleCreate}>
             <label className="epidemiology-field-wide">
-              Pessoa ativa já cadastrada <span>*</span>
+              Pessoa já cadastrada <span>*</span>
               <select
                 name="personId"
-                value={formPersonId}
                 onChange={(event) => {
                   setFormPersonId(event.target.value);
                   setSourceValue("");
                 }}
                 required
+                value={formPersonId}
               >
-                <option value="">Selecione uma pessoa fictícia</option>
-                {activePeople.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.fullName} · {item.id}
+                <option value="">Selecione uma pessoa existente</option>
+                {activePeople.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.preferredName
+                      ? `${person.preferredName} · ${person.fullName}`
+                      : person.fullName}{" "}
+                    · {person.id}
                   </option>
                 ))}
               </select>
-              <small>O módulo não cria nem duplica cadastros de pessoas.</small>
-            </label>
-            <label>
-              Tema do agravo <span>*</span>
-              <select
-                name="theme"
-                defaultValue={epidemiologyThemes[0]}
-                required
-              >
-                {epidemiologyThemes.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
               <small>
-                Rótulos didáticos, sem equivalência a classificação oficial.
+                O nome é exibido a partir do cadastro compartilhado; não será
+                duplicado.
               </small>
             </label>
             <label>
-              Prioridade ilustrativa <span>*</span>
-              <select
-                name="priority"
-                defaultValue={epidemiologyPriorities[0]}
-                required
-              >
-                {epidemiologyPriorities.map((item) => (
-                  <option key={item}>{item}</option>
+              Categoria demonstrativa <span>*</span>
+              <select name="theme" defaultValue="" required>
+                <option value="">Selecione uma categoria</option>
+                {epidemiologyThemes.map((theme) => (
+                  <option key={theme} value={theme}>
+                    {theme}
+                  </option>
                 ))}
               </select>
             </label>
             <label>
-              Data de notificação <span>*</span>
-              <input
-                name="reportedAt"
-                type="date"
-                defaultValue={today()}
-                required
-              />
+              Data do registro <span>*</span>
+              <input max={today()} name="reportedAt" required type="date" />
             </label>
             <label>
-              Data de início (se conhecida)
-              <input name="symptomOnsetAt" type="date" />
+              Data de início (opcional)
+              <input max={today()} name="symptomOnsetAt" type="date" />
+              <small>
+                Data administrativa de referência; não é uma avaliação clínica.
+              </small>
+            </label>
+            <label>
+              Unidade de referência <span>*</span>
+              <select
+                name="reportingUnitId"
+                onChange={(event) => setFormUnitId(event.target.value)}
+                required
+                value={formUnitId}
+              >
+                <option value="">Selecione uma unidade ativa</option>
+                {activeUnits.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.name} · {unit.id}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="epidemiology-field-wide">
-              Origem já cadastrada (opcional)
+              Origem existente (opcional)
               <select
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSourceValue(value);
+                  const source = originOptions.find(
+                    (item) => item.value === value,
+                  );
+                  if (source) setFormUnitId(source.unitId);
+                }}
                 value={sourceValue}
-                onChange={(event) => setSourceValue(event.target.value)}
-                disabled={!formPersonId || originOptions.length === 0}
               >
-                <option value="">
-                  {formPersonId
-                    ? originOptions.length
-                      ? "Registro manual, sem evento de origem"
-                      : "Sem visita ou atendimento vinculado à pessoa"
-                    : "Selecione primeiro uma pessoa"}
-                </option>
-                {originOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
+                <option value="">Registro manual, sem vínculo de origem</option>
+                {originOptions.map((origin) => (
+                  <option key={origin.value} value={origin.value}>
+                    {origin.label}
                   </option>
                 ))}
               </select>
               <small>
-                Selecione apenas um atendimento ou visita existente da pessoa
-                escolhida.
+                Mostra apenas atendimentos e visitas já vinculados à pessoa
+                selecionada; a origem é referenciada por tipo e identificador,
+                sem copiar sua narrativa.
               </small>
             </label>
-            <label className="epidemiology-field-wide">
-              Nota administrativa demonstrativa <span>*</span>
-              <textarea
-                name="initialNote"
-                rows={3}
-                maxLength={400}
-                required
-                placeholder="Use somente texto administrativo fictício; não inclua dados reais ou informações clínicas."
-              />
-            </label>
-            {formError && (
-              <p className="epidemiology-error" role="alert">
-                {formError}
-              </p>
-            )}
+            <p className="epidemiology-form-help epidemiology-field-wide">
+              A pessoa e a unidade precisam existir no cadastro compartilhado. O
+              sistema gera um identificador fictício e uma conferência
+              administrativa inicial.
+            </p>
+            {formError && <p className="epidemiology-error">{formError}</p>}
             <div className="epidemiology-form-actions">
               <button
-                type="button"
                 className="epidemiology-secondary"
-                onClick={() => {
-                  setView("list");
-                  setFormError("");
-                }}
+                onClick={() => setView("overview")}
+                type="button"
               >
                 Cancelar
               </button>
-              <button type="submit" className="epidemiology-primary">
-                <Check size={15} /> Registrar nesta sessão
+              <button className="epidemiology-primary" type="submit">
+                Criar registro fictício
               </button>
             </div>
           </form>
@@ -949,21 +1024,20 @@ export default function HealthEpidemiologyModule({
         <section className="epidemiology-detail-view">
           <button
             className="epidemiology-back-link"
-            onClick={() => {
-              setView("list");
-              clearNotice();
-            }}
+            onClick={() => setView("list")}
+            type="button"
           >
-            <ArrowLeft size={14} /> Voltar à fila
+            <ArrowLeft size={14} /> Voltar à lista
           </button>
           <div className="epidemiology-detail-heading">
             <div>
               <span className="epidemiology-eyebrow">
                 REGISTRO DEMONSTRATIVO
               </span>
-              <h3>{getPersonName(selected.personId)}</h3>
+              <h3>{selected.id}</h3>
               <p>
-                {selected.id} · {selected.theme}
+                {getPersonName(selected.personId)} · referência{" "}
+                {selected.personId}
               </p>
             </div>
             <span
@@ -972,65 +1046,103 @@ export default function HealthEpidemiologyModule({
               {selected.status}
             </span>
           </div>
+
           <div className="epidemiology-detail-grid">
             <article>
-              <span>Pessoa de referência</span>
-              <strong>{getPersonName(selected.personId)}</strong>
-              <small>{selected.personId} · cadastro já existente</small>
-            </article>
-            <article>
-              <span>Tema demonstrativo</span>
+              <span>Categoria</span>
               <strong>{selected.theme}</strong>
-              <small>Não representa definição de caso oficial</small>
             </article>
             <article>
-              <span>Datas de referência</span>
-              <strong>Notificação: {dateLabel(selected.reportedAt)}</strong>
-              <small>
-                Início informado: {dateLabel(selected.symptomOnsetAt)}
-              </small>
+              <span>Data do registro</span>
+              <strong>{dateLabel(selected.reportedAt)}</strong>
             </article>
             <article>
-              <span>Origem</span>
-              <strong>{getOriginLabel(selected)}</strong>
-              <small>Referência vinculada, sem duplicação do evento</small>
+              <span>Data de início (se informada)</span>
+              <strong>{dateLabel(selected.symptomOnsetAt)}</strong>
             </article>
             <article>
-              <span>Prioridade ilustrativa</span>
-              <strong>{selected.priority}</strong>
-              <small>Não é classificação de risco oficial</small>
-            </article>
-            <article>
-              <span>Próxima tarefa administrativa</span>
-              <strong>{selected.nextAction ?? "Nenhuma ação em aberto"}</strong>
-              <small>
-                Prazo administrativo: {dateLabel(selected.followUpAt)}
-              </small>
+              <span>Unidade de referência</span>
+              <strong>{getUnitName(selected.reportingUnitId)}</strong>
+              <small>{selected.reportingUnitId}</small>
             </article>
             <article className="epidemiology-detail-wide">
-              <span>Nota administrativa</span>
-              <p>{selected.initialNote}</p>
+              <span>Origem</span>
+              <strong>{getOriginLabel(selected)}</strong>
+              <small>
+                Referência ao evento existente; sem cópia de narrativa ou
+                detalhe de outro módulo.
+              </small>
             </article>
           </div>
 
+          {availableTransitions.length > 0 ? (
+            <form
+              className="epidemiology-update-form"
+              onSubmit={handleStatusUpdate}
+            >
+              <div className="epidemiology-section-heading">
+                <div>
+                  <span className="epidemiology-eyebrow">ETAPA LOCAL</span>
+                  <h3>Atualizar fluxo administrativo</h3>
+                </div>
+                <ListChecks size={19} />
+              </div>
+              <label className="epidemiology-field-wide">
+                Próxima etapa disponível <span>*</span>
+                <select
+                  onChange={(event) =>
+                    setNextStatus(event.target.value as EpidemiologyStatus | "")
+                  }
+                  required
+                  value={nextStatus}
+                >
+                  <option value="">Selecione uma etapa</option>
+                  {availableTransitions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {hasOpenSelectedPendings && (
+                <small className="epidemiology-field-wide">
+                  Conclua as pendências administrativas abertas antes de
+                  concluir ou cancelar este fluxo.
+                </small>
+              )}
+              <small className="epidemiology-field-wide">
+                A atualização gera um evento pré-definido no histórico. Não há
+                campo de narrativa clínica.
+              </small>
+              {updateError && (
+                <p className="epidemiology-error">{updateError}</p>
+              )}
+              <button className="epidemiology-primary" type="submit">
+                Atualizar etapa
+              </button>
+            </form>
+          ) : (
+            <div className="epidemiology-terminal-note">
+              <CheckCircle2 size={16} /> Este fluxo administrativo está
+              concluído ou cancelado; o histórico permanece disponível.
+            </div>
+          )}
+
           <section className="epidemiology-detail-pendings">
             <div className="epidemiology-section-title">
-              <ListChecks size={17} />
+              <ListChecks size={18} />
               <div>
-                <span>VÍNCULO OPERACIONAL</span>
-                <h3>Pendências administrativas</h3>
+                <span>UNIDADE RESPONSÁVEL · PRAZO ADMINISTRATIVO OPCIONAL</span>
+                <h3>Pendências vinculadas</h3>
               </div>
             </div>
             <p>
-              Itens de conferência da demonstração, sem orientação clínica,
-              prazos assistenciais ou envio a sistema oficial.
+              Use somente tarefas operacionais pré-definidas. Datas não
+              representam prazos assistenciais.
             </p>
-            {dataset.pendings.filter(
-              (item) => item.notificationId === selected.id,
-            ).length ? (
-              dataset.pendings
-                .filter((item) => item.notificationId === selected.id)
-                .map((pending) => (
+            {selectedPendings.length ? (
+              <div className="epidemiology-pending-list">
+                {selectedPendings.map((pending) => (
                   <article
                     className="epidemiology-pending-card"
                     key={pending.id}
@@ -1038,179 +1150,169 @@ export default function HealthEpidemiologyModule({
                     <div>
                       <strong>{pending.title}</strong>
                       <p>
-                        {pending.id} · {pending.responsible}
+                        {pending.id} · {getUnitName(pending.responsibleUnitId)}{" "}
+                        · {pending.status}
                       </p>
                       <small>
-                        Prazo administrativo: {dateLabel(pending.dueAt)} ·
-                        Situação: {pending.status}
+                        {pending.dueAt
+                          ? `Prazo administrativo: ${dateLabel(pending.dueAt)}`
+                          : "Sem prazo administrativo definido"}
                       </small>
                       <div className="epidemiology-pending-history">
                         {pending.history.map((event) => (
                           <small key={event.id}>
-                            {dateLabel(event.at)} · {event.note}
+                            {dateTimeLabel(event.at)} · {event.actor} ·{" "}
+                            {event.fromStatus ?? "Criada"} → {event.toStatus} ·{" "}
+                            {event.note}
                           </small>
                         ))}
                       </div>
                     </div>
-                    <button
-                      className="epidemiology-pending-complete"
-                      onClick={() => updatePendingStatus(pending.id)}
-                    >
-                      {pending.status === "Aberta" ? (
-                        <>
-                          <CheckCircle2 size={14} /> Concluir pendência
-                        </>
+                    <div className="epidemiology-pending-actions">
+                      {pending.status === "Aberta" ||
+                      !isTerminalStatus(selected.status) ? (
+                        <button
+                          className="epidemiology-pending-complete"
+                          onClick={() =>
+                            updatePendingStatus(
+                              pending,
+                              pending.status === "Aberta"
+                                ? "Concluída"
+                                : "Aberta",
+                            )
+                          }
+                          type="button"
+                        >
+                          <Check size={13} />{" "}
+                          {pending.status === "Aberta" ? "Concluir" : "Reabrir"}
+                        </button>
                       ) : (
-                        "Reabrir pendência"
+                        <small>
+                          Fluxo encerrado; pendência concluída não pode ser
+                          reaberta.
+                        </small>
                       )}
-                    </button>
+                    </div>
                   </article>
-                ))
+                ))}
+              </div>
             ) : (
               <div className="epidemiology-empty">
-                <ListChecks size={22} />
+                <ListChecks size={20} />
                 <strong>Nenhuma pendência vinculada</strong>
                 <p>
-                  Os registros novos recebem uma conferência administrativa
-                  fictícia.
+                  Crie somente tarefas administrativas da lista controlada
+                  abaixo.
                 </p>
               </div>
             )}
+
+            {isTerminalStatus(selected.status) ? (
+              <p className="epidemiology-form-help">
+                Não é possível criar novas pendências após a conclusão ou o
+                cancelamento administrativo.
+              </p>
+            ) : (
+              <form
+                className="epidemiology-form epidemiology-pending-form"
+                onSubmit={addPending}
+              >
+                <label>
+                  Tarefa administrativa <span>*</span>
+                  <select defaultValue="" name="pendingAction" required>
+                    <option value="">Selecione uma tarefa</option>
+                    {pendingActions.map((action) => (
+                      <option key={action} value={action}>
+                        {action}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Unidade responsável <span>*</span>
+                  <select
+                    defaultValue={selected.reportingUnitId}
+                    name="responsibleUnitId"
+                    required
+                  >
+                    {activeUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Prazo administrativo (opcional)
+                  <input name="dueAt" type="date" />
+                </label>
+                {pendingError && (
+                  <p className="epidemiology-error">{pendingError}</p>
+                )}
+                <div className="epidemiology-form-actions">
+                  <button className="epidemiology-primary" type="submit">
+                    Adicionar pendência
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
 
-          {epidemiologyStatusTransitions[selected.status].length > 0 ? (
-            <form
-              className="epidemiology-update-form"
-              onSubmit={updateNotification}
-            >
-              <div className="epidemiology-section-heading">
-                <div>
-                  <span>ACOMPANHAMENTO</span>
-                  <h3>Registrar próxima etapa</h3>
-                  <p>As etapas disponíveis dependem da situação atual.</p>
-                </div>
-                <Activity size={19} />
+          <section className="epidemiology-history">
+            <div className="epidemiology-section-title">
+              <History size={18} />
+              <div>
+                <span>TRILHA LOCAL</span>
+                <h3>Histórico administrativo</h3>
               </div>
-              <label>
-                Nova etapa demonstrativa <span>*</span>
-                <select
-                  value={nextStatus}
-                  onChange={(event) =>
-                    setNextStatus(event.target.value as EpidemiologyStatus | "")
-                  }
-                  required
-                >
-                  <option value="">Selecione uma etapa</option>
-                  {epidemiologyStatusTransitions[selected.status].map(
-                    (item) => (
-                      <option key={item}>{item}</option>
-                    ),
-                  )}
-                </select>
-              </label>
-              {nextStatus === "Em acompanhamento" && (
-                <>
-                  <label>
-                    Próxima tarefa administrativa <span>*</span>
-                    <input
-                      name="nextAction"
-                      maxLength={160}
-                      required
-                      placeholder="Descreva uma tarefa administrativa fictícia"
-                    />
-                  </label>
-                  <label>
-                    Prazo administrativo fictício <span>*</span>
-                    <input name="followUpAt" type="date" required />
-                  </label>
-                </>
-              )}
-              <label className="epidemiology-field-wide">
-                Nota administrativa da atualização <span>*</span>
-                <textarea
-                  name="updateNote"
-                  rows={3}
-                  maxLength={400}
-                  required
-                  placeholder="Registre somente uma mudança administrativa fictícia, sem informação clínica."
-                />
-              </label>
-              {updateError && (
-                <p className="epidemiology-error" role="alert">
-                  {updateError}
-                </p>
-              )}
-              <button type="submit" className="epidemiology-primary">
-                <Check size={15} /> Salvar etapa nesta sessão
-              </button>
-            </form>
-          ) : (
-            <div className="epidemiology-terminal-note" role="note">
-              <Check size={15} /> Esta etapa demonstrativa é final; o registro
-              continua disponível para consulta do histórico.
             </div>
-          )}
-          {renderHistory(selected.history)}
+            <ol>
+              {[...selected.history].reverse().map((item) => (
+                <li key={item.id}>
+                  <span className="epidemiology-history-dot" />
+                  <div>
+                    <strong>{item.action}</strong>
+                    <p>{item.note}</p>
+                    <small>
+                      {dateTimeLabel(item.at)} · {item.actor} · {item.toStatus}
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
         </section>
       )}
 
+      {view === "detail" && !selected && (
+        <div className="epidemiology-empty">
+          <Search size={22} />
+          <strong>Registro não localizado</strong>
+          <p>
+            O item pode ter sido removido do conjunto demonstrativo desta
+            sessão.
+          </p>
+          <button
+            className="epidemiology-secondary"
+            onClick={() => setView("list")}
+            type="button"
+          >
+            Voltar à lista
+          </button>
+        </div>
+      )}
+
       <footer className="epidemiology-footer">
-        <ShieldAlert size={13} />
-        <span>Protótipo sem persistência, integração ou envio de dados.</span>
-        <span>·</span>
-        <span>Temas e etapas não têm validade oficial.</span>
+        <Clock3 size={13} /> Dados e alterações fictícios mantidos apenas na
+        sessão atual; não há persistência, integração ou exportação.
+        <button
+          className="epidemiology-link"
+          onClick={() => openList("Todas")}
+          type="button"
+        >
+          Consultar registros <ArrowRight size={13} />
+        </button>
       </footer>
     </section>
-  );
-}
-
-type NotificationCardProps = {
-  item: EpidemiologyNotification;
-  personName: string;
-  originLabel: string;
-  onOpen: () => void;
-};
-
-function NotificationCard({
-  item,
-  personName,
-  originLabel,
-  onOpen,
-}: NotificationCardProps) {
-  return (
-    <article className="epidemiology-record-card">
-      <div className="epidemiology-record-main">
-        <div className="epidemiology-record-title">
-          <strong>{item.theme}</strong>
-          <span
-            className={`epidemiology-status status-${statusTone(item.status)}`}
-          >
-            {item.status}
-          </span>
-        </div>
-        <p>
-          {personName} <span>· {item.id}</span>
-        </p>
-        <div className="epidemiology-record-meta">
-          <span>
-            <CalendarDays size={13} /> Notificada: {dateLabel(item.reportedAt)}
-          </span>
-          <span>
-            <UserRound size={13} /> {originLabel}
-          </span>
-          <span>
-            <Activity size={13} /> {item.priority}
-          </span>
-          {item.followUpAt && (
-            <span>
-              <Clock3 size={13} /> Retorno: {dateLabel(item.followUpAt)}
-            </span>
-          )}
-        </div>
-      </div>
-      <button className="epidemiology-open" onClick={onOpen}>
-        Abrir registro <ArrowRight size={14} />
-      </button>
-    </article>
   );
 }
