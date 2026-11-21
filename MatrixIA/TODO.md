@@ -96,7 +96,7 @@ Os números, pessoas, entidades, datas, eventos e identificadores desta demonstr
 - [x] **Card e navegação:** adicionar à Secretaria de Saúde um card clicável chamado **“Vigilância Epidemiológica e Acompanhamento de Agravos”** que abra o módulo, ofereça retorno ao catálogo e não altere a navegação das demais secretarias.
 - [x] **Dados fictícios e limites:** identificar a demonstração e todos os registros como fictícios, orientar que não sejam inseridos dados reais ou informações clínicas e deixar explícito que temas/etapas não são definições de caso, notificações ou decisões oficiais; não oferecer condutas clínicas nem substituir avaliação profissional, protocolos ou sistemas oficiais; não implementar backend, persistência, integração/transmissão ao SINAN, e-SUS, SIVEP-Gripe ou outros sistemas, nem exportação oficial.
 - [x] **Validação técnica:** aplicar Prettier, compilar MatrixIA, executar `git diff --check` e revisar vínculos, transições e escopo em leitura independente somente após a implementação.
-- [ ] **Publicação:** confirmar publicação no GitHub Pages com resposta HTTP 200 antes de marcar este critério como concluído; não publicar sem autorização expressa para a alteração pública.
+- [x] **Publicação:** após autorização expressa para a alteração pública, confirmar publicação no GitHub Pages com resposta HTTP 200 antes de marcar este critério como concluído; deploy do commit `5ee460b` confirmado pelo workflow `Deploy to GitHub Pages` e pela rota `/inteligencia-municipal/MatrixIA/` com HTTP 200.
 
 ## Nesta rodada — Navegação da Secretaria de Saúde por cards
 
