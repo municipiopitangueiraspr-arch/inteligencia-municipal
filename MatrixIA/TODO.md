@@ -152,3 +152,11 @@ Os números, pessoas, entidades, datas, eventos e identificadores desta demonstr
 - [x] **Integração com Regulação:** exibir no módulo de encaminhamentos da Saúde a referência autorizada ao protocolo intersetorial, sem contar a solicitação como fila clínica nem duplicar o encaminhamento.
 - [x] **Homologação fictícia:** manter todos os registros e alterações somente em memória, com avisos de demonstração; não implementar autenticação, persistência, integração ou substituição de sistemas oficiais.
 - [x] **Validação:** compilar TypeScript/Vite com `npm run build` e executar `git diff --check` sem erros.
+
+## Nesta rodada — Resumo e Prioridades da Secretaria de Saúde
+
+- [x] **Indicadores derivados:** consolidar encaminhamentos, exames, farmácia, Saúde da Mulher, Acompanhamento da Criança, epidemiologia, Vigilância Sanitária, rede territorial, atividades e solicitações a partir das coleções fictícias existentes.
+- [x] **Prioridades explicáveis:** permitir filtrar por criticidade, pesquisar indicadores e abrir a regra de cálculo, a fonte e os identificadores sintéticos considerados.
+- [x] **Navegação de origem:** oferecer atalhos do indicador para o módulo operacional responsável, sem duplicar cadastros ou misturar filas clínicas com solicitações administrativas.
+- [x] **Limites:** manter os dados em memória, mostrar referência administrativa de 19/nov/2026, não oferecer condutas clínicas, não transmitir dados e não substituir protocolos, prontuários ou sistemas oficiais.
+- [x] **Validação e publicação:** compilar TypeScript/Vite, executar `git diff --check` e publicar no GitHub Pages após revisar a integração do módulo.

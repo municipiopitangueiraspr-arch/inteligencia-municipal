@@ -61,6 +61,9 @@ import type { HealthImmunizationDataset } from "../data/healthImmunization";
 import type { HealthPharmacyDataset } from "../data/healthPharmacy";
 import type { HealthMaternalDataset } from "../data/healthMaternal";
 import type { HealthChildDataset } from "../data/healthChild";
+import HealthSummaryModule, {
+  type SourceKey as HealthSummarySourceKey,
+} from "./HealthSummaryModule";
 
 const HealthSanitarySurveillanceModule = lazy(
   () => import("./HealthSanitarySurveillanceModule"),
@@ -588,6 +591,7 @@ export default function OperationalWorkspace({
     | "health-pharmacy"
     | "health-maternal"
     | "health-child"
+    | "health-summary"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
@@ -755,6 +759,25 @@ export default function OperationalWorkspace({
     setHealthChildOpen(false);
     setHealthMaternalOpen(true);
   };
+  const openHealthSummarySource = (source: HealthSummarySourceKey) => {
+    const sourceTabs: Record<
+      HealthSummarySourceKey,
+      typeof activeSecretaryTab
+    > = {
+      territory: "territory",
+      activities: "health-activities",
+      referrals: "health-referrals",
+      diagnostics: "health-diagnostics",
+      sanitary: "health-sanitary",
+      epidemiology: "health-epidemiology",
+      immunization: "health-immunization",
+      pharmacy: "health-pharmacy",
+      maternal: "health-maternal",
+      child: "health-child",
+      requests: "requests",
+    };
+    setActiveSecretaryTab(sourceTabs[source]);
+  };
   const selectedDepartmentSummary =
     selectedDepartment.name === "Saúde e Vigilância Sanitária"
       ? {
@@ -858,9 +881,12 @@ export default function OperationalWorkspace({
       contact: String(values.get("contact") ?? "").trim(),
       location: String(values.get("location") ?? "").trim(),
       channel: String(values.get("channel") ?? "").trim(),
-      kind: String(values.get("kind") ?? "Administrativa") as MunicipalRequestDraft["kind"],
-      sourceDepartment:
-        String(values.get("sourceDepartment") ?? selectedDepartment.name).trim(),
+      kind: String(
+        values.get("kind") ?? "Administrativa",
+      ) as MunicipalRequestDraft["kind"],
+      sourceDepartment: String(
+        values.get("sourceDepartment") ?? selectedDepartment.name,
+      ).trim(),
       targetDepartment: String(values.get("department") ?? "").trim(),
       personId: String(values.get("personId") ?? "").trim() || undefined,
       createdBy: selectedPersona.label,
@@ -1509,7 +1535,7 @@ export default function OperationalWorkspace({
                       <button
                         type="button"
                         className="health-module-launch-card"
-                        onClick={() => setActiveSecretaryTab("overview")}
+                        onClick={() => setActiveSecretaryTab("health-summary")}
                       >
                         <span className="health-module-launch-icon">
                           <Activity size={19} />
@@ -1583,6 +1609,24 @@ export default function OperationalWorkspace({
                 <HealthTerritoryModule
                   dataset={healthTerritory}
                   onChange={onHealthTerritoryChange}
+                />
+              )}
+            {activeSecretaryTab === "health-summary" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthSummaryModule
+                  requests={requests}
+                  healthTerritory={healthTerritory}
+                  healthActivities={healthActivities}
+                  healthReferrals={healthReferrals}
+                  healthDiagnostics={healthDiagnostics}
+                  healthSanitary={healthSanitary}
+                  healthEpidemiology={healthEpidemiology}
+                  healthImmunization={healthImmunization}
+                  healthPharmacy={healthPharmacy}
+                  healthMaternal={healthMaternal}
+                  healthChild={healthChild}
+                  onOpenSource={openHealthSummarySource}
+                  onBack={() => setActiveSecretaryTab("services")}
                 />
               )}
             {activeSecretaryTab === "people" &&
@@ -2006,7 +2050,9 @@ export default function OperationalWorkspace({
                     setMaternalInitialFollowUpId(undefined);
                     if (returnToChildAfterMaternal) {
                       setSelectedPersona(
-                        operatorPersonas.find((persona) => persona.id === "child")!,
+                        operatorPersonas.find(
+                          (persona) => persona.id === "child",
+                        )!,
                       );
                       setHealthChildOpen(true);
                       setReturnToChildAfterMaternal(false);

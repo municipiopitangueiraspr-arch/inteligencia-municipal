@@ -1,0 +1,401 @@
+.health-summary-module {
+  color: #17304a;
+}
+.health-summary-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: #1d5f91;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  transform: rotate(180deg);
+}
+.health-summary-back:hover {
+  color: #123f63;
+}
+.health-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin: 24px 0 18px;
+}
+.health-summary-eyebrow {
+  display: block;
+  color: #66819a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.health-summary-heading h2 {
+  margin: 7px 0 5px;
+  font-size: clamp(25px, 3vw, 34px);
+  letter-spacing: -0.04em;
+}
+.health-summary-heading p {
+  margin: 0;
+  color: #667d91;
+  font-size: 14px;
+}
+.health-summary-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid #d8e4ec;
+  border-radius: 9px;
+  background: #fff;
+  color: #5d7385;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.health-summary-safety {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #ecdcae;
+  border-radius: 12px;
+  background: #fff9e9;
+  color: #76591d;
+}
+.health-summary-safety svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.health-summary-safety strong {
+  display: block;
+  font-size: 12px;
+}
+.health-summary-safety p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.health-summary-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.health-summary-kpis article {
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid #dbe7ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(29, 74, 108, 0.04);
+}
+.health-summary-kpis article.attention {
+  border-color: #edcf87;
+  background: #fffaf0;
+}
+.health-summary-kpis article.ok {
+  border-color: #c6e4d3;
+  background: #f5fcf8;
+}
+.health-summary-kpis span,
+.health-summary-kpis small {
+  display: block;
+  color: #70869a;
+  font-size: 11px;
+}
+.health-summary-kpis strong {
+  display: block;
+  margin: 5px 0 2px;
+  color: #183952;
+  font-size: 26px;
+  letter-spacing: -0.04em;
+}
+.health-summary-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin: 22px 0 12px;
+}
+.health-summary-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #73889a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.health-summary-filter button {
+  border: 1px solid #d7e3eb;
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: #5e7689;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.health-summary-filter button.active {
+  border-color: #2c76a9;
+  background: #e9f4fb;
+  color: #1c5b87;
+}
+.health-summary-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 280px;
+  padding: 9px 11px;
+  border: 1px solid #d7e3eb;
+  border-radius: 9px;
+  background: #fff;
+  color: #7b90a1;
+}
+.health-summary-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: #23435b;
+  font: inherit;
+  font-size: 12px;
+}
+.health-summary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(310px, 0.75fr);
+  gap: 14px;
+  align-items: start;
+}
+.health-summary-list {
+  display: grid;
+  gap: 8px;
+}
+.health-summary-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #dce7ef;
+  border-radius: 11px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s,
+    transform 0.18s;
+}
+.health-summary-item:hover,
+.health-summary-item.selected {
+  border-color: #6ea8cc;
+  box-shadow: 0 7px 17px rgba(34, 103, 147, 0.09);
+  transform: translateY(-1px);
+}
+.health-summary-item-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: #1e6996;
+  background: #e9f4fb;
+}
+.health-summary-item-icon.critical {
+  color: #a3473b;
+  background: #fcece8;
+}
+.health-summary-item-icon.attention {
+  color: #9a6918;
+  background: #fff3d4;
+}
+.health-summary-item-copy {
+  min-width: 0;
+}
+.health-summary-item-copy strong,
+.health-summary-item-copy small,
+.health-summary-item-copy em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.health-summary-item-copy strong {
+  color: #1b3c55;
+  font-size: 13px;
+}
+.health-summary-item-copy small {
+  margin-top: 3px;
+  color: #718697;
+  font-size: 11px;
+}
+.health-summary-item-copy em {
+  margin-top: 6px;
+  color: #39749a;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+.health-summary-item-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7590a2;
+}
+.health-summary-item-value b {
+  color: #1b4665;
+  font-size: 20px;
+}
+.health-summary-detail {
+  min-height: 270px;
+  padding: 18px;
+  border: 1px solid #d5e4ee;
+  border-radius: 12px;
+  background: #f8fbfd;
+}
+.health-summary-detail h3 {
+  margin: 8px 0 14px;
+  color: #1a3b55;
+  font-size: 18px;
+  line-height: 1.25;
+}
+.health-summary-detail-value {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #dce8ef;
+}
+.health-summary-detail-value b {
+  color: #1b5e86;
+  font-size: 31px;
+  letter-spacing: -0.05em;
+}
+.health-summary-detail-value.critical b {
+  color: #ae4d42;
+}
+.health-summary-detail-value.attention b {
+  color: #9b6a18;
+}
+.health-summary-detail-value span {
+  color: #6c8293;
+  font-size: 11px;
+}
+.health-summary-detail dl {
+  margin: 14px 0;
+}
+.health-summary-detail dl div {
+  margin: 10px 0;
+}
+.health-summary-detail dt {
+  color: #7890a1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.health-summary-detail dd {
+  margin: 4px 0 0;
+  color: #31536c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.health-summary-source-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: #1b638f;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.health-summary-source-button:hover {
+  background: #154e72;
+}
+.health-summary-detail-empty {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  color: #7790a2;
+  text-align: center;
+}
+.health-summary-detail-empty strong {
+  margin-top: 8px;
+  color: #42647b;
+  font-size: 13px;
+}
+.health-summary-detail-empty p {
+  max-width: 230px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.health-summary-empty {
+  padding: 30px;
+  border: 1px dashed #cadbe6;
+  border-radius: 11px;
+  color: #708697;
+  background: #fbfdfe;
+  text-align: center;
+  font-size: 13px;
+}
+.health-summary-footnote {
+  display: flex;
+  gap: 9px;
+  margin-top: 15px;
+  padding: 13px 15px;
+  border-left: 3px solid #83abc2;
+  background: #f3f8fb;
+  color: #597286;
+}
+.health-summary-footnote svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.health-summary-footnote p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .health-summary-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .health-summary-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .health-summary-heading,
+  .health-summary-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .health-summary-date,
+  .health-summary-search {
+    min-width: 0;
+  }
+  .health-summary-kpis {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .health-summary-kpis article {
+    padding: 11px;
+  }
+  .health-summary-item {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    padding: 10px;
+  }
+  .health-summary-item-icon {
+    width: 34px;
+    height: 34px;
+  }
+}
