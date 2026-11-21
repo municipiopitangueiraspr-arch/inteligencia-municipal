@@ -1,0 +1,440 @@
+.health-immunization-module {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+  color: #17283d;
+}
+.immunization-header {
+  margin-bottom: 20px;
+}
+.immunization-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  color: #315b8d;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 8px 0;
+}
+.immunization-eyebrow,
+.immunization-section-title span {
+  display: block;
+  color: #65809f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  margin-top: 8px;
+}
+.immunization-header h1 {
+  font-size: clamp(25px, 3vw, 34px);
+  margin: 8px 0;
+  color: #102f51;
+}
+.immunization-header p {
+  margin: 0;
+  color: #64758a;
+}
+.immunization-warning {
+  border: 1px solid #edcf91;
+  border-left: 4px solid #d79a25;
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #59451f;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.immunization-warning strong {
+  display: block;
+  margin-bottom: 3px;
+}
+.immunization-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #176c4c;
+  background: #e9f8f1;
+  border: 1px solid #c5ead7;
+  border-radius: 9px;
+  padding: 10px 13px;
+  font-size: 13px;
+}
+.immunization-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.immunization-metrics article {
+  border: 1px solid #e1e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 5px 18px #18365408;
+}
+.immunization-metrics span {
+  display: block;
+  color: #68798d;
+  font-size: 12px;
+}
+.immunization-metrics strong {
+  display: block;
+  color: #173e65;
+  font-size: 27px;
+  margin-top: 7px;
+}
+.immunization-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+}
+.immunization-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d9e1ea;
+  background: #fff;
+  border-radius: 9px;
+  padding: 0 11px;
+  color: #71839a;
+}
+.immunization-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 11px 0;
+  color: #24384d;
+}
+.immunization-toolbar select,
+.immunization-form select,
+.immunization-form input {
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #24384d;
+}
+.immunization-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #1769aa;
+  color: #fff;
+  padding: 11px 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.immunization-primary:hover {
+  background: #11558d;
+}
+.immunization-list,
+.immunization-form {
+  border: 1px solid #e0e7ef;
+  border-radius: 13px;
+  background: #fff;
+  padding: 18px;
+}
+.immunization-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 13px;
+}
+.immunization-section-title span {
+  margin: 0;
+}
+.immunization-section-title h2,
+.immunization-form h2 {
+  margin: 5px 0;
+  color: #193a5c;
+  font-size: 20px;
+}
+.immunization-section-title small {
+  color: #74849a;
+}
+.immunization-records {
+  display: flex;
+  flex-direction: column;
+}
+.immunization-record {
+  display: grid;
+  grid-template-columns: 38px minmax(190px, 1fr) minmax(140px, auto) auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #edf1f5;
+  background: #fff;
+  padding: 14px 4px;
+  cursor: pointer;
+  color: #26384d;
+}
+.immunization-record:hover {
+  background: #f6fafe;
+}
+.immunization-record.is-overdue {
+  background: #fffaf2;
+}
+.immunization-record-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #e8f2fb;
+  color: #23699c;
+}
+.immunization-record-main strong,
+.immunization-record-main small {
+  display: block;
+}
+.immunization-record-main small {
+  font-size: 12px;
+  color: #738197;
+  margin-top: 3px;
+}
+.immunization-record-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #5d7188;
+  font-size: 12px;
+}
+.immunization-status {
+  font-size: 11px;
+  font-weight: 750;
+  padding: 6px 9px;
+  border-radius: 99px;
+  background: #eaf2fb;
+  color: #315f91;
+  white-space: nowrap;
+}
+.immunization-status.overdue {
+  background: #fff0d7;
+  color: #986218;
+}
+.immunization-status.done {
+  background: #e5f6ed;
+  color: #1b7653;
+}
+.immunization-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: #738197;
+  background: #f8fafc;
+  border-radius: 9px;
+}
+.immunization-form {
+  margin: 14px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.immunization-form h2,
+.immunization-form > p {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.immunization-form > p {
+  color: #6d7d91;
+  font-size: 13px;
+}
+.immunization-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #465b73;
+  font-size: 12px;
+  font-weight: 700;
+}
+.immunization-form-actions {
+  grid-column: 1/-1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.immunization-form-actions > button:first-child {
+  border: 1px solid #d6e0ea;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #47617c;
+  cursor: pointer;
+}
+.immunization-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #10243b88;
+  display: flex;
+  justify-content: flex-end;
+}
+.immunization-detail {
+  width: min(560px, 100%);
+  height: 100%;
+  overflow: auto;
+  background: #fff;
+  padding: 25px;
+  box-shadow: -12px 0 40px #10243b25;
+}
+.immunization-detail h2 {
+  margin: 10px 0 4px;
+  color: #163b60;
+}
+.immunization-detail > p {
+  color: #687b90;
+}
+.immunization-detail h3 {
+  font-size: 15px;
+  margin: 23px 0 9px;
+  color: #254765;
+}
+.immunization-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0;
+}
+.immunization-detail-grid span {
+  background: #f4f8fb;
+  border-radius: 9px;
+  padding: 11px;
+  color: #6d7d91;
+  font-size: 11px;
+}
+.immunization-detail-grid strong {
+  display: block;
+  color: #294966;
+  font-size: 13px;
+  margin-top: 5px;
+}
+.immunization-dose {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e5ebf1;
+  border-radius: 8px;
+  padding: 11px;
+  margin: 8px 0;
+  color: #334a61;
+  font-size: 13px;
+}
+.immunization-dose small,
+.immunization-dose span {
+  color: #718198;
+}
+.immunization-history {
+  padding-left: 20px;
+}
+.immunization-history li {
+  padding: 3px 0 12px;
+  color: #3f5871;
+}
+.immunization-history small {
+  display: block;
+  color: #738197;
+  margin: 4px 0;
+}
+.immunization-history p {
+  font-size: 12px;
+  margin: 3px 0;
+}
+.immunization-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px;
+  background: #f3f7fa;
+  border-radius: 8px;
+  color: #647990;
+  font-size: 12px;
+}
+.health-immunization-module button:focus-visible,
+.health-immunization-module input:focus-visible,
+.health-immunization-module select:focus-visible {
+  outline: 3px solid #77b7ec;
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .health-immunization-module {
+    padding: 15px;
+  }
+  .immunization-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .immunization-toolbar {
+    flex-wrap: wrap;
+  }
+  .immunization-search {
+    flex-basis: 100%;
+  }
+  .immunization-toolbar select {
+    flex: 1;
+  }
+  .immunization-record {
+    grid-template-columns: 34px 1fr auto;
+  }
+  .immunization-record-date {
+    grid-column: 2;
+  }
+  .immunization-status {
+    grid-column: 3;
+    grid-row: 1/3;
+  }
+  .immunization-form {
+    grid-template-columns: 1fr;
+  }
+  .immunization-form > * {
+    grid-column: 1;
+  }
+  .immunization-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 430px) {
+  .immunization-record {
+    grid-template-columns: 30px 1fr;
+  }
+  .immunization-record-date,
+  .immunization-status {
+    grid-column: 2;
+    grid-row: auto;
+    justify-self: start;
+  }
+  .immunization-toolbar .immunization-primary {
+    width: 100%;
+  }
+}
+
+.immunization-next-dose-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.immunization-next-dose-form label {
+  font-size: 12px;
+  color: #5f738a;
+  font-weight: 700;
+}
+.immunization-next-dose-form select {
+  min-width: 220px;
+  border: 1px solid #d9e1ea;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #24384d;
+}
+.immunization-next-dose-form .immunization-primary:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
