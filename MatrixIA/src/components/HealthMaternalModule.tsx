@@ -405,26 +405,26 @@ export default function HealthMaternalModule({
       <section className="maternal-coverage" aria-labelledby="maternal-coverage-title">
         <div className="maternal-coverage-heading">
           <div>
-            <span className="maternal-eyebrow">LEVANTAMENTO PARA ETAPA FUTURA</span>
-            <h3 id="maternal-coverage-title">Cobertura atual do módulo</h3>
+            <span className="maternal-eyebrow">MODELO DE DADOS DA PLATAFORMA</span>
+            <h3 id="maternal-coverage-title">O que este módulo coleta</h3>
           </div>
-          <span className="maternal-coverage-badge">Não é exportação oficial</span>
+          <span className="maternal-coverage-badge">Exportação fica para o final</span>
         </div>
         <div className="maternal-coverage-grid">
           <article>
-            <strong>Já organizado aqui</strong>
-            <p>Referência municipal, unidade e equipe, abertura, etapa administrativa, pendências, responsáveis, prazos demonstrativos e histórico.</p>
-          </article>
-          <article className="attention">
-            <strong>Falta validar antes de exportar</strong>
-            <p>Evento de nascimento e desfecho, datas e campos do formulário oficial aplicável, códigos externos, identificadores do estabelecimento/profissional, competência, periodicidade, retorno de rejeição e regras de correção.</p>
+            <strong>Cadastro compartilhado</strong>
+            <p>Usa a referência existente da pessoa, da unidade e da equipe. Nome, contato e documentos continuam no cadastro municipal, sem recadastrar a pessoa neste fluxo.</p>
           </article>
           <article>
-            <strong>Depende de outros módulos</strong>
-            <p>Pessoas e território, agenda/atendimentos, registro de nascimento e fluxo vital, transição administrativa da criança, regulação e documentos. Cada módulo permanece dono de seu evento.</p>
+            <strong>Fluxo próprio da Saúde</strong>
+            <p>Coleta abertura, etapa do acompanhamento, unidade/equipe de referência, pendências administrativas, responsável, prazo de trabalho e histórico de alterações.</p>
+          </article>
+          <article>
+            <strong>Integração transversal</strong>
+            <p>Relaciona atendimento, registro de nascimento, documentos e transição da criança por identificadores. Cada secretaria consulta somente o retorno necessário, e cada módulo permanece dono do seu evento.</p>
           </article>
         </div>
-        <p className="maternal-coverage-footnote">Esta lista é um requisito de levantamento, não uma decisão de leiaute, código, prazo ou sistema de destino. Os dados da tela continuam sintéticos, locais e em memória.</p>
+        <p className="maternal-coverage-footnote">Nesta fase, o objetivo é modelar o trabalho real e os dados mínimos compartilháveis. Leiautes, códigos, versões, regras e adaptadores de sistemas externos serão definidos somente depois que os módulos e fluxos municipais estiverem maduros.</p>
       </section>
 
       {message && (
