@@ -19,6 +19,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import OperationalWorkspace, {
   type Experience,
 } from "./components/OperationalWorkspace";
 import RequestCenter from "./components/RequestCenter";
+import PeopleFamiliesDomicilesModule from "./components/PeopleFamiliesDomicilesModule";
 import { dataLineage, simulatedTransportRecords } from "./data/dataLineage";
 import {
   createHistoryEntry,
@@ -96,7 +98,7 @@ import {
   type HealthChildDataset,
 } from "./data/healthChild";
 
-type View = "overview" | "departments" | "requests";
+type View = "overview" | "departments" | "requests" | "general-registry";
 type NoticeMode = "executive" | "help" | "notifications";
 
 type MetricCard = {
@@ -381,6 +383,12 @@ function App() {
 
   const closeDepartment = () => setSelectedDepartment(null);
 
+  const openGeneralRegistry = () => {
+    setSelectedDepartment(null);
+    setView("general-registry");
+    setMobileMenuOpen(false);
+  };
+
   const openNotice = (mode: NoticeMode) => {
     setNoticeMode(mode);
     setNoticeOpen(true);
@@ -541,6 +549,14 @@ function App() {
             <Building2 size={18} />
             <span>Secretarias</span>
             <span className="nav-count">{departments.length}</span>
+          </button>
+          <button
+            className={`nav-item ${view === "general-registry" ? "active" : ""}`}
+            onClick={openGeneralRegistry}
+          >
+            <Users size={18} />
+            <span>CADASTRO GERAL</span>
+            <span className="nav-active-dot" />
           </button>
           <button
             className={`nav-item ${view === "requests" ? "active" : ""}`}
@@ -751,7 +767,13 @@ function App() {
         )}
 
         <div className="content-wrap">
-          {view === "requests" && !selectedDepartment ? (
+          {view === "general-registry" ? (
+            <PeopleFamiliesDomicilesModule
+              dataset={peopleRegistry}
+              healthTerritory={healthTerritory}
+              onChange={setPeopleRegistry}
+            />
+          ) : view === "requests" && !selectedDepartment ? (
             <RequestCenter requests={requests} mode="mayor" />
           ) : view === "overview" && !selectedDepartment ? (
             <>
