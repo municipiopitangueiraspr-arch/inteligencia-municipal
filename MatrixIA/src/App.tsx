@@ -89,6 +89,10 @@ import {
   initialHealthMaternal,
   type HealthMaternalDataset,
 } from "./data/healthMaternal";
+import {
+  initialHealthChild,
+  type HealthChildDataset,
+} from "./data/healthChild";
 
 type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -131,8 +135,11 @@ function App() {
   const [healthPharmacy, setHealthPharmacy] = useState<HealthPharmacyDataset>(
     initialHealthPharmacy,
   );
-  const [healthMaternal, setHealthMaternal] =
-    useState<HealthMaternalDataset>(initialHealthMaternal);
+  const [healthMaternal, setHealthMaternal] = useState<HealthMaternalDataset>(
+    initialHealthMaternal,
+  );
+  const [healthChild, setHealthChild] =
+    useState<HealthChildDataset>(initialHealthChild);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -449,6 +456,8 @@ function App() {
         onHealthPharmacyChange={setHealthPharmacy}
         healthMaternal={healthMaternal}
         onHealthMaternalChange={setHealthMaternal}
+        healthChild={healthChild}
+        onHealthChildChange={setHealthChild}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}

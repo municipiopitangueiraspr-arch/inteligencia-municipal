@@ -60,6 +60,7 @@ import type { HealthEpidemiologyDataset } from "../data/healthEpidemiology";
 import type { HealthImmunizationDataset } from "../data/healthImmunization";
 import type { HealthPharmacyDataset } from "../data/healthPharmacy";
 import type { HealthMaternalDataset } from "../data/healthMaternal";
+import type { HealthChildDataset } from "../data/healthChild";
 
 const HealthSanitarySurveillanceModule = lazy(
   () => import("./HealthSanitarySurveillanceModule"),
@@ -72,6 +73,7 @@ const HealthImmunizationModule = lazy(
 );
 const HealthPharmacyModule = lazy(() => import("./HealthPharmacyModule"));
 const HealthMaternalModule = lazy(() => import("./HealthMaternalModule"));
+const HealthChildModule = lazy(() => import("./HealthChildModule"));
 
 export type Experience = "mayor" | "secretary" | "operator";
 
@@ -117,6 +119,10 @@ type WorkspaceProps = {
   healthMaternal: HealthMaternalDataset;
   onHealthMaternalChange: (
     update: (current: HealthMaternalDataset) => HealthMaternalDataset,
+  ) => void;
+  healthChild: HealthChildDataset;
+  onHealthChildChange: (
+    update: (current: HealthChildDataset) => HealthChildDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -208,6 +214,7 @@ const departmentModules: Record<string, string[]> = {
     "Visitas e procedimentos",
     "Encaminhamentos e regulação",
     "Atenção à Saúde da Mulher, Pré-Natal e Puerpério",
+    "Acompanhamento da Criança",
     "Estabelecimentos e licenciamento",
     "Inspeções, providências e retornos",
   ],
@@ -272,6 +279,20 @@ const operatorPersonas: Persona[] = [
     modules: [
       "Atenção à Saúde da Mulher",
       "Etapas demonstrativas",
+      "Pendências administrativas",
+    ],
+    fields: [],
+    tasks: [],
+  },
+  {
+    id: "child",
+    label: "Operador de Acompanhamento da Criança · demonstração",
+    unit: "Atenção Primária à Saúde · cenário fictício",
+    description:
+      "Recepção e conferência administrativa da transição do puerpério para a APS.",
+    modules: [
+      "Acompanhamento da Criança",
+      "Transição administrativa do puerpério à APS",
       "Pendências administrativas",
     ],
     fields: [],
@@ -539,6 +560,8 @@ export default function OperationalWorkspace({
   onHealthPharmacyChange,
   healthMaternal,
   onHealthMaternalChange,
+  healthChild,
+  onHealthChildChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -547,7 +570,7 @@ export default function OperationalWorkspace({
     departments.find((department) => department.name === "Educação")!,
   );
   const [selectedPersona, setSelectedPersona] = useState<Persona>(
-    operatorPersonas[3],
+    operatorPersonas.find((persona) => persona.id === "school")!,
   );
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
     | "overview"
@@ -564,6 +587,7 @@ export default function OperationalWorkspace({
     | "health-immunization"
     | "health-pharmacy"
     | "health-maternal"
+    | "health-child"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
@@ -571,6 +595,17 @@ export default function OperationalWorkspace({
   const [healthDiagnosticsOpen, setHealthDiagnosticsOpen] = useState(false);
   const [healthSanitaryOpen, setHealthSanitaryOpen] = useState(false);
   const [healthMaternalOpen, setHealthMaternalOpen] = useState(false);
+  const [healthChildOpen, setHealthChildOpen] = useState(false);
+  const [returnToChildAfterMaternal, setReturnToChildAfterMaternal] =
+    useState(false);
+  const [maternalInitialFollowUpId, setMaternalInitialFollowUpId] = useState<
+    string | undefined
+  >();
+  const [childInitialMaternalFollowUpId, setChildInitialMaternalFollowUpId] =
+    useState<string | undefined>();
+  const [childInitialPendingId, setChildInitialPendingId] = useState<
+    string | undefined
+  >();
   const [diagnosticsSourceServiceId, setDiagnosticsSourceServiceId] = useState<
     string | undefined
   >();
@@ -636,6 +671,8 @@ export default function OperationalWorkspace({
     : undefined;
   const sanitaryOperator = selectedPersona.id === "visa";
   const maternalOperator = selectedPersona.id === "maternal";
+  const childOperator = selectedPersona.id === "child";
+  const administrativeOperator = maternalOperator || childOperator;
   const maternalOperatorTasks = healthMaternal.pendings
     .filter((pending) => pending.status === "Aberta")
     .map((pending) => ({
@@ -646,9 +683,19 @@ export default function OperationalWorkspace({
         : "Sem prazo · Pendência administrativa fictícia",
       source: `Acompanhamento sintético ${pending.followUpId}`,
     }));
+  const childOperatorTasks = healthChild.pendings
+    .filter((pending) => pending.status === "Aberta")
+    .map((pending) => ({
+      id: pending.id,
+      title: pending.title,
+      time: "Sem prazo assistencial · Conferência administrativa",
+      source: `Transição sintética ${pending.transitionId}`,
+    }));
   const personaTasks = maternalOperator
     ? maternalOperatorTasks
-    : selectedPersona.tasks;
+    : childOperator
+      ? childOperatorTasks
+      : selectedPersona.tasks;
   const openHealthRegulation = (serviceRecordId?: string) => {
     setReferralSourceServiceId(serviceRecordId);
     if (isSecretary) {
@@ -678,6 +725,35 @@ export default function OperationalWorkspace({
     setHealthWorkflowOpen(false);
     setHealthReferralOpen(false);
     setHealthDiagnosticsOpen(true);
+  };
+  const openHealthChild = (maternalFollowUpId?: string, pendingId?: string) => {
+    setChildInitialMaternalFollowUpId(maternalFollowUpId);
+    setChildInitialPendingId(pendingId);
+    if (isSecretary) {
+      setActiveSecretaryTab("health-child");
+      return;
+    }
+    setHealthWorkflowOpen(false);
+    setHealthReferralOpen(false);
+    setHealthDiagnosticsOpen(false);
+    setHealthSanitaryOpen(false);
+    setHealthMaternalOpen(false);
+    setHealthChildOpen(true);
+  };
+  const openHealthMaternal = (maternalFollowUpId?: string) => {
+    setMaternalInitialFollowUpId(maternalFollowUpId);
+    if (isSecretary) {
+      setActiveSecretaryTab("health-maternal");
+      return;
+    }
+    if (childOperator) {
+      setReturnToChildAfterMaternal(true);
+      setSelectedPersona(
+        operatorPersonas.find((persona) => persona.id === "maternal")!,
+      );
+    }
+    setHealthChildOpen(false);
+    setHealthMaternalOpen(true);
   };
   const selectedDepartmentSummary =
     selectedDepartment.name === "Saúde e Vigilância Sanitária"
@@ -709,7 +785,9 @@ export default function OperationalWorkspace({
   );
   const personaTaskCount =
     personaTasks.length +
-    (maternalOperator ? 0 : operatorEntries.length + operatorRequests.length);
+    (administrativeOperator
+      ? 0
+      : operatorEntries.length + operatorRequests.length);
   const secretariatAreas = departmentModules[selectedDepartment.name] ?? [];
   const updatesForDepartment = secretaryUpdates.filter(
     (update) => update.departmentName === selectedDepartment.name,
@@ -883,6 +961,10 @@ export default function OperationalWorkspace({
                 setHealthDiagnosticsOpen(false);
                 setHealthSanitaryOpen(false);
                 setHealthMaternalOpen(false);
+                setHealthChildOpen(false);
+                setMaternalInitialFollowUpId(undefined);
+                setChildInitialMaternalFollowUpId(undefined);
+                setChildInitialPendingId(undefined);
                 setReferralSourceServiceId(undefined);
                 setDiagnosticsSourceServiceId(undefined);
                 setDiagnosticsSourceReferralId(undefined);
@@ -1156,7 +1238,7 @@ export default function OperationalWorkspace({
                   </div>
                   <span className="workspace-count">
                     {isHealthDepartment
-                      ? "12 acessos"
+                      ? "14 acessos"
                       : `${secretariatAreas.length} áreas`}
                   </span>
                 </div>
@@ -1383,9 +1465,31 @@ export default function OperationalWorkspace({
                           <CalendarDays size={19} />
                         </span>
                         <span className="health-module-launch-copy">
-                          <strong>Atenção à Saúde da Mulher, Pré-Natal e Puerpério</strong>
+                          <strong>
+                            Atenção à Saúde da Mulher, Pré-Natal e Puerpério
+                          </strong>
                           <small>
-                            Etapas de acompanhamento e pendências administrativas fictícias, sem condutas clínicas.
+                            Etapas de acompanhamento e pendências
+                            administrativas fictícias, sem condutas clínicas.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => openHealthChild()}
+                      >
+                        <span className="health-module-launch-icon">
+                          <UsersRound size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Acompanhamento da Criança</strong>
+                          <small>
+                            Recepção e conferência administrativa da transição
+                            do puerpério para a APS.
                           </small>
                         </span>
                         <span className="health-module-launch-action">
@@ -1584,7 +1688,7 @@ export default function OperationalWorkspace({
                   />
                 </Suspense>
               )}
-              {activeSecretaryTab === "health-pharmacy" &&
+            {activeSecretaryTab === "health-pharmacy" &&
               selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
                 <Suspense
                   fallback={
@@ -1617,7 +1721,39 @@ export default function OperationalWorkspace({
                     peopleRegistry={peopleRegistry}
                     healthTerritory={healthTerritory}
                     onChange={onHealthMaternalChange}
+                    initialFollowUpId={maternalInitialFollowUpId}
+                    onOpenChildTransition={(maternalFollowUpId) =>
+                      openHealthChild(maternalFollowUpId)
+                    }
                     onBack={() => setActiveSecretaryTab("services")}
+                  />
+                </Suspense>
+              )}
+            {activeSecretaryTab === "health-child" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <Suspense
+                  fallback={
+                    <div className="workspace-cross-area" role="status">
+                      <strong>Carregando Acompanhamento da Criança...</strong>
+                    </div>
+                  }
+                >
+                  <HealthChildModule
+                    mode="secretary"
+                    dataset={healthChild}
+                    maternalDataset={healthMaternal}
+                    healthTerritory={healthTerritory}
+                    peopleRegistry={peopleRegistry}
+                    onChange={onHealthChildChange}
+                    initialMaternalFollowUpId={childInitialMaternalFollowUpId}
+                    onOpenMaternal={(maternalFollowUpId) =>
+                      openHealthMaternal(maternalFollowUpId)
+                    }
+                    onBack={() => {
+                      setChildInitialMaternalFollowUpId(undefined);
+                      setChildInitialPendingId(undefined);
+                      setActiveSecretaryTab("services");
+                    }}
                   />
                 </Suspense>
               )}
@@ -1720,6 +1856,7 @@ export default function OperationalWorkspace({
                   if (healthOperatorPersona) setHealthWorkflowOpen(true);
                   else if (sanitaryOperator) setHealthSanitaryOpen(true);
                   else if (maternalOperator) setHealthMaternalOpen(true);
+                  else if (childOperator) openHealthChild();
                   else setEntryOpen(true);
                 }}
               >
@@ -1730,7 +1867,9 @@ export default function OperationalWorkspace({
                     ? "Abrir módulo de Vigilância Sanitária"
                     : maternalOperator
                       ? "Abrir acompanhamento demonstrativo"
-                    : "Registrar atividade"}
+                      : childOperator
+                        ? "Abrir Acompanhamento da Criança"
+                        : "Registrar atividade"}
               </button>
               {healthOperatorPersona === "ubs" && (
                 <button
@@ -1748,15 +1887,17 @@ export default function OperationalWorkspace({
                   <ClipboardPlus size={16} /> Exames, procedimentos e resultados
                 </button>
               )}
-              <button
-                className="workspace-secondary-button"
-                onClick={() => {
-                  setRequestValidationError(null);
-                  setRequestOpen(true);
-                }}
-              >
-                <ClipboardList size={16} /> Registrar demanda
-              </button>
+              {!childOperator && (
+                <button
+                  className="workspace-secondary-button"
+                  onClick={() => {
+                    setRequestValidationError(null);
+                    setRequestOpen(true);
+                  }}
+                >
+                  <ClipboardList size={16} /> Registrar demanda
+                </button>
+              )}
             </div>
             {healthWorkflowOpen && healthOperatorPersona && (
               <HealthVisitsAttendanceModule
@@ -1844,11 +1985,54 @@ export default function OperationalWorkspace({
                   peopleRegistry={peopleRegistry}
                   healthTerritory={healthTerritory}
                   onChange={onHealthMaternalChange}
-                  onBack={() => setHealthMaternalOpen(false)}
+                  initialFollowUpId={maternalInitialFollowUpId}
+                  onOpenChildTransition={(maternalFollowUpId) =>
+                    openHealthChild(maternalFollowUpId)
+                  }
+                  onBack={() => {
+                    setHealthMaternalOpen(false);
+                    setMaternalInitialFollowUpId(undefined);
+                    if (returnToChildAfterMaternal) {
+                      setSelectedPersona(
+                        operatorPersonas.find((persona) => persona.id === "child")!,
+                      );
+                      setHealthChildOpen(true);
+                      setReturnToChildAfterMaternal(false);
+                    }
+                  }}
                 />
               </Suspense>
             )}
-            {latestProtocol && (
+            {healthChildOpen && childOperator && (
+              <Suspense
+                fallback={
+                  <div className="workspace-cross-area" role="status">
+                    <strong>Carregando Acompanhamento da Criança...</strong>
+                  </div>
+                }
+              >
+                <HealthChildModule
+                  key={`${selectedPersona.id}-${childInitialMaternalFollowUpId ?? ""}-${childInitialPendingId ?? ""}`}
+                  mode="operator"
+                  dataset={healthChild}
+                  maternalDataset={healthMaternal}
+                  healthTerritory={healthTerritory}
+                  peopleRegistry={peopleRegistry}
+                  onChange={onHealthChildChange}
+                  initialMaternalFollowUpId={childInitialMaternalFollowUpId}
+                  initialPendingId={childInitialPendingId}
+                  onOpenMaternal={(maternalFollowUpId) =>
+                    openHealthMaternal(maternalFollowUpId)
+                  }
+                  onBack={() => {
+                    setHealthChildOpen(false);
+                    setChildInitialMaternalFollowUpId(undefined);
+                    setChildInitialPendingId(undefined);
+                  }}
+                />
+              </Suspense>
+            )}
+            {latestProtocol && !childOperator && (
               <div className="request-confirmation" role="status">
                 <span>
                   <Check size={17} />
@@ -1874,10 +2058,16 @@ export default function OperationalWorkspace({
                 <CalendarDays size={20} />
               </div>
               <div>
-                <span>{maternalOperator ? "PENDÊNCIAS ADMINISTRATIVAS · 19/NOV/2026" : "AGENDA DE HOJE · 19/NOV/2026"}</span>
+                <span>
+                  {childOperator
+                    ? "PENDÊNCIAS ADMINISTRATIVAS · SEM PRAZO ASSISTENCIAL"
+                    : maternalOperator
+                      ? "PENDÊNCIAS ADMINISTRATIVAS · 19/NOV/2026"
+                      : "AGENDA DE HOJE · 19/NOV/2026"}
+                </span>
                 <strong>{selectedPersona.label}</strong>
                 <p>
-                  {maternalOperator
+                  {administrativeOperator
                     ? "As pendências desta fila são conferências administrativas fictícias, não prazos assistenciais."
                     : "As tarefas mostram de qual agenda, serviço ou registro elas foram originadas."}
                 </p>
@@ -1889,11 +2079,20 @@ export default function OperationalWorkspace({
             </div>
             <div className="workspace-section-heading">
               <div>
-                <span>{maternalOperator ? "PENDÊNCIAS ADMINISTRATIVAS" : "FILA DE ATIVIDADES"}</span>
-                <h2>{maternalOperator ? "Pendências abertas nesta sessão" : "Próximos atendimentos e tarefas"}</h2>
+                <span>
+                  {administrativeOperator
+                    ? "PENDÊNCIAS ADMINISTRATIVAS"
+                    : "FILA DE ATIVIDADES"}
+                </span>
+                <h2>
+                  {administrativeOperator
+                    ? "Pendências abertas nesta sessão"
+                    : "Próximos atendimentos e tarefas"}
+                </h2>
               </div>
               <span className="workspace-count">
-                {personaTasks.length} {maternalOperator ? "pendências abertas" : "agendados"}
+                {personaTasks.length}{" "}
+                {administrativeOperator ? "pendências abertas" : "agendados"}
               </span>
             </div>
             <div className="operator-task-list">
@@ -1901,7 +2100,13 @@ export default function OperationalWorkspace({
                 <article className="operator-task-card" key={task.id}>
                   <div className="operator-task-time">
                     <strong>{task.time.split(" · ")[0]}</strong>
-                    <span>{maternalOperator ? "PENDÊNCIA" : index === 0 ? "PRÓXIMA" : "NA SEQUÊNCIA"}</span>
+                    <span>
+                      {administrativeOperator
+                        ? "PENDÊNCIA"
+                        : index === 0
+                          ? "PRÓXIMA"
+                          : "NA SEQUÊNCIA"}
+                    </span>
                   </div>
                   <div className="operator-task-main">
                     <h3>{task.title}</h3>
@@ -1922,9 +2127,13 @@ export default function OperationalWorkspace({
                   </button>
                   {expandedEntry === task.id && (
                     <div className="operator-task-detail">
-                      <strong>{maternalOperator ? "Pendência administrativa demonstrativa" : "O que será atualizado"}</strong>
+                      <strong>
+                        {administrativeOperator
+                          ? "Pendência administrativa demonstrativa"
+                          : "O que será atualizado"}
+                      </strong>
                       <p>
-                        {maternalOperator
+                        {administrativeOperator
                           ? "A pendência está vinculada a um registro sintético. Abra o módulo para atualizar somente a situação administrativa; não inclua dados reais ou informações clínicas."
                           : "Ao registrar a atividade, o profissional informa local/unidade, atividade realizada, resultado, situação e próxima providência. O registro atualiza a fila da equipe e os resumos relacionados nesta simulação."}
                       </p>
@@ -1936,17 +2145,22 @@ export default function OperationalWorkspace({
                             setHealthSanitaryOpen(true);
                           else if (maternalOperator)
                             setHealthMaternalOpen(true);
+                          else if (childOperator)
+                            openHealthChild(undefined, task.id);
                           else setEntryOpen(true);
                         }}
                       >
-                        Registrar atividade vinculada <ArrowRight size={13} />
+                        {childOperator
+                          ? "Abrir transição vinculada"
+                          : "Registrar atividade vinculada"}{" "}
+                        <ArrowRight size={13} />
                       </button>
                     </div>
                   )}
                 </article>
               ))}
             </div>
-            {operatorRequests.length > 0 && (
+            {operatorRequests.length > 0 && !childOperator && (
               <section className="operator-new-records">
                 <div className="workspace-section-heading">
                   <div>
@@ -1973,7 +2187,7 @@ export default function OperationalWorkspace({
                 ))}
               </section>
             )}
-            {operatorEntries.length > 0 && (
+            {operatorEntries.length > 0 && !childOperator && (
               <section className="operator-new-records">
                 <div className="workspace-section-heading">
                   <div>
@@ -2029,7 +2243,7 @@ export default function OperationalWorkspace({
         )}
       </section>
 
-      {entryOpen && !isSecretary && (
+      {entryOpen && !isSecretary && !childOperator && (
         <div
           className="modal-backdrop"
           role="presentation"
@@ -2085,7 +2299,7 @@ export default function OperationalWorkspace({
           </section>
         </div>
       )}
-      {requestOpen && !isSecretary && (
+      {requestOpen && !isSecretary && !childOperator && (
         <div
           className="modal-backdrop"
           role="presentation"
