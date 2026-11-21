@@ -111,3 +111,12 @@ Os números, pessoas, entidades, datas, eventos e identificadores desta demonstr
 - [x] **Card e navegação da Saúde:** incluir card clicável “Imunização e Vacinação” no catálogo da Secretaria de Saúde, abrir o módulo e permitir retorno ao catálogo sem alterar outras secretarias.
 - [x] **Dados fictícios e limites oficiais:** rotular pessoas/sementes, nomes, esquemas, lotes, datas e intervalos como fictícios; explicar que não são recomendação, calendário ou registro vacinal oficial, não inserir dados reais e não substituir sistemas oficiais de imunização ou avaliação profissional; não implementar backend, persistência, integração, transmissão ou exportação oficial.
 - [x] **Validação e publicação:** formatar, compilar MatrixIA, executar `git diff --check`, revisar vínculos e escopo em leitura independente, publicar no GitHub Pages e confirmar HTTP 200 antes de marcar estes critérios como concluídos.
+
+## Nesta rodada — Assistência Farmacêutica e Gestão de Medicamentos
+
+- [x] **Catálogo e acesso:** incluir card clicável “Assistência Farmacêutica e Gestão de Medicamentos” na Secretaria de Saúde, abrir o módulo e permitir retornar ao catálogo sem alterar outras secretarias.
+- [x] **Estoque e lotes:** consultar itens fictícios por unidade, lote, quantidade disponível e validade; mostrar totais derivados, estoque abaixo do mínimo ilustrativo e lotes próximos/vencidos na referência da demonstração; oferecer busca/filtros e estado vazio.
+- [x] **Movimentações demonstrativas:** permitir registrar entrada e ajuste de saldo, além de simular dispensação vinculada a pessoa ativa opcional e unidade/itens existentes; impedir quantidade zero, negativa, superior ao saldo ou retirada de lote vencido; recalcular saldo e preservar cada movimentação em histórico.
+- [x] **Referências compartilhadas:** reutilizar somente unidades e pessoas já cadastradas, mantendo estoque e histórico em coleção única no estado raiz do MatrixIA durante a sessão, sem duplicar cadastros.
+- [x] **Dados fictícios e limites clínicos:** identificar itens, códigos, quantidades, lotes, validades e pessoas como sintéticos; não representar prescrições, doses, posologias, recomendações, dispensações ou estoque real; avisar para não inserir dados reais; não implementar backend, persistência, integração/transmissão ou exportação oficial.
+- [x] **Validação:** formatar, compilar MatrixIA, executar `git diff --check` e revisar vínculos e regras de movimentação antes de considerar a implementação concluída.

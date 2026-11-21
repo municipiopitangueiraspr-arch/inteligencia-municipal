@@ -81,6 +81,10 @@ import {
   initialHealthImmunization,
   type HealthImmunizationDataset,
 } from "./data/healthImmunization";
+import {
+  initialHealthPharmacy,
+  type HealthPharmacyDataset,
+} from "./data/healthPharmacy";
 
 type View = "overview" | "departments" | "requests";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -120,6 +124,9 @@ function App() {
     useState<HealthEpidemiologyDataset>(initialHealthEpidemiology);
   const [healthImmunization, setHealthImmunization] =
     useState<HealthImmunizationDataset>(initialHealthImmunization);
+  const [healthPharmacy, setHealthPharmacy] = useState<HealthPharmacyDataset>(
+    initialHealthPharmacy,
+  );
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -432,6 +439,8 @@ function App() {
         onHealthEpidemiologyChange={setHealthEpidemiology}
         healthImmunization={healthImmunization}
         onHealthImmunizationChange={setHealthImmunization}
+        healthPharmacy={healthPharmacy}
+        onHealthPharmacyChange={setHealthPharmacy}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}

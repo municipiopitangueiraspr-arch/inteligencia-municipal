@@ -21,6 +21,7 @@ import {
   LogOut,
   MapPinned,
   MapPin,
+  Pill,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
@@ -57,6 +58,7 @@ import type { PeopleRegistryDataset } from "../data/peopleRegistry";
 import type { HealthSanitaryDataset } from "../data/healthSanitary";
 import type { HealthEpidemiologyDataset } from "../data/healthEpidemiology";
 import type { HealthImmunizationDataset } from "../data/healthImmunization";
+import type { HealthPharmacyDataset } from "../data/healthPharmacy";
 
 const HealthSanitarySurveillanceModule = lazy(
   () => import("./HealthSanitarySurveillanceModule"),
@@ -67,6 +69,7 @@ const HealthEpidemiologyModule = lazy(
 const HealthImmunizationModule = lazy(
   () => import("./HealthImmunizationModule"),
 );
+const HealthPharmacyModule = lazy(() => import("./HealthPharmacyModule"));
 
 export type Experience = "mayor" | "secretary" | "operator";
 
@@ -104,6 +107,10 @@ type WorkspaceProps = {
   healthImmunization: HealthImmunizationDataset;
   onHealthImmunizationChange: (
     update: (current: HealthImmunizationDataset) => HealthImmunizationDataset,
+  ) => void;
+  healthPharmacy: HealthPharmacyDataset;
+  onHealthPharmacyChange: (
+    update: (current: HealthPharmacyDataset) => HealthPharmacyDataset,
   ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
@@ -507,6 +514,8 @@ export default function OperationalWorkspace({
   onHealthEpidemiologyChange,
   healthImmunization,
   onHealthImmunizationChange,
+  healthPharmacy,
+  onHealthPharmacyChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -530,6 +539,7 @@ export default function OperationalWorkspace({
     | "health-sanitary"
     | "health-epidemiology"
     | "health-immunization"
+    | "health-pharmacy"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
@@ -1107,7 +1117,7 @@ export default function OperationalWorkspace({
                   </div>
                   <span className="workspace-count">
                     {isHealthDepartment
-                      ? "11 acessos"
+                      ? "12 acessos"
                       : `${secretariatAreas.length} áreas`}
                   </span>
                 </div>
@@ -1307,6 +1317,27 @@ export default function OperationalWorkspace({
                       <button
                         type="button"
                         className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("health-pharmacy")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <Pill size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>
+                            Assistência Farmacêutica e Gestão de Medicamentos
+                          </strong>
+                          <small>
+                            Estoques, lotes, validade e movimentações fictícias
+                            por unidade.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
                         onClick={() => setActiveSecretaryTab("overview")}
                       >
                         <span className="health-module-launch-icon">
@@ -1492,6 +1523,24 @@ export default function OperationalWorkspace({
                     peopleRegistry={peopleRegistry}
                     healthTerritory={healthTerritory}
                     onChange={onHealthImmunizationChange}
+                    onBack={() => setActiveSecretaryTab("services")}
+                  />
+                </Suspense>
+              )}
+            {activeSecretaryTab === "health-pharmacy" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <Suspense
+                  fallback={
+                    <div className="workspace-cross-area" role="status">
+                      <strong>Carregando Assistência Farmacêutica...</strong>
+                    </div>
+                  }
+                >
+                  <HealthPharmacyModule
+                    dataset={healthPharmacy}
+                    peopleRegistry={peopleRegistry}
+                    healthTerritory={healthTerritory}
+                    onChange={onHealthPharmacyChange}
                     onBack={() => setActiveSecretaryTab("services")}
                   />
                 </Suspense>
