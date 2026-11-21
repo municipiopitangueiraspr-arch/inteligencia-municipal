@@ -576,15 +576,15 @@ export default function PeopleFamiliesDomicilesModule({
       aria-label="Pessoas, famílias e domicílios"
     >
       <header className="pr-head">
-        <div>
-          <span className="pr-kicker">
-            GESTÃO TERRITORIAL · AMOSTRA FICTÍCIA
-          </span>
-          <h2>Pessoas, Famílias e Domicílios</h2>
-          <p>
-            Cadastros ilustrativos para demonstrar vínculos no território. Não
-            são dados reais nem censo municipal.
-          </p>
+          <div>
+            <span className="pr-kicker">
+              CADASTRO GERAL · BASE TRANSVERSAL
+            </span>
+            <h2>Cadastro Geral</h2>
+            <p>
+              Pessoas, endereços, domicílios e famílias para uso compartilhado
+              entre as Secretarias. Não são dados reais nem censo municipal.
+            </p>
         </div>
         <span className="pr-demo">DEMONSTRAÇÃO / FICTÍCIO</span>
       </header>
@@ -650,6 +650,30 @@ export default function PeopleFamiliesDomicilesModule({
                 <strong>{value}</strong>
               </article>
             ))}
+          </div>
+          <div className="pr-card">
+            <div className="pr-shared-model">
+              <div>
+                <h3>Uma pessoa, vários serviços</h3>
+                <p>
+                  O Cadastro Geral identifica e relaciona as entidades comuns.
+                  Saúde, Assistência Social e as demais Secretarias registram
+                  seus próprios eventos usando os mesmos IDs, sem duplicar a
+                  pessoa.
+                </p>
+              </div>
+              <div className="pr-shared-model-grid">
+                <span><b>Pessoa</b><small>identificadores e contatos</small></span>
+                <span><b>Endereço</b><small>local físico compartilhável</small></span>
+                <span><b>Domicílio</b><small>unidade residencial</small></span>
+                <span><b>Família</b><small>composição e vínculos</small></span>
+              </div>
+              <p className="pr-shared-model-note">
+                Cruzamentos usam <strong>personId</strong>, <strong>addressId</strong>,
+                <strong> householdId</strong> e <strong>familyId</strong>. Dados de
+                Saúde, renda e acompanhamento social continuam nos módulos de origem.
+              </p>
+            </div>
           </div>
           <div className="pr-card">
             <h3>Qualidade da amostra</h3>
