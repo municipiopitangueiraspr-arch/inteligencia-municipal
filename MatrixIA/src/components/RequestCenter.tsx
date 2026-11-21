@@ -8,12 +8,15 @@ import {
   FileText,
   MapPin,
   Search,
+  ShieldCheck,
+  UsersRound,
 } from "lucide-react";
 import {
   formatRequestDate,
   getRequestCounts,
   isRequestOverdue,
   type MunicipalRequest,
+  type RequestReturnStatus,
   type RequestStatus,
 } from "../data/requests";
 
@@ -25,13 +28,27 @@ const statuses: RequestStatus[] = [
   "Cancelada",
 ];
 
+const returnStatuses: RequestReturnStatus[] = [
+  "Ainda não enviado",
+  "Retorno parcial",
+  "Concluído pela secretaria destino",
+  "Devolvido para complementação",
+];
+
 type RequestCenterProps = {
   requests: MunicipalRequest[];
   mode: "mayor" | "secretary";
   departmentName?: string;
   onUpdate?: (
     id: string,
-    update: { status: RequestStatus; assignedTo: string; note: string },
+    update: {
+      status: RequestStatus;
+      assignedTo: string;
+      note: string;
+      pending?: string;
+      returnStatus?: RequestReturnStatus;
+      returnNote?: string;
+    },
   ) => void;
 };
 
@@ -43,6 +60,7 @@ export default function RequestCenter({
 }: RequestCenterProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");
+  const [kindFilter, setKindFilter] = useState("Todas");
   const departmentRequests = requests.filter(
     (request) => !departmentName || request.department === departmentName,
   );
@@ -53,6 +71,9 @@ export default function RequestCenter({
       .filter(
         (request) =>
           statusFilter === "Todas" || request.status === statusFilter,
+      )
+      .filter(
+        (request) => kindFilter === "Todas" || request.kind === kindFilter,
       )
       .filter(
         (request) =>
@@ -68,7 +89,7 @@ export default function RequestCenter({
             .includes(normalizedQuery),
       )
       .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
-  }, [departmentRequests, query, statusFilter]);
+  }, [departmentRequests, query, statusFilter, kindFilter]);
 
   return (
     <section className="request-center">
@@ -87,6 +108,11 @@ export default function RequestCenter({
               ? `Acompanhe os protocolos encaminhados para ${departmentName}.`
               : "Uma fila administrativa compartilhada pelas onze secretarias, com situação e prazo rastreáveis."}
           </p>
+          <div className="request-center-flow-note">
+            <UsersRound size={15} /> Fluxos administrativos e encaminhamentos
+            intersetoriais usam a mesma Central; a regulação clínica continua
+            dentro do processo da Saúde.
+          </div>
         </div>
         <span className="request-sim-badge">REGISTROS FICTÍCIOS</span>
       </div>
@@ -139,6 +165,19 @@ export default function RequestCenter({
           </select>
           <ChevronDown size={14} />
         </label>
+        <label className="request-status-filter">
+          <UsersRound size={15} />
+          <select
+            value={kindFilter}
+            aria-label="Filtrar por tipo de fluxo"
+            onChange={(event) => setKindFilter(event.target.value)}
+          >
+            <option>Todas</option>
+            <option>Administrativa</option>
+            <option>Encaminhamento intersetorial</option>
+          </select>
+          <ChevronDown size={14} />
+        </label>
       </div>
 
       <div className="request-list-heading">
@@ -170,8 +209,9 @@ export default function RequestCenter({
       <p className="request-center-footnote">
         Os protocolos “PROTO” e os cadastros criados nesta tela são
         demonstrativos; os dados ficam somente na memória desta sessão.
-        Encaminhamentos clínicos especializados não fazem parte desta fila
-        administrativa.
+        Um encaminhamento intersetorial pode aparecer nesta fila e se vincular
+        a um processo especializado da Saúde; ele não duplica nem substitui a
+        regulação clínica.
       </p>
     </section>
   );
@@ -190,6 +230,11 @@ function RequestCard({
   const [nextStatus, setNextStatus] = useState<RequestStatus>(request.status);
   const [assignee, setAssignee] = useState(request.assignedTo);
   const [note, setNote] = useState("");
+  const [pending, setPending] = useState(request.pending ?? "");
+  const [returnStatus, setReturnStatus] = useState<RequestReturnStatus>(
+    request.returnStatus ?? "Ainda não enviado",
+  );
+  const [returnNote, setReturnNote] = useState(request.returnNote ?? "");
   const overdue = isRequestOverdue(request);
 
   const submitUpdate = (event: FormEvent<HTMLFormElement>) => {
@@ -198,6 +243,9 @@ function RequestCard({
       status: nextStatus,
       assignedTo: assignee.trim() || "Equipe responsável",
       note: note.trim() || "Acompanhamento atualizado pela secretaria.",
+      pending: pending.trim() || undefined,
+      returnStatus,
+      returnNote: returnNote.trim() || undefined,
     });
     setNote("");
   };
@@ -241,6 +289,26 @@ function RequestCard({
             {request.priority}
           </span>
         </div>
+        <div className="request-flow-strip">
+          <span className="request-kind-chip">
+            {request.kind === "Encaminhamento intersetorial"
+              ? "Fluxo intersetorial"
+              : "Demanda administrativa"}
+          </span>
+          <span>
+            {request.sourceDepartment} <ArrowDownUp size={12} /> {request.targetDepartment}
+          </span>
+          {request.linkedHealthReferralId && (
+            <span className="request-linked-health">
+              <ShieldCheck size={12} /> Saúde vinculada: {request.linkedHealthReferralId}
+            </span>
+          )}
+        </div>
+        {request.pending && (
+          <div className="request-pending-callout">
+            <strong>Pendência atual</strong> {request.pending}
+          </div>
+        )}
         <div className="request-record-foot">
           <span>
             <MapPin size={13} /> {request.location}
@@ -282,7 +350,21 @@ function RequestCard({
               <strong>Identificador interno</strong>
               {request.id}
             </span>
+            <span>
+              <strong>Retorno</strong>
+              {request.returnStatus ?? "Ainda não enviado"}
+            </span>
+            <span>
+              <strong>Visualização permitida</strong>
+              {request.allowedViewers?.join(" · ") ?? request.department}
+            </span>
           </div>
+          {request.returnNote && (
+            <div className="request-return-callout">
+              <strong>Retorno compartilhável</strong>
+              <p>{request.returnNote}</p>
+            </div>
+          )}
           <div className="request-history">
             <h3>Histórico do protocolo</h3>
             {[...request.history].reverse().map((entry) => (
@@ -341,6 +423,37 @@ function RequestCard({
                   onChange={(event) => setNote(event.target.value)}
                   rows={2}
                   placeholder="Ex.: vistoria agendada para quinta-feira."
+                />
+              </label>
+              <label className="request-update-note">
+                Pendência atual
+                <textarea
+                  value={pending}
+                  onChange={(event) => setPending(event.target.value)}
+                  rows={2}
+                  placeholder="Ex.: aguardar documento ou oferta de vaga."
+                />
+              </label>
+              <label>
+                Situação do retorno
+                <select
+                  value={returnStatus}
+                  onChange={(event) =>
+                    setReturnStatus(event.target.value as RequestReturnStatus)
+                  }
+                >
+                  {returnStatuses.map((status) => (
+                    <option key={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="request-update-note">
+                Retorno compartilhável
+                <textarea
+                  value={returnNote}
+                  onChange={(event) => setReturnNote(event.target.value)}
+                  rows={2}
+                  placeholder="Registre somente a informação autorizada para a secretaria de origem."
                 />
               </label>
               <button className="workspace-primary-button" type="submit">

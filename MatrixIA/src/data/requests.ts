@@ -1,9 +1,18 @@
 export type RequestStatus =
   | "Recebida"
   | "Em análise"
+  | "Aguardando informação"
   | "Em atendimento"
   | "Concluída"
   | "Cancelada";
+
+export type RequestKind = "Administrativa" | "Encaminhamento intersetorial";
+
+export type RequestReturnStatus =
+  | "Ainda não enviado"
+  | "Retorno parcial"
+  | "Concluído pela secretaria destino"
+  | "Devolvido para complementação";
 
 export type RequestPriority = "Baixa" | "Normal" | "Alta" | "Urgente";
 
@@ -15,6 +24,7 @@ export type RequestHistoryEntry = {
   note: string;
   previousAssignee?: string;
   assignedTo?: string;
+  visibility?: string;
 };
 
 export type MunicipalRequest = {
@@ -35,6 +45,15 @@ export type MunicipalRequest = {
   dueAt: string;
   simulated: boolean;
   history: RequestHistoryEntry[];
+  kind: RequestKind;
+  sourceDepartment: string;
+  targetDepartment: string;
+  personId?: string;
+  linkedHealthReferralId?: string;
+  pending?: string;
+  returnStatus?: RequestReturnStatus;
+  returnNote?: string;
+  allowedViewers?: string[];
 };
 
 export type MunicipalRequestDraft = Pick<
@@ -48,7 +67,18 @@ export type MunicipalRequestDraft = Pick<
   | "contact"
   | "location"
   | "channel"
-> & { createdBy: string };
+> & {
+  createdBy: string;
+  kind?: RequestKind;
+  sourceDepartment?: string;
+  targetDepartment?: string;
+  personId?: string;
+  linkedHealthReferralId?: string;
+  pending?: string;
+  returnStatus?: RequestReturnStatus;
+  returnNote?: string;
+  allowedViewers?: string[];
+};
 
 const demoReference = new Date();
 demoReference.setDate(demoReference.getDate() - 1);
@@ -60,7 +90,7 @@ const seededDepartmentQueues = [
   { department: "Assistência Social", open: 3, overdue: 0 },
   { department: "Cultura e Turismo", open: 2, overdue: 0 },
   { department: "Desenvolvimento Econômico", open: 3, overdue: 1 },
-  { department: "Educação", open: 4, overdue: 0 },
+  { department: "Educação", open: 3, overdue: 0 },
   { department: "Esporte e Lazer", open: 2, overdue: 0 },
   { department: "Obras", open: 5, overdue: 2 },
   { department: "Planejamento e Urbanismo", open: 2, overdue: 0 },
@@ -242,12 +272,71 @@ function createSeededRequests(): MunicipalRequest[] {
             assignedTo: demoActors[department],
           },
         ],
+        kind: "Administrativa",
+        sourceDepartment: department,
+        targetDepartment: department,
+        returnStatus: "Ainda não enviado",
+        allowedViewers: [department, "Administração e Finanças"],
       } satisfies MunicipalRequest;
     }),
   );
 }
 
-export const initialMunicipalRequests = createSeededRequests();
+const seededIntersectoralRequest: MunicipalRequest = {
+  id: "SIM-EDU-SAU-001",
+  protocol: "PROTO-2026-00037",
+  subject: "Solicitação de regulação especializada para aluno",
+  description:
+    "A psicologia escolar solicita que a Saúde avalie e conduza, dentro de sua competência, a regulação demonstrativa para Neurologia.",
+  category: "Encaminhamento intersetorial",
+  department: "Saúde e Vigilância Sanitária",
+  priority: "Alta",
+  requester: "Marina Alves · Psicóloga escolar",
+  contact: "(43) 90000-0001",
+  location: "Escola Municipal do Centro",
+  channel: "Fluxo interno MatrixIA",
+  status: "Em atendimento",
+  assignedTo: "Regulação municipal · Ana Martins",
+  createdAt: "2026-11-18T09:10:00.000Z",
+  dueAt: "2026-11-23T09:10:00.000Z",
+  simulated: true,
+  kind: "Encaminhamento intersetorial",
+  sourceDepartment: "Educação",
+  targetDepartment: "Saúde e Vigilância Sanitária",
+  personId: "SIM-PES-042",
+  linkedHealthReferralId: "SIM-SAU-ENC-040",
+  pending: "Confirmar oferta de vaga e registrar retorno administrativo à Educação.",
+  returnStatus: "Retorno parcial",
+  returnNote:
+    "A Saúde recebeu a solicitação e vinculou o caso à fila de regulação demonstrativa. Dados clínicos permanecem restritos à Saúde.",
+  allowedViewers: ["Educação", "Saúde e Vigilância Sanitária", "Prefeito"],
+  history: [
+    {
+      id: "SIM-EDU-SAU-001-H01",
+      at: "2026-11-18T09:10:00.000Z",
+      actor: "Marina Alves · Educação",
+      status: "Recebida",
+      note: "Solicitação intersetorial criada e encaminhada para a Saúde, vinculada à pessoa do cadastro compartilhado.",
+      assignedTo: "Triagem da Saúde",
+      visibility: "Educação · Saúde · Gestão autorizada",
+    },
+    {
+      id: "SIM-EDU-SAU-001-H02",
+      at: "2026-11-18T11:35:00.000Z",
+      actor: "Ana Martins · Saúde",
+      status: "Em atendimento",
+      note: "Demanda recebida pela Saúde e relacionada ao encaminhamento clínico demonstrativo SIM-SAU-ENC-040.",
+      previousAssignee: "Triagem da Saúde",
+      assignedTo: "Regulação municipal · Ana Martins",
+      visibility: "Educação · Saúde · Gestão autorizada",
+    },
+  ],
+};
+
+export const initialMunicipalRequests = [
+  seededIntersectoralRequest,
+  ...createSeededRequests(),
+];
 
 export function getRequestCounts(requests: MunicipalRequest[]) {
   const openRequests = requests.filter(

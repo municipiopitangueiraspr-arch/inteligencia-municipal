@@ -56,6 +56,31 @@
   line-height: 1.55;
 }
 
+.health-referrals-cross-link {
+  display: grid;
+  gap: 4px;
+  max-width: 760px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #cfe5db;
+  border-radius: 9px;
+  background: #f0f8f4;
+  color: #3f6f61;
+  font-size: 12px;
+}
+
+.health-referrals-cross-link strong {
+  color: #2e6755;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+
+.health-referrals-cross-link small {
+  color: #648477;
+  line-height: 1.45;
+}
+
 .health-referrals-header-actions {
   flex: 0 0 auto;
   align-items: flex-start;

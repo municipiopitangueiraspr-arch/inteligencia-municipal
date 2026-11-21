@@ -95,9 +95,19 @@ Nesta etapa, as três entradas, transições, seleções de secretaria/persona, 
 
 O protótipo inclui uma central municipal para demandas administrativas. O cadastro feito pelo operador informa assunto, descrição, categoria, solicitante, contato opcional, local, canal, secretaria responsável e prioridade. A aplicação atribui um protocolo demonstrativo, situação inicial, responsável, datas de recebimento e prazo; toda alteração acrescenta evento ao histórico do mesmo registro. O secretário acompanha a fila da pasta selecionada e pode atualizar situação, responsável e nota de andamento. O prefeito consulta os protocolos e resumos agregados.
 
-No front-end, `src/data/requests.ts` define o contrato comum (`MunicipalRequest`), os registros sintéticos iniciais, a regra de aberto/atrasado e a numeração demonstrativa. `src/components/RequestCenter.tsx` apresenta lista, filtros, detalhamento, histórico e atualização da secretaria; `OperationalWorkspace.tsx` oferece o cadastro ao operador e passa as alterações à aplicação. `App.tsx` mantém a coleção única em memória e deriva dela os totais por secretaria e do município. Os 36 registros abertos e 7 vencidos são seeds fictícios alinhados ao cenário que já existia. A fila de encaminhamentos clínicos especializados continua separada e não é contada como solicitação administrativa.
+No front-end, `src/data/requests.ts` define o contrato comum (`MunicipalRequest`), os registros sintéticos iniciais, a regra de aberto/atrasado e a numeração demonstrativa. `src/components/RequestCenter.tsx` apresenta lista, filtros, detalhamento, histórico e atualização da secretaria; `OperationalWorkspace.tsx` oferece o cadastro ao operador e passa as alterações à aplicação. `App.tsx` mantém a coleção única em memória e deriva dela os totais por secretaria e do município. Os 36 registros abertos e 7 vencidos são seeds fictícios alinhados ao cenário que já existia; um deles demonstra o fluxo intersetorial Educação → Saúde. A fila de encaminhamentos clínicos especializados continua separada e não é contada como solicitação administrativa.
 
 Não existe persistência nesta etapa: cadastro, atualização e histórico desaparecem ao recarregar ou encerrar a sessão. O protocolo exibido não é número oficial de prefeitura e os registros não correspondem a manifestações reais. O futuro backend deverá substituir a geração local por numeração transacional, trilha auditável e persistência apropriada, preservando o mesmo contrato funcional.
+
+## Evolução — Encaminhamentos intersetoriais na Central
+
+A Central foi ampliada para distinguir demandas administrativas de encaminhamentos intersetoriais sem criar uma nova pasta ou módulo. O contrato `MunicipalRequest` agora reutiliza a pessoa do cadastro compartilhado quando informada, registra secretaria de origem e destino, vínculo opcional com encaminhamento clínico da Saúde, responsável atual, prazo, pendência, retorno compartilhável, histórico e lista demonstrativa de visualizadores autorizados.
+
+O cenário principal é Educação → Saúde: a psicóloga escolar cria a solicitação para a Saúde; a Saúde recebe e conduz a regulação em `HealthReferralRegulationModule`; o protocolo conserva apenas o retorno autorizado para a origem. O seed `SIM-EDU-SAU-001` demonstra esse ciclo e se relaciona ao encaminhamento fictício `SIM-SAU-ENC-040`, sem duplicar pessoa, atendimento ou regulação.
+
+`RequestCenter.tsx` passou a filtrar e apresentar o tipo do fluxo, a rota origem–destino, a pendência, o retorno, a proteção de visualização e a ligação com a Saúde. A atualização da secretaria pode alterar situação, responsável, pendência e retorno dentro do histórico. O formulário do operador cria os dois tipos de demanda no mesmo ponto de entrada. O módulo de Regulação exibe a referência intersetorial autorizada, mas mantém sua fila clínica, seus status e sua competência próprios.
+
+Todos os dados continuam fictícios e em memória nesta etapa. A demonstração não expõe dados clínicos à Educação, não implementa autenticação ou persistência e não substitui os fluxos, protocolos ou sistemas oficiais de regulação.
 
 ## Módulo de Saúde — Território, Unidades e Equipes
 

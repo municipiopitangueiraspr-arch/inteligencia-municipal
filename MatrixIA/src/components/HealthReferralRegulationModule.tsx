@@ -28,6 +28,7 @@ import {
 } from "../data/healthReferrals";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
 import type { PeopleRegistryDataset } from "../data/peopleRegistry";
+import type { MunicipalRequest } from "../data/requests";
 import "./HealthReferralRegulationModule.css";
 
 type ModuleMode = "secretary" | "operator";
@@ -45,6 +46,7 @@ type HealthReferralRegulationModuleProps = {
   initialServiceRecordId?: string;
   onOpenDiagnostics?: (referralId: string) => void;
   onBack?: () => void;
+  intersectoralRequests?: MunicipalRequest[];
 };
 
 const priorities: HealthReferralPriority[] = [
@@ -159,6 +161,7 @@ export default function HealthReferralRegulationModule({
   initialServiceRecordId,
   onOpenDiagnostics,
   onBack,
+  intersectoralRequests = [],
 }: HealthReferralRegulationModuleProps) {
   const [view, setView] = useState<ModuleView>(
     initialServiceRecordId ? "create" : "queue",
@@ -501,9 +504,22 @@ export default function HealthReferralRegulationModule({
           <h2>Encaminhamentos e Regulação</h2>
           <p>
             Acompanhe o pedido desde o atendimento de origem até a oferta, o
-            agendamento e o retorno à unidade. Esta fila é clínica e não altera
-            solicitações administrativas.
+            agendamento e o retorno à unidade. A fila é clínica e não altera
+            solicitações administrativas; quando houver origem intersetorial,
+            ela mantém apenas o vínculo e o retorno autorizado.
           </p>
+          {intersectoralRequests.length > 0 && (
+            <div className="health-referrals-cross-link">
+              <strong>Solicitação intersetorial vinculada</strong>
+              <span>
+                {intersectoralRequests[0].protocol} · origem: {intersectoralRequests[0].sourceDepartment} · retorno para {intersectoralRequests[0].sourceDepartment}
+              </span>
+              <small>
+                A Saúde conduz a regulação nesta fila. A secretaria de origem
+                recebe somente o retorno autorizado no protocolo.
+              </small>
+            </div>
+          )}
         </div>
         <div className="health-referrals-header-actions">
           {onBack && (

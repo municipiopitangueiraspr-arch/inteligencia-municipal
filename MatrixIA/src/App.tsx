@@ -34,8 +34,10 @@ import {
   getDepartmentRequestCounts,
   getRequestCounts,
   initialMunicipalRequests,
+  type MunicipalRequestDraft,
   nextProtocolNumber,
   type MunicipalRequest,
+  type RequestReturnStatus,
   type RequestStatus,
 } from "./data/requests";
 import {
@@ -306,17 +308,7 @@ function App() {
   };
 
   const createMunicipalRequest = (
-    input: Omit<
-      MunicipalRequest,
-      | "id"
-      | "protocol"
-      | "createdAt"
-      | "dueAt"
-      | "status"
-      | "assignedTo"
-      | "history"
-      | "simulated"
-    > & { createdBy: string },
+    input: MunicipalRequestDraft,
   ) => {
     const now = new Date();
     const dueAt = new Date(now);
@@ -331,6 +323,12 @@ function App() {
       dueAt: dueAt.toISOString(),
       status: "Recebida",
       assignedTo: "Triagem da secretaria",
+      kind: requestFields.kind ?? "Administrativa",
+      sourceDepartment: requestFields.sourceDepartment ?? requestFields.department,
+      targetDepartment: requestFields.targetDepartment ?? requestFields.department,
+      returnStatus: requestFields.returnStatus ?? "Ainda não enviado",
+      allowedViewers:
+        requestFields.allowedViewers ?? [requestFields.department, "Prefeito"],
       simulated: true,
       history: [
         {
@@ -340,6 +338,7 @@ function App() {
           status: "Recebida",
           note: "Demanda cadastrada e encaminhada para triagem da secretaria responsável.",
           assignedTo: "Triagem da secretaria",
+          visibility: "Secretaria destino · Gestão autorizada",
         },
       ],
     };
@@ -349,7 +348,14 @@ function App() {
 
   const updateMunicipalRequest = (
     id: string,
-    update: { status: RequestStatus; assignedTo: string; note: string },
+    update: {
+      status: RequestStatus;
+      assignedTo: string;
+      note: string;
+      pending?: string;
+      returnStatus?: RequestReturnStatus;
+      returnNote?: string;
+    },
     actor: string,
   ) => {
     setRequests((previous) =>
@@ -364,6 +370,9 @@ function App() {
           ...request,
           status: update.status,
           assignedTo: update.assignedTo,
+          pending: update.pending,
+          returnStatus: update.returnStatus,
+          returnNote: update.returnNote,
           history: [...request.history, historyEntry],
         };
       }),

@@ -140,3 +140,14 @@ Os números, pessoas, entidades, datas, eventos e identificadores desta demonstr
 - [x] **Dados fictícios e limites clínicos:** identificar registros, referências e alterações como fictícios e transitórios, manter aviso persistente para não inserir dados reais e explicar que a interface demonstra somente recepção, conferência e encerramento administrativo da transição, sem orientação, avaliação ou decisão clínica e sem substituir profissionais, protocolos, prontuário ou sistemas oficiais. Não incluir sintomas, idades, avaliação de crescimento/desenvolvimento, recomendações, consultas clínicas, exames, vacinas, tratamentos, prazos assistenciais ou campo livre para narrativa clínica.
 - [x] **Sistemas e persistência:** não integrar, transmitir nem exportar informações para e-SUS APS/Siaps, SINASC, RNDS, CARE-PR ou qualquer sistema/destino oficial; não implementar autenticação, backend, Supabase ou persistência. Alterações locais devem desaparecer ao recarregar ou encerrar a sessão.
 - [x] **Validação e publicação:** aplicar Prettier, compilar MatrixIA com TypeScript/Vite, executar `git diff --check`, revisar em leitura independente os vínculos, transições, acessos de persona e limites de escopo, e confirmar o workflow de publicação no GitHub Pages e HTTP 200 antes de marcar os critérios de implementação como concluídos.
+
+
+## Nesta rodada — Central de Solicitações e Protocolos com encaminhamentos intersetoriais
+
+- [x] **Fluxos no mesmo ponto de entrada:** ampliar a Central para distinguir demanda administrativa de encaminhamento intersetorial, sem criar módulo independente; manter busca, filtros, protocolo e histórico no mesmo conjunto de registros.
+- [x] **Fluxo demonstrativo Educação → Saúde:** incluir cenário fictício em que a psicóloga escolar solicita à Saúde a condução da regulação, vinculando a pessoa do cadastro compartilhado e relacionando o protocolo ao encaminhamento clínico demonstrativo `SIM-SAU-ENC-040`.
+- [x] **Responsáveis e prazos:** apresentar e permitir atualizar secretaria de origem/destino, responsável atual, situação, prazo demonstrativo, pendência e histórico cronológico.
+- [x] **Retorno e permissões:** registrar situação e nota do retorno compartilhável, mostrar visualizadores autorizados e informar que a origem não acessa dados clínicos restritos; a Saúde mantém sua competência e processo próprio.
+- [x] **Integração com Regulação:** exibir no módulo de encaminhamentos da Saúde a referência autorizada ao protocolo intersetorial, sem contar a solicitação como fila clínica nem duplicar o encaminhamento.
+- [x] **Homologação fictícia:** manter todos os registros e alterações somente em memória, com avisos de demonstração; não implementar autenticação, persistência, integração ou substituição de sistemas oficiais.
+- [x] **Validação:** compilar TypeScript/Vite com `npm run build` e executar `git diff --check` sem erros.

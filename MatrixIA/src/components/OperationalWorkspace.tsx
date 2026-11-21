@@ -780,6 +780,11 @@ export default function OperationalWorkspace({
     requests,
     selectedDepartment.name,
   );
+  const intersectoralHealthRequests = requests.filter(
+    (request) =>
+      request.kind === "Encaminhamento intersetorial" &&
+      request.targetDepartment === "Saúde e Vigilância Sanitária",
+  );
   const operatorRequests = requests.filter((request) =>
     createdRequestIds.includes(request.id),
   );
@@ -853,6 +858,11 @@ export default function OperationalWorkspace({
       contact: String(values.get("contact") ?? "").trim(),
       location: String(values.get("location") ?? "").trim(),
       channel: String(values.get("channel") ?? "").trim(),
+      kind: String(values.get("kind") ?? "Administrativa") as MunicipalRequestDraft["kind"],
+      sourceDepartment:
+        String(values.get("sourceDepartment") ?? selectedDepartment.name).trim(),
+      targetDepartment: String(values.get("department") ?? "").trim(),
+      personId: String(values.get("personId") ?? "").trim() || undefined,
       createdBy: selectedPersona.label,
     };
     const firstEmptyField = [
@@ -1602,6 +1612,7 @@ export default function OperationalWorkspace({
                 <HealthReferralRegulationModule
                   mode="secretary"
                   dataset={healthReferrals}
+                  intersectoralRequests={intersectoralHealthRequests}
                   healthActivities={healthActivities}
                   peopleRegistry={peopleRegistry}
                   healthTerritory={healthTerritory}
@@ -1919,6 +1930,7 @@ export default function OperationalWorkspace({
               <HealthReferralRegulationModule
                 mode="operator"
                 dataset={healthReferrals}
+                intersectoralRequests={intersectoralHealthRequests}
                 healthActivities={healthActivities}
                 peopleRegistry={peopleRegistry}
                 healthTerritory={healthTerritory}
@@ -2370,6 +2382,22 @@ export default function OperationalWorkspace({
                 </select>
               </label>
               <label>
+                Tipo de fluxo
+                <select name="kind" defaultValue="Administrativa" required>
+                  <option>Administrativa</option>
+                  <option>Encaminhamento intersetorial</option>
+                </select>
+              </label>
+              <label>
+                Pessoa do cadastro compartilhado{" "}
+                <span className="request-optional">opcional</span>
+                <input
+                  name="personId"
+                  placeholder="Ex.: SIM-PES-042"
+                  maxLength={40}
+                />
+              </label>
+              <label>
                 Solicitante
                 <input
                   name="requester"
@@ -2416,6 +2444,11 @@ export default function OperationalWorkspace({
                   ))}
                 </select>
               </label>
+              <div className="request-deadline-note request-cross-flow-note">
+                <UsersRound size={15} /> Em um encaminhamento intersetorial, a
+                origem registra o contexto e a secretaria destino conduz seu
+                processo. O retorno compartilhado respeita as permissões.
+              </div>
               <label>
                 Prioridade
                 <select name="priority" defaultValue="Normal" required>
