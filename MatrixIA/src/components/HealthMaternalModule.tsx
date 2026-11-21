@@ -402,6 +402,31 @@ export default function HealthMaternalModule({
         </div>
       </div>
 
+      <section className="maternal-coverage" aria-labelledby="maternal-coverage-title">
+        <div className="maternal-coverage-heading">
+          <div>
+            <span className="maternal-eyebrow">LEVANTAMENTO PARA ETAPA FUTURA</span>
+            <h3 id="maternal-coverage-title">Cobertura atual do módulo</h3>
+          </div>
+          <span className="maternal-coverage-badge">Não é exportação oficial</span>
+        </div>
+        <div className="maternal-coverage-grid">
+          <article>
+            <strong>Já organizado aqui</strong>
+            <p>Referência municipal, unidade e equipe, abertura, etapa administrativa, pendências, responsáveis, prazos demonstrativos e histórico.</p>
+          </article>
+          <article className="attention">
+            <strong>Falta validar antes de exportar</strong>
+            <p>Evento de nascimento e desfecho, datas e campos do formulário oficial aplicável, códigos externos, identificadores do estabelecimento/profissional, competência, periodicidade, retorno de rejeição e regras de correção.</p>
+          </article>
+          <article>
+            <strong>Depende de outros módulos</strong>
+            <p>Pessoas e território, agenda/atendimentos, registro de nascimento e fluxo vital, transição administrativa da criança, regulação e documentos. Cada módulo permanece dono de seu evento.</p>
+          </article>
+        </div>
+        <p className="maternal-coverage-footnote">Esta lista é um requisito de levantamento, não uma decisão de leiaute, código, prazo ou sistema de destino. Os dados da tela continuam sintéticos, locais e em memória.</p>
+      </section>
+
       {message && (
         <div className="maternal-message" role="status">
           {message}
