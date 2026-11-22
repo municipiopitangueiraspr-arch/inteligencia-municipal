@@ -38,12 +38,14 @@ export type SharedQuestionnaire = {
   status: "Ativo" | "Inativo" | "Rascunho";
   questions: { id: string; label: string; kind: "choice" | "text"; options?: string[] }[];
   formSchema?: { sections: QuestionnaireSection[] };
+  versionHistory?: { version: number; savedAt: string; title: string; formSchema?: { sections: QuestionnaireSection[] }; questions: { id: string; label: string; kind: "choice" | "text"; options?: string[] }[] }[];
 };
 
 export type QuestionnaireResponse = {
   id: string;
   questionnaireId: string;
   questionnaireVersion?: number;
+  draftOfResponseId?: string;
   lotId?: string;
   householdId?: string;
   visitId?: string;
