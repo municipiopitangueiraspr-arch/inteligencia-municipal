@@ -97,6 +97,11 @@ import {
   initialHealthChild,
   type HealthChildDataset,
 } from "./data/healthChild";
+import { initialFieldwork, type FieldworkDataset } from "./data/fieldwork";
+import {
+  initialSharedQuestionnaires,
+  type SharedQuestionnairesDataset,
+} from "./data/sharedQuestionnaires";
 
 type View = "overview" | "departments" | "requests" | "general-registry";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -144,6 +149,9 @@ function App() {
   );
   const [healthChild, setHealthChild] =
     useState<HealthChildDataset>(initialHealthChild);
+  const [fieldwork, setFieldwork] = useState<FieldworkDataset>(initialFieldwork);
+  const [sharedQuestionnaires, setSharedQuestionnaires] =
+    useState<SharedQuestionnairesDataset>(initialSharedQuestionnaires);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -475,6 +483,10 @@ function App() {
         onHealthMaternalChange={setHealthMaternal}
         healthChild={healthChild}
         onHealthChildChange={setHealthChild}
+        fieldwork={fieldwork}
+        onFieldworkChange={setFieldwork}
+        sharedQuestionnaires={sharedQuestionnaires}
+        onSharedQuestionnairesChange={setSharedQuestionnaires}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}

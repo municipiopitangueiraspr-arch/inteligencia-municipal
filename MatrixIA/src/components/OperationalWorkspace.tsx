@@ -64,6 +64,10 @@ import type { HealthChildDataset } from "../data/healthChild";
 import HealthSummaryModule, {
   type SourceKey as HealthSummarySourceKey,
 } from "./HealthSummaryModule";
+import FieldworkModule from "./FieldworkModule";
+import SharedQuestionnairesModule from "./SharedQuestionnairesModule";
+import type { FieldworkDataset } from "../data/fieldwork";
+import type { SharedQuestionnairesDataset } from "../data/sharedQuestionnaires";
 
 const HealthSanitarySurveillanceModule = lazy(
   () => import("./HealthSanitarySurveillanceModule"),
@@ -127,6 +131,10 @@ type WorkspaceProps = {
   onHealthChildChange: (
     update: (current: HealthChildDataset) => HealthChildDataset,
   ) => void;
+  fieldwork: FieldworkDataset;
+  onFieldworkChange: (update: (current: FieldworkDataset) => FieldworkDataset) => void;
+  sharedQuestionnaires: SharedQuestionnairesDataset;
+  onSharedQuestionnairesChange: (update: (current: SharedQuestionnairesDataset) => SharedQuestionnairesDataset) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
     id: string,
@@ -565,6 +573,10 @@ export default function OperationalWorkspace({
   onHealthMaternalChange,
   healthChild,
   onHealthChildChange,
+  fieldwork,
+  onFieldworkChange,
+  sharedQuestionnaires,
+  onSharedQuestionnairesChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -593,6 +605,8 @@ export default function OperationalWorkspace({
     | "health-maternal"
     | "health-child"
     | "health-summary"
+    | "fieldwork"
+    | "questionnaires"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
   const [healthWorkflowOpen, setHealthWorkflowOpen] = useState(false);
@@ -1177,6 +1191,18 @@ export default function OperationalWorkspace({
                   >
                     <ShieldCheck size={14} /> Vigilância Sanitária
                   </button>
+                  <button
+                    className={activeSecretaryTab === "fieldwork" ? "active" : ""}
+                    onClick={() => setActiveSecretaryTab("fieldwork")}
+                  >
+                    <MapPinned size={14} /> Campo e jornada ACS
+                  </button>
+                  <button
+                    className={activeSecretaryTab === "questionnaires" ? "active" : ""}
+                    onClick={() => setActiveSecretaryTab("questionnaires")}
+                  >
+                    <ClipboardList size={14} /> Questionários compartilhados
+                  </button>
                 </>
               )}
             </div>
@@ -1312,6 +1338,44 @@ export default function OperationalWorkspace({
                 {isHealthDepartment && (
                   <>
                     <div className="health-module-launch-grid">
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("fieldwork")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <MapPinned size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Campo, lotes e jornada ACS</strong>
+                          <small>
+                            Mapa fictício, microáreas, cadastro guiado, vínculos,
+                            questionários e visitas.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="health-module-launch-card"
+                        onClick={() => setActiveSecretaryTab("questionnaires")}
+                      >
+                        <span className="health-module-launch-icon">
+                          <ClipboardList size={19} />
+                        </span>
+                        <span className="health-module-launch-copy">
+                          <strong>Questionários compartilhados</strong>
+                          <small>
+                            Catálogo transversal para aplicação por Saúde e futuras
+                            secretarias.
+                          </small>
+                        </span>
+                        <span className="health-module-launch-action">
+                          Abrir módulo <ArrowRight size={14} />
+                        </span>
+                      </button>
                       <button
                         type="button"
                         className="health-module-launch-card"
@@ -1623,6 +1687,26 @@ export default function OperationalWorkspace({
                 <HealthTerritoryModule
                   dataset={healthTerritory}
                   onChange={onHealthTerritoryChange}
+                />
+              )}
+            {activeSecretaryTab === "fieldwork" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <FieldworkModule
+                  personaId="secretary"
+                  dataset={fieldwork}
+                  questionnaires={sharedQuestionnaires}
+                  peopleRegistry={peopleRegistry}
+                  onChange={onFieldworkChange}
+                  onQuestionnairesChange={onSharedQuestionnairesChange}
+                  onPeopleRegistryChange={onPeopleRegistryChange}
+                  onBack={() => setActiveSecretaryTab("services")}
+                />
+              )}
+            {activeSecretaryTab === "questionnaires" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <SharedQuestionnairesModule
+                  dataset={sharedQuestionnaires}
+                  onBack={() => setActiveSecretaryTab("services")}
                 />
               )}
             {activeSecretaryTab === "health-summary" &&
@@ -1969,7 +2053,19 @@ export default function OperationalWorkspace({
                 </button>
               )}
             </div>
-            {healthWorkflowOpen && healthOperatorPersona && (
+            {healthWorkflowOpen && healthOperatorPersona === "acs" && (
+              <FieldworkModule
+                personaId="acs"
+                dataset={fieldwork}
+                questionnaires={sharedQuestionnaires}
+                peopleRegistry={peopleRegistry}
+                onChange={onFieldworkChange}
+                onQuestionnairesChange={onSharedQuestionnairesChange}
+                onPeopleRegistryChange={onPeopleRegistryChange}
+                onBack={() => setHealthWorkflowOpen(false)}
+              />
+            )}
+            {healthWorkflowOpen && healthOperatorPersona && healthOperatorPersona !== "acs" && (
               <HealthVisitsAttendanceModule
                 key={selectedPersona.id}
                 mode="operator"
