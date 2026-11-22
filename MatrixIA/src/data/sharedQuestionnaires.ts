@@ -6,7 +6,7 @@ export type SharedQuestionnaire = {
   subtitle: string;
   audience: QuestionnaireAudience;
   version: number;
-  status: "Ativo" | "Rascunho";
+  status: "Ativo" | "Inativo" | "Rascunho";
   questions: { id: string; label: string; kind: "choice" | "text"; options?: string[] }[];
 };
 

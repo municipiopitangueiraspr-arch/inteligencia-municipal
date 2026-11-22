@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -99,6 +99,7 @@ import {
 } from "./data/healthChild";
 import {
   initialSharedQuestionnaires,
+  type SharedQuestionnairesDataset,
 } from "./data/sharedQuestionnaires";
 
 type View = "overview" | "departments" | "requests" | "general-registry";
@@ -147,7 +148,23 @@ function App() {
   );
   const [healthChild, setHealthChild] =
     useState<HealthChildDataset>(initialHealthChild);
-  const [sharedQuestionnaires] = useState(initialSharedQuestionnaires);
+  const [sharedQuestionnaires, setSharedQuestionnaires] =
+    useState<SharedQuestionnairesDataset>(() => {
+      try {
+        const stored = window.localStorage.getItem("matrixia-questionnaires");
+        return stored
+          ? (JSON.parse(stored) as SharedQuestionnairesDataset)
+          : initialSharedQuestionnaires;
+      } catch {
+        return initialSharedQuestionnaires;
+      }
+    });
+  useEffect(() => {
+    window.localStorage.setItem(
+      "matrixia-questionnaires",
+      JSON.stringify(sharedQuestionnaires),
+    );
+  }, [sharedQuestionnaires]);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -480,6 +497,7 @@ function App() {
         healthChild={healthChild}
         onHealthChildChange={setHealthChild}
         sharedQuestionnaires={sharedQuestionnaires}
+        onSharedQuestionnairesChange={setSharedQuestionnaires}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}

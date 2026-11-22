@@ -129,6 +129,9 @@ type WorkspaceProps = {
     update: (current: HealthChildDataset) => HealthChildDataset,
   ) => void;
   sharedQuestionnaires: SharedQuestionnairesDataset;
+  onSharedQuestionnairesChange: (
+    update: (current: SharedQuestionnairesDataset) => SharedQuestionnairesDataset,
+  ) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
     id: string,
@@ -632,6 +635,7 @@ export default function OperationalWorkspace({
   healthChild,
   onHealthChildChange,
   sharedQuestionnaires,
+  onSharedQuestionnairesChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -902,7 +906,7 @@ export default function OperationalWorkspace({
       accent: "blue",
       icon: "summary",
       modules: [
-        { kind: "questionnaires", title: "Questionários compartilhados", description: "Modelos transversais para diferentes secretarias.", onOpen: () => setActiveSecretaryTab("questionnaires") },
+        { kind: "questionnaires", title: "Questionários", description: "Criação, versões, respostas e histórico local.", onOpen: () => setActiveSecretaryTab("questionnaires") },
         { kind: "territory", title: "Território, Unidades e Equipes", description: "Rede municipal, áreas de atuação e equipes.", onOpen: () => setActiveSecretaryTab("territory") },
         { kind: "summary", title: "Resumo e Prioridades", description: "Indicadores, prioridades e próximos passos.", onOpen: () => setActiveSecretaryTab("health-summary"), action: "Ver tudo" },
         { kind: "requests", title: "Solicitações Administrativas", description: "Demandas, encaminhamentos e prazos.", onOpen: () => setActiveSecretaryTab("requests") },
@@ -1306,7 +1310,7 @@ export default function OperationalWorkspace({
                     className={activeSecretaryTab === "questionnaires" ? "active" : ""}
                     onClick={() => setActiveSecretaryTab("questionnaires")}
                   >
-                    <ClipboardList size={14} /> Questionários compartilhados
+                    <ClipboardList size={14} /> Questionários
                   </button>
                 </>
               )}
@@ -1491,6 +1495,7 @@ export default function OperationalWorkspace({
               selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
                 <SharedQuestionnairesModule
                   dataset={sharedQuestionnaires}
+                  onChange={onSharedQuestionnairesChange}
                   onBack={() => setActiveSecretaryTab("services")}
                 />
               )}
