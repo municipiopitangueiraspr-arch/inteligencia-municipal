@@ -3361,68 +3361,132 @@ button:disabled {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 11px;
   margin: 18px 0;
+  counter-reset: health-module;
 }
 .health-module-launch-card {
+  position: relative;
   width: 100%;
-  min-height: 96px;
+  min-height: 184px;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 11px;
-  padding: 14px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  align-items: start;
+  gap: 12px 13px;
+  padding: 18px;
+  overflow: hidden;
   border: 1px solid #d7e0ea;
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #fff 0%, #fff 68%, #f3f7fb 100%);
   color: #183d63;
   text-align: left;
   cursor: pointer;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
-    transform 140ms ease;
+    transform 180ms ease,
+    background 180ms ease;
+}
+.health-module-launch-card::before {
+  counter-increment: health-module;
+  content: counter(health-module, decimal-leading-zero);
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: #a7b9c8;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+.health-module-launch-card::after {
+  content: "";
+  position: absolute;
+  right: -32px;
+  bottom: -42px;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: rgb(54 119 176 / 6%);
+  pointer-events: none;
 }
 .health-module-launch-card:hover {
-  transform: translateY(-1px);
-  border-color: #9cb9d5;
-  box-shadow: 0 5px 16px rgb(24 61 99 / 9%);
+  transform: translateY(-4px);
+  border-color: #8eacc8;
+  background: linear-gradient(145deg, #fff 0%, #fff 54%, #eaf3fb 100%);
+  box-shadow: 0 14px 26px rgb(24 61 99 / 13%);
 }
 .health-module-launch-icon {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  z-index: 1;
+  width: 58px;
+  height: 58px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: #e8f1fa;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #eaf4fc, #cfe3f4);
   color: #1558a6;
+  box-shadow:
+    inset 2px 2px 5px rgb(255 255 255 / 90%),
+    inset -3px -4px 7px rgb(94 142 181 / 18%),
+    0 8px 14px rgb(29 77 117 / 12%);
 }
 .health-module-glyph {
-  width: 24px;
-  height: 24px;
+  width: 34px;
+  height: 34px;
   overflow: visible;
+  filter: drop-shadow(1px 2px 1px rgb(28 75 113 / 18%));
 }
 .health-module-launch-copy {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: 7px;
+  padding-right: 14px;
 }
 .health-module-launch-copy strong {
   color: #183d63;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.24;
+  letter-spacing: -0.015em;
 }
 .health-module-launch-copy small {
   color: #607586;
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: 10px;
+  line-height: 1.52;
 }
 .health-module-launch-action {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  justify-self: start;
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 7px 10px;
+  border: 1px solid #d2e1ee;
+  border-radius: 999px;
+  background: rgb(239 247 253 / 86%);
   color: #1558a6;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
   white-space: nowrap;
+}
+.health-module-launch-card:hover .health-module-launch-action {
+  border-color: #9fc0dc;
+  background: #e4f1fb;
+}
+.health-module-launch-card:nth-child(3n + 2) .health-module-launch-icon {
+  background: linear-gradient(145deg, #edf8f2, #cce9d8);
+  color: #187052;
+}
+.health-module-launch-card:nth-child(3n) .health-module-launch-icon {
+  background: linear-gradient(145deg, #fff3df, #f5d6a4);
+  color: #ad6a24;
+}
+.health-module-launch-card:nth-child(4n) .health-module-launch-icon {
+  background: linear-gradient(145deg, #f5edfc, #dfc9f0);
+  color: #7c4f9f;
 }
 .secretary-records-page {
   max-width: 900px;
@@ -4041,9 +4105,18 @@ button:disabled {
     font-size: 9px;
   }
   .health-module-launch-card {
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 9px;
-    padding: 12px;
+    grid-template-columns: 48px minmax(0, 1fr);
+    min-height: 160px;
+    gap: 10px;
+    padding: 15px;
+  }
+  .health-module-launch-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .health-module-glyph {
+    width: 29px;
+    height: 29px;
   }
   .health-module-launch-action {
     grid-column: 2;
