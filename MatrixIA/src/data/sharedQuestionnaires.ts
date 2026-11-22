@@ -1,5 +1,34 @@
 export type QuestionnaireAudience = "Saúde" | "Assistência Social" | "Educação" | "Compartilhado";
 
+export type QuestionnaireQuestionType =
+  | "short_text"
+  | "long_text"
+  | "phone"
+  | "number"
+  | "currency"
+  | "date"
+  | "yes_no"
+  | "single_choice"
+  | "multiple_choice"
+  | "signature";
+
+export type QuestionnaireQuestion = {
+  id: string;
+  label: string;
+  type: QuestionnaireQuestionType;
+  required: boolean;
+  helpText?: string;
+  options?: string[];
+  validation?: { min?: number; max?: number; minLength?: number; maxLength?: number };
+};
+
+export type QuestionnaireSection = {
+  id: string;
+  title: string;
+  description?: string;
+  questions: QuestionnaireQuestion[];
+};
+
 export type SharedQuestionnaire = {
   id: string;
   title: string;
@@ -8,6 +37,7 @@ export type SharedQuestionnaire = {
   version: number;
   status: "Ativo" | "Inativo" | "Rascunho";
   questions: { id: string; label: string; kind: "choice" | "text"; options?: string[] }[];
+  formSchema?: { sections: QuestionnaireSection[] };
 };
 
 export type QuestionnaireResponse = {
@@ -20,6 +50,7 @@ export type QuestionnaireResponse = {
   status: "Rascunho" | "Enviado";
   answers: Record<string, string>;
   updatedAt: string;
+  context?: { personId?: string; householdId?: string; lotId?: string; visitId?: string; unitId?: string; professionalId?: string };
 };
 
 export type SharedQuestionnairesDataset = {
