@@ -43,6 +43,7 @@ export type SharedQuestionnaire = {
 export type QuestionnaireResponse = {
   id: string;
   questionnaireId: string;
+  questionnaireVersion?: number;
   lotId?: string;
   householdId?: string;
   visitId?: string;
