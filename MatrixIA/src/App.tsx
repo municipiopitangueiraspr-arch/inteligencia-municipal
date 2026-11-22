@@ -97,10 +97,7 @@ import {
   initialHealthChild,
   type HealthChildDataset,
 } from "./data/healthChild";
-import {
-  initialSharedQuestionnaires,
-  type SharedQuestionnairesDataset,
-} from "./data/sharedQuestionnaires";
+import { supabase, loadMunicipalUser, type MatrixUser } from "./lib/supabase";
 
 type View = "overview" | "departments" | "requests" | "general-registry";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -122,6 +119,7 @@ const formatPercent = (value: number) =>
 
 function App() {
   const [experience, setExperience] = useState<Experience | null>(null);
+  const [municipalUser, setMunicipalUser] = useState<MatrixUser | null>(null);
   const [requests, setRequests] = useState<MunicipalRequest[]>(
     initialMunicipalRequests,
   );
@@ -148,23 +146,34 @@ function App() {
   );
   const [healthChild, setHealthChild] =
     useState<HealthChildDataset>(initialHealthChild);
-  const [sharedQuestionnaires, setSharedQuestionnaires] =
-    useState<SharedQuestionnairesDataset>(() => {
-      try {
-        const stored = window.localStorage.getItem("matrixia-questionnaires");
-        return stored
-          ? (JSON.parse(stored) as SharedQuestionnairesDataset)
-          : initialSharedQuestionnaires;
-      } catch {
-        return initialSharedQuestionnaires;
-      }
-    });
   useEffect(() => {
-    window.localStorage.setItem(
-      "matrixia-questionnaires",
-      JSON.stringify(sharedQuestionnaires),
-    );
-  }, [sharedQuestionnaires]);
+    let mounted = true;
+    const hydrate = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (mounted && data.session) {
+        const profile = await loadMunicipalUser(data.session.user.id, data.session.user.email);
+        setMunicipalUser(profile);
+        setExperience(profile.experience);
+      }
+    };
+    void hydrate();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setMunicipalUser(null);
+        setExperience(null);
+        return;
+      }
+      void loadMunicipalUser(session.user.id, session.user.email).then((profile) => {
+        if (!mounted) return;
+        setMunicipalUser(profile);
+        setExperience(profile.experience);
+      });
+    });
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -468,7 +477,7 @@ function App() {
   }[noticeMode];
 
   if (!experience) {
-    return <AccessScreen onEnter={setExperience} />;
+    return <AccessScreen onAuthenticated={(user) => { setMunicipalUser(user); setExperience(user.experience); }} />;
   }
 
   if (experience !== "mayor") {
@@ -496,15 +505,14 @@ function App() {
         onHealthMaternalChange={setHealthMaternal}
         healthChild={healthChild}
         onHealthChildChange={setHealthChild}
-        sharedQuestionnaires={sharedQuestionnaires}
-        onSharedQuestionnairesChange={setSharedQuestionnaires}
+        municipalUser={municipalUser}
         peopleRegistry={peopleRegistry}
         onPeopleRegistryChange={setPeopleRegistry}
         onCreateRequest={createMunicipalRequest}
         onUpdateRequest={(id, update) =>
           updateMunicipalRequest(id, update, "Secretaria responsável")
         }
-        onSwitchExperience={() => setExperience(null)}
+        onSwitchExperience={() => { void supabase.auth.signOut(); setExperience(null); setMunicipalUser(null); }}
       />
     );
   }

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   UsersRound,
 } from "lucide-react";
+import { loadMunicipalUser, supabase, type MatrixUser } from "../lib/supabase";
 
 type Experience = "mayor" | "secretary" | "operator";
 
@@ -57,10 +58,10 @@ const secretariatNames = [
 ];
 
 type AccessScreenProps = {
-  onEnter: (experience: Experience) => void;
+  onAuthenticated: (user: MatrixUser) => void;
 };
 
-export default function AccessScreen({ onEnter }: AccessScreenProps) {
+export default function AccessScreen({ onAuthenticated }: AccessScreenProps) {
   const [experience, setExperience] = useState<Experience>("mayor");
   const [email, setEmail] = useState("prefeito@demo.matrixia");
   const [password, setPassword] = useState("");
@@ -73,15 +74,26 @@ export default function AccessScreen({ onEnter }: AccessScreenProps) {
     setMessage("");
   };
 
-  const enterDemo = (event: FormEvent<HTMLFormElement>) => {
+  const enterDemo = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.trim() || !password.trim()) {
       setMessage(
-        "Informe o e-mail e uma senha de demonstração para continuar.",
+        "Informe seu e-mail e sua senha para continuar.",
       );
       return;
     }
-    onEnter(experience);
+    setMessage("");
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error || !data.user) {
+      setMessage(error?.message ?? "Não foi possível autenticar este usuário.");
+      return;
+    }
+    try {
+      onAuthenticated(await loadMunicipalUser(data.user.id, data.user.email));
+    } catch {
+      setMessage("Usuário autenticado, mas sem perfil municipal cadastrado.");
+      await supabase.auth.signOut();
+    }
   };
 
   const selectedRole = roleOptions.find((role) => role.id === experience)!;
@@ -193,7 +205,7 @@ export default function AccessScreen({ onEnter }: AccessScreenProps) {
           </div>
 
           <form className="access-form" onSubmit={enterDemo}>
-            <label htmlFor="demo-email">E-mail de demonstração</label>
+            <label htmlFor="demo-email">E-mail institucional</label>
             <input
               id="demo-email"
               type="email"
@@ -220,7 +232,7 @@ export default function AccessScreen({ onEnter }: AccessScreenProps) {
                 id="demo-password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
-                placeholder="Digite qualquer senha fictícia"
+                placeholder="Digite sua senha"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
@@ -233,10 +245,7 @@ export default function AccessScreen({ onEnter }: AccessScreenProps) {
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
-            <p className="access-demo-note">
-              Acesso de demonstração: não há autenticação real. E-mail e senha
-              são usados apenas para simular a entrada.
-            </p>
+            <p className="access-demo-note">Acesso protegido pelo Supabase. O papel é carregado do perfil municipal vinculado ao login.</p>
             {message && (
               <p className="access-message" role="status">
                 {message}
@@ -253,9 +262,7 @@ export default function AccessScreen({ onEnter }: AccessScreenProps) {
             <button
               type="button"
               onClick={() =>
-                setMessage(
-                  "No protótipo, escolha uma visão acima e informe qualquer senha fictícia para entrar.",
-                )
+                setMessage("Use um usuário autorizado do ambiente de homologação e a senha cadastrada no Supabase.")
               }
             >
               Ver orientação

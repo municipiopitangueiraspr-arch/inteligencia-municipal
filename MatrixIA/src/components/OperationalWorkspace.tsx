@@ -64,7 +64,7 @@ import HealthSummaryModule, {
   type SourceKey as HealthSummarySourceKey,
 } from "./HealthSummaryModule";
 import SharedQuestionnairesModule from "./SharedQuestionnairesModule";
-import type { SharedQuestionnairesDataset } from "../data/sharedQuestionnaires";
+import type { MatrixUser } from "../lib/supabase";
 
 const HealthSanitarySurveillanceModule = lazy(
   () => import("./HealthSanitarySurveillanceModule"),
@@ -128,10 +128,7 @@ type WorkspaceProps = {
   onHealthChildChange: (
     update: (current: HealthChildDataset) => HealthChildDataset,
   ) => void;
-  sharedQuestionnaires: SharedQuestionnairesDataset;
-  onSharedQuestionnairesChange: (
-    update: (current: SharedQuestionnairesDataset) => SharedQuestionnairesDataset,
-  ) => void;
+  municipalUser: MatrixUser | null;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
     id: string,
@@ -634,8 +631,7 @@ export default function OperationalWorkspace({
   onHealthMaternalChange,
   healthChild,
   onHealthChildChange,
-  sharedQuestionnaires,
-  onSharedQuestionnairesChange,
+  municipalUser,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -1494,8 +1490,7 @@ export default function OperationalWorkspace({
             {activeSecretaryTab === "questionnaires" &&
               selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
                 <SharedQuestionnairesModule
-                  dataset={sharedQuestionnaires}
-                  onChange={onSharedQuestionnairesChange}
+                  userId={municipalUser?.id ?? ""}
                   onBack={() => setActiveSecretaryTab("services")}
                 />
               )}
