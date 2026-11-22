@@ -575,6 +575,7 @@ export default function OperationalWorkspace({
   const [selectedPersona, setSelectedPersona] = useState<Persona>(
     operatorPersonas.find((persona) => persona.id === "school")!,
   );
+  const [generalRegistryOpen, setGeneralRegistryOpen] = useState(false);
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
     | "overview"
     | "services"
@@ -952,6 +953,7 @@ export default function OperationalWorkspace({
                       : ""
                   }
                   onClick={() => {
+                    setGeneralRegistryOpen(false);
                     setSelectedDepartment(department);
                     setActiveSecretaryTab(
                       department.name === "Saúde e Vigilância Sanitária"
@@ -1014,6 +1016,21 @@ export default function OperationalWorkspace({
             </select>
           </>
         )}
+        <button
+          className={`workspace-general-registry ${generalRegistryOpen ? "selected" : ""}`}
+          onClick={() => {
+            setGeneralRegistryOpen(true);
+            setHealthWorkflowOpen(false);
+            setHealthReferralOpen(false);
+            setHealthDiagnosticsOpen(false);
+            setHealthSanitaryOpen(false);
+            setHealthMaternalOpen(false);
+            setHealthChildOpen(false);
+          }}
+        >
+          <UsersRound size={15} />
+          <span>CADASTRO GERAL</span>
+        </button>
         <div className="workspace-sidebar-bottom">
           <div className="workspace-demo-note">
             <Check size={14} />
@@ -1035,7 +1052,11 @@ export default function OperationalWorkspace({
             <span>Município</span>
             <ArrowRight size={13} />
             <strong>
-              {isSecretary ? selectedDepartment.shortName : "Meu trabalho"}
+              {generalRegistryOpen
+                ? "Cadastro Geral"
+                : isSecretary
+                  ? selectedDepartment.shortName
+                  : "Meu trabalho"}
             </strong>
           </div>
           <div className="workspace-top-actions">
@@ -1046,7 +1067,15 @@ export default function OperationalWorkspace({
           </div>
         </header>
 
-        {isSecretary ? (
+        {generalRegistryOpen ? (
+          <div className="workspace-content">
+            <PeopleFamiliesDomicilesModule
+              dataset={peopleRegistry}
+              healthTerritory={healthTerritory}
+              onChange={onPeopleRegistryChange}
+            />
+          </div>
+        ) : isSecretary ? (
           <div className="workspace-content">
             <div className="workspace-page-kicker">
               <Building2 size={14} /> VISÃO DA SECRETARIA · ATUALIZADA EM 19/NOV

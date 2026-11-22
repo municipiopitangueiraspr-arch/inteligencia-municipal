@@ -2880,6 +2880,28 @@ button:disabled {
   background: #1d568c;
   color: #fff;
 }
+.workspace-general-registry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 8px;
+  border: 1px solid rgba(137, 201, 213, 0.38);
+  border-radius: 6px;
+  background: rgba(72, 137, 158, 0.22);
+  color: #e4f4f4;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.workspace-general-registry:hover,
+.workspace-general-registry.selected {
+  border-color: #8bd5d2;
+  background: #1d6680;
+  color: #fff;
+}
 .workspace-dot {
   width: 7px;
   height: 7px;
