@@ -3358,7 +3358,7 @@ button:disabled {
 }
 .health-module-launch-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 11px;
   margin: 18px 0;
 }
@@ -3394,6 +3394,11 @@ button:disabled {
   border-radius: 8px;
   background: #e8f1fa;
   color: #1558a6;
+}
+.health-module-glyph {
+  width: 24px;
+  height: 24px;
+  overflow: visible;
 }
 .health-module-launch-copy {
   min-width: 0;
@@ -3912,6 +3917,9 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .service-module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .health-module-launch-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

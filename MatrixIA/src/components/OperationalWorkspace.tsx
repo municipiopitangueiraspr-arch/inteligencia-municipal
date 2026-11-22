@@ -21,7 +21,6 @@ import {
   LogOut,
   MapPinned,
   MapPin,
-  Pill,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
@@ -64,9 +63,7 @@ import type { HealthChildDataset } from "../data/healthChild";
 import HealthSummaryModule, {
   type SourceKey as HealthSummarySourceKey,
 } from "./HealthSummaryModule";
-import FieldworkModule from "./FieldworkModule";
 import SharedQuestionnairesModule from "./SharedQuestionnairesModule";
-import type { FieldworkDataset } from "../data/fieldwork";
 import type { SharedQuestionnairesDataset } from "../data/sharedQuestionnaires";
 
 const HealthSanitarySurveillanceModule = lazy(
@@ -131,10 +128,7 @@ type WorkspaceProps = {
   onHealthChildChange: (
     update: (current: HealthChildDataset) => HealthChildDataset,
   ) => void;
-  fieldwork: FieldworkDataset;
-  onFieldworkChange: (update: (current: FieldworkDataset) => FieldworkDataset) => void;
   sharedQuestionnaires: SharedQuestionnairesDataset;
-  onSharedQuestionnairesChange: (update: (current: SharedQuestionnairesDataset) => SharedQuestionnairesDataset) => void;
   onCreateRequest: (draft: MunicipalRequestDraft) => MunicipalRequest;
   onUpdateRequest: (
     id: string,
@@ -548,6 +542,51 @@ type LocalSecretaryUpdate = {
   createdAt: string;
 };
 
+type HealthModuleGlyphKind =
+  | "questionnaires"
+  | "territory"
+  | "people"
+  | "activities"
+  | "referrals"
+  | "diagnostics"
+  | "sanitary"
+  | "epidemiology"
+  | "immunization"
+  | "pharmacy"
+  | "maternal"
+  | "child"
+  | "summary"
+  | "requests"
+  | "records";
+
+function HealthModuleGlyph({ kind }: { kind: HealthModuleGlyphKind }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 1.8,
+  };
+  const shapes: Record<HealthModuleGlyphKind, ReactNode> = {
+    questionnaires: <><path {...common} d="M9 5.5h10l4 4v17H9z" /><path {...common} d="M19 5.5v4h4M12 14h8M12 18h8M12 22h5" /><path {...common} d="M6 8.5H5a2 2 0 0 0-2 2v16h14" /></>,
+    territory: <><path {...common} d="M4 8.5 12 5l8 3 8-3v18.5l-8 3-8-3-8 3z" /><path {...common} d="M12 5v18.5M20 8v18.5" /><circle {...common} cx="16" cy="13" r="2.2" /><path {...common} d="M16 15.2v4.3" /></>,
+    people: <><circle {...common} cx="12" cy="10" r="3.2" /><circle {...common} cx="22" cy="11" r="2.5" /><path {...common} d="M5 25c.8-4 3.2-6 7-6s6.2 2 7 6M19 19c3.5-.2 5.7 1.7 6.5 5" /></>,
+    activities: <><path {...common} d="M3 17h5l2.4-7 4.2 13 2.7-8H29" /><path {...common} d="M5 7v-2M27 7v-2" /></>,
+    referrals: <><circle {...common} cx="8" cy="16" r="3" /><circle {...common} cx="24" cy="9" r="3" /><path {...common} d="M10.7 14.8 21.3 10.2M21 22H11M11 22l3-3M11 22l3 3" /></>,
+    diagnostics: <><rect {...common} x="7" y="4" width="18" height="24" rx="2" /><path {...common} d="M12 4v-1h8v1M11 12h10M11 17h4M18 17h3M11 22h10" /><circle {...common} cx="15" cy="22" r=".5" /></>,
+    sanitary: <><path {...common} d="M16 4 26 8v7c0 6-4.2 10-10 13C10.2 25 6 21 6 15V8z" /><path {...common} d="m11.5 16 3 3 6-7" /></>,
+    epidemiology: <><path {...common} d="M4 23h5l2.5-9 4 5 3-11 3 15H28" /><circle {...common} cx="11.5" cy="14" r="1.5" /></>,
+    immunization: <><path {...common} d="m8 7 17 17M12 3l17 17M7 8l5-5M3 29l8-8" /><path {...common} d="m18 10 4-4M10 18l-4 4" /><circle {...common} cx="23" cy="23" r="4" /></>,
+    pharmacy: <><rect {...common} x="7" y="5" width="18" height="22" rx="3" /><path {...common} d="M12 5v22M12 11h13M16 18h6M19 15v6" /></>,
+    maternal: <><circle {...common} cx="16" cy="8" r="3" /><path {...common} d="M10 27c0-5 2-9 6-9s6 4 6 9M8 15c2 1 3 2 4 4M24 15c-2 1-3 2-4 4" /><path {...common} d="M13 25h6" /></>,
+    child: <><circle {...common} cx="16" cy="8" r="3" /><path {...common} d="M10 27c.4-5.2 2.2-9 6-9s5.6 3.8 6 9M10 18l-3 4M22 18l3 4M13 13h6" /></>,
+    summary: <><path {...common} d="M6 26V15M13 26V8M20 26v-5M27 26V4" /><path {...common} d="M4 26h25" /></>,
+    requests: <><path {...common} d="M7 5h14l4 4v18H7z" /><path {...common} d="M21 5v5h4M11 15h10M11 19h10M11 23h6" /></>,
+    records: <><path {...common} d="M8 4h16v24H8zM12 9h8M12 14h8M12 19h5" /><path {...common} d="m5 8-2 2 2 2M27 20l2 2-2 2" /></>,
+  };
+  return <svg className="health-module-glyph" viewBox="0 0 32 32" aria-hidden="true">{shapes[kind]}</svg>;
+}
+
 export default function OperationalWorkspace({
   experience,
   requests,
@@ -573,10 +612,7 @@ export default function OperationalWorkspace({
   onHealthMaternalChange,
   healthChild,
   onHealthChildChange,
-  fieldwork,
-  onFieldworkChange,
   sharedQuestionnaires,
-  onSharedQuestionnairesChange,
   onCreateRequest,
   onUpdateRequest,
   onSwitchExperience,
@@ -605,7 +641,6 @@ export default function OperationalWorkspace({
     | "health-maternal"
     | "health-child"
     | "health-summary"
-    | "fieldwork"
     | "questionnaires"
   >("overview");
   const [entryOpen, setEntryOpen] = useState(false);
@@ -1076,23 +1111,25 @@ export default function OperationalWorkspace({
           </div>
         ) : isSecretary ? (
           <div className="workspace-content">
-            <div className="workspace-page-kicker">
-              <Building2 size={14} /> VISÃO DA SECRETARIA · ATUALIZADA EM 19/NOV
-            </div>
-            <div className="workspace-heading-row">
-              <div>
-                <h1>{selectedDepartment.name}</h1>
-                <p>{selectedDepartmentSummary.summary}</p>
-              </div>
-              {!isHealthDepartment && (
-                <button
-                  className="workspace-primary-button"
-                  onClick={() => setActiveSecretaryTab("requests")}
-                >
-                  <ClipboardList size={16} /> Ver solicitações
-                </button>
-              )}
-            </div>
+            {!isHealthDepartment && (
+              <>
+                <div className="workspace-page-kicker">
+                  <Building2 size={14} /> VISÃO DA SECRETARIA · ATUALIZADA EM 19/NOV
+                </div>
+                <div className="workspace-heading-row">
+                  <div>
+                    <h1>{selectedDepartment.name}</h1>
+                    <p>{selectedDepartmentSummary.summary}</p>
+                  </div>
+                  <button
+                    className="workspace-primary-button"
+                    onClick={() => setActiveSecretaryTab("requests")}
+                  >
+                    <ClipboardList size={16} /> Ver solicitações
+                  </button>
+                </div>
+              </>
+            )}
             {isHealthDepartment && activeSecretaryTab !== "services" && (
               <button
                 type="button"
@@ -1190,12 +1227,6 @@ export default function OperationalWorkspace({
                     onClick={() => setActiveSecretaryTab("health-sanitary")}
                   >
                     <ShieldCheck size={14} /> Vigilância Sanitária
-                  </button>
-                  <button
-                    className={activeSecretaryTab === "fieldwork" ? "active" : ""}
-                    onClick={() => setActiveSecretaryTab("fieldwork")}
-                  >
-                    <MapPinned size={14} /> Campo e jornada ACS
                   </button>
                   <button
                     className={activeSecretaryTab === "questionnaires" ? "active" : ""}
@@ -1341,29 +1372,10 @@ export default function OperationalWorkspace({
                       <button
                         type="button"
                         className="health-module-launch-card"
-                        onClick={() => setActiveSecretaryTab("fieldwork")}
-                      >
-                        <span className="health-module-launch-icon">
-                          <MapPinned size={19} />
-                        </span>
-                        <span className="health-module-launch-copy">
-                          <strong>Campo, lotes e jornada ACS</strong>
-                          <small>
-                            Mapa fictício, microáreas, cadastro guiado, vínculos,
-                            questionários e visitas.
-                          </small>
-                        </span>
-                        <span className="health-module-launch-action">
-                          Abrir módulo <ArrowRight size={14} />
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="health-module-launch-card"
                         onClick={() => setActiveSecretaryTab("questionnaires")}
                       >
                         <span className="health-module-launch-icon">
-                          <ClipboardList size={19} />
+                          <HealthModuleGlyph kind="questionnaires" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Questionários compartilhados</strong>
@@ -1382,7 +1394,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("territory")}
                       >
                         <span className="health-module-launch-icon">
-                          <MapPinned size={19} />
+                          <HealthModuleGlyph kind="territory" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Território, Unidades e Equipes</strong>
@@ -1401,7 +1413,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("people")}
                       >
                         <span className="health-module-launch-icon">
-                          <UsersRound size={19} />
+                          <HealthModuleGlyph kind="people" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Pessoas, Famílias e Domicílios</strong>
@@ -1423,7 +1435,7 @@ export default function OperationalWorkspace({
                         }
                       >
                         <span className="health-module-launch-icon">
-                          <Activity size={19} />
+                          <HealthModuleGlyph kind="activities" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Visitas e Atendimentos</strong>
@@ -1446,7 +1458,7 @@ export default function OperationalWorkspace({
                         }}
                       >
                         <span className="health-module-launch-icon">
-                          <Activity size={19} />
+                          <HealthModuleGlyph kind="referrals" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Encaminhamentos e Regulação</strong>
@@ -1471,7 +1483,7 @@ export default function OperationalWorkspace({
                         }}
                       >
                         <span className="health-module-launch-icon">
-                          <ClipboardPlus size={19} />
+                          <HealthModuleGlyph kind="diagnostics" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Exames, Procedimentos e Resultados</strong>
@@ -1491,7 +1503,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("health-sanitary")}
                       >
                         <span className="health-module-launch-icon">
-                          <ShieldCheck size={19} />
+                          <HealthModuleGlyph kind="sanitary" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Vigilância Sanitária</strong>
@@ -1512,7 +1524,7 @@ export default function OperationalWorkspace({
                         }
                       >
                         <span className="health-module-launch-icon">
-                          <Activity size={19} />
+                          <HealthModuleGlyph kind="epidemiology" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>
@@ -1536,7 +1548,7 @@ export default function OperationalWorkspace({
                         }
                       >
                         <span className="health-module-launch-icon">
-                          <Activity size={19} />
+                          <HealthModuleGlyph kind="immunization" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Imunização e Vacinação</strong>
@@ -1555,7 +1567,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("health-pharmacy")}
                       >
                         <span className="health-module-launch-icon">
-                          <Pill size={19} />
+                          <HealthModuleGlyph kind="pharmacy" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>
@@ -1576,7 +1588,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("health-maternal")}
                       >
                         <span className="health-module-launch-icon">
-                          <CalendarDays size={19} />
+                          <HealthModuleGlyph kind="maternal" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>
@@ -1597,7 +1609,7 @@ export default function OperationalWorkspace({
                         onClick={() => openHealthChild()}
                       >
                         <span className="health-module-launch-icon">
-                          <UsersRound size={19} />
+                          <HealthModuleGlyph kind="child" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Acompanhamento da Criança</strong>
@@ -1616,7 +1628,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("health-summary")}
                       >
                         <span className="health-module-launch-icon">
-                          <Activity size={19} />
+                          <HealthModuleGlyph kind="summary" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Resumo e prioridades</strong>
@@ -1635,7 +1647,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("requests")}
                       >
                         <span className="health-module-launch-icon">
-                          <ClipboardList size={19} />
+                          <HealthModuleGlyph kind="requests" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Solicitações administrativas</strong>
@@ -1654,7 +1666,7 @@ export default function OperationalWorkspace({
                         onClick={() => setActiveSecretaryTab("records")}
                       >
                         <span className="health-module-launch-icon">
-                          <FilePlus2 size={19} />
+                          <HealthModuleGlyph kind="records" />
                         </span>
                         <span className="health-module-launch-copy">
                           <strong>Ações e registros</strong>
@@ -1687,19 +1699,6 @@ export default function OperationalWorkspace({
                 <HealthTerritoryModule
                   dataset={healthTerritory}
                   onChange={onHealthTerritoryChange}
-                />
-              )}
-            {activeSecretaryTab === "fieldwork" &&
-              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
-                <FieldworkModule
-                  personaId="secretary"
-                  dataset={fieldwork}
-                  questionnaires={sharedQuestionnaires}
-                  peopleRegistry={peopleRegistry}
-                  onChange={onFieldworkChange}
-                  onQuestionnairesChange={onSharedQuestionnairesChange}
-                  onPeopleRegistryChange={onPeopleRegistryChange}
-                  onBack={() => setActiveSecretaryTab("services")}
                 />
               )}
             {activeSecretaryTab === "questionnaires" &&
@@ -2053,18 +2052,6 @@ export default function OperationalWorkspace({
                 </button>
               )}
             </div>
-            {healthWorkflowOpen && healthOperatorPersona === "acs" && (
-              <FieldworkModule
-                personaId="acs"
-                dataset={fieldwork}
-                questionnaires={sharedQuestionnaires}
-                peopleRegistry={peopleRegistry}
-                onChange={onFieldworkChange}
-                onQuestionnairesChange={onSharedQuestionnairesChange}
-                onPeopleRegistryChange={onPeopleRegistryChange}
-                onBack={() => setHealthWorkflowOpen(false)}
-              />
-            )}
             {healthWorkflowOpen && healthOperatorPersona && healthOperatorPersona !== "acs" && (
               <HealthVisitsAttendanceModule
                 key={selectedPersona.id}
