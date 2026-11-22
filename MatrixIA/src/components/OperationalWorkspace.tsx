@@ -1016,21 +1016,6 @@ export default function OperationalWorkspace({
             </select>
           </>
         )}
-        <button
-          className={`workspace-general-registry ${generalRegistryOpen ? "selected" : ""}`}
-          onClick={() => {
-            setGeneralRegistryOpen(true);
-            setHealthWorkflowOpen(false);
-            setHealthReferralOpen(false);
-            setHealthDiagnosticsOpen(false);
-            setHealthSanitaryOpen(false);
-            setHealthMaternalOpen(false);
-            setHealthChildOpen(false);
-          }}
-        >
-          <UsersRound size={15} />
-          <span>CADASTRO GERAL</span>
-        </button>
         <div className="workspace-sidebar-bottom">
           <div className="workspace-demo-note">
             <Check size={14} />
