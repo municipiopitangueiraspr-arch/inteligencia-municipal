@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type {
   HealthActivitiesDataset,
+  HealthAttendanceModality,
+  HealthAttendanceOutcome,
   HealthServiceRecord,
   HealthServiceStatus,
   HomeVisitKind,
@@ -34,8 +36,12 @@ type ModuleView =
   | "overview"
   | "visits"
   | "attendance"
+  | "collective"
+  | "food-markers"
   | "new-visit"
   | "new-attendance"
+  | "new-collective"
+  | "new-food-marker"
   | "detail";
 type SelectedRecord =
   | { kind: "visit"; id: string }
@@ -94,6 +100,20 @@ const serviceTypes = [
   "Procedimento",
   "Vacinação",
   "Outro atendimento na unidade",
+];
+const attendanceModalities: HealthAttendanceModality[] = [
+  "Consulta programada",
+  "Demanda espontânea",
+  "Atendimento domiciliar",
+  "Teleatendimento",
+];
+const attendanceOutcomes: HealthAttendanceOutcome[] = [
+  "Acompanhamento mantido",
+  "Retorno programado",
+  "Encaminhamento realizado",
+  "Procedimento realizado",
+  "Alta do acompanhamento",
+  "Não concluído",
 ];
 
 const localDate = () => {
@@ -350,6 +370,12 @@ export default function HealthVisitsAttendanceModule({
     (record) =>
       record.status === "Não compareceu" || record.status === "Cancelado",
   );
+  const canCreateApsRecords = isSecretary || personaId === "ubs";
+  const completedProduction = visibleCareRecords.filter(
+    (record) => record.status === "Realizado",
+  ).length;
+  const collectiveActivities = dataset.collectiveActivities ?? [];
+  const foodMarkers = dataset.foodMarkers ?? [];
   const nextActivities = [
     ...visibleVisits
       .filter(
@@ -536,10 +562,14 @@ export default function HealthVisitsAttendanceModule({
       (candidate) => candidate.id === professional?.unitId,
     );
     const serviceType = String(values.get("serviceType") ?? "").trim();
+    const competence = String(values.get("competence") ?? "").trim();
+    const modality = String(values.get("modality") ?? "Consulta programada") as HealthAttendanceModality;
     const date = String(values.get("date") ?? "");
     const time = String(values.get("time") ?? "");
     const status = String(values.get("status") ?? "Agendado") as HealthServiceStatus;
     const reason = String(values.get("reason") ?? "").trim();
+    const conditionOrFollowUp = String(values.get("conditionOrFollowUp") ?? "").trim();
+    const outcome = String(values.get("outcome") ?? "Acompanhamento mantido") as HealthAttendanceOutcome;
     const careSummary = String(values.get("careSummary") ?? "").trim();
     const referral = String(values.get("referral") ?? "").trim();
     const followUpDate = String(values.get("followUpDate") ?? "");
@@ -557,9 +587,9 @@ export default function HealthVisitsAttendanceModule({
       );
       return;
     }
-    if (!serviceType || !date || !time || !reason) {
+    if (!serviceType || !date || !time || !reason || !competence || !conditionOrFollowUp) {
       setFormError(
-        "Preencha o tipo de atendimento, data, horário e motivo/objetivo.",
+        "Preencha tipo, competência, data, horário, motivo e acompanhamento.",
       );
       return;
     }
@@ -578,9 +608,13 @@ export default function HealthVisitsAttendanceModule({
       unitId: unit.id,
       date,
       time,
+      competence,
+      modality,
       serviceType,
       status,
       reason,
+      conditionOrFollowUp,
+      outcome,
       careSummary,
       referral,
       followUpDate,
@@ -602,6 +636,89 @@ export default function HealthVisitsAttendanceModule({
     setStatusOutcomeDraft(newRecord.careSummary);
     setView("detail");
     setFormError("");
+  };
+
+  const saveCollectiveActivity = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const date = String(values.get("date") ?? "");
+    const time = String(values.get("time") ?? "");
+    const activityType = String(values.get("activityType") ?? "").trim();
+    const theme = String(values.get("theme") ?? "").trim();
+    const targetAudience = String(values.get("targetAudience") ?? "").trim();
+    const participantCount = Number(values.get("participantCount") ?? 0);
+    const professional = healthTerritory.professionals.find(
+      (item) => item.id === String(values.get("professionalId") ?? "") && item.active,
+    );
+    if (!date || !time || !activityType || !theme || !targetAudience || !professional || participantCount < 0) {
+      setFormError("Preencha atividade, tema, público, data, horário e responsável.");
+      return;
+    }
+    const id = `SIM-APS-COL-${String(collectiveActivities.length + 1).padStart(3, "0")}`;
+    onChange((current) => ({
+      ...current,
+      collectiveActivities: [
+        {
+          id,
+          unitId: professional.unitId,
+          teamId: professional.teamId,
+          professionalId: professional.id,
+          date,
+          time,
+          competence: date.slice(0, 7),
+          activityType,
+          theme,
+          targetAudience,
+          participantCount,
+          outcome: "Atividade registrada para acompanhamento da equipe.",
+          status: "Realizada",
+          history: [{ date: eventDateTime(date, time), action: "Atividade coletiva registrada", detail: "Registro assistencial demonstrativo." }],
+        },
+        ...current.collectiveActivities,
+      ],
+    }));
+    setFormError("");
+    setView("collective");
+    event.currentTarget.reset();
+  };
+
+  const saveFoodMarker = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const personId = String(values.get("personId") ?? "");
+    const measuredAt = String(values.get("measuredAt") ?? "");
+    const markerSummary = String(values.get("markerSummary") ?? "").trim();
+    const professional = healthTerritory.professionals.find(
+      (item) => item.id === String(values.get("professionalId") ?? "") && item.active,
+    );
+    if (!personId || !professional || !measuredAt || !markerSummary) {
+      setFormError("Selecione pessoa, responsável, data e registre os marcadores alimentares.");
+      return;
+    }
+    const id = `SIM-APS-ALI-${String(foodMarkers.length + 1).padStart(3, "0")}`;
+    onChange((current) => ({
+      ...current,
+      foodMarkers: [
+        {
+          id,
+          personId,
+          unitId: professional.unitId,
+          teamId: professional.teamId,
+          professionalId: professional.id,
+          measuredAt,
+          competence: measuredAt.slice(0, 7),
+          weightKg: Number(values.get("weightKg") || 0) || undefined,
+          heightCm: Number(values.get("heightCm") || 0) || undefined,
+          markerSummary,
+          nutritionalAssessment: String(values.get("nutritionalAssessment") ?? "").trim(),
+          history: [{ date: `${measuredAt}T09:00:00`, action: "Marcadores alimentares registrados", detail: "Registro assistencial demonstrativo." }],
+        },
+        ...current.foodMarkers,
+      ],
+    }));
+    setFormError("");
+    setView("food-markers");
+    event.currentTarget.reset();
   };
 
   const updateSelectedStatus = () => {
@@ -766,6 +883,24 @@ export default function HealthVisitsAttendanceModule({
             <span>{visibleCareRecords.length}</span>
           </button>
         )}
+        {canCreateApsRecords && (
+          <button
+            className={view === "collective" || view === "new-collective" ? "active" : ""}
+            onClick={() => setView("collective")}
+          >
+            <UsersRound size={15} /> Atividades coletivas
+            <span>{collectiveActivities.length}</span>
+          </button>
+        )}
+        {canCreateApsRecords && (
+          <button
+            className={view === "food-markers" || view === "new-food-marker" ? "active" : ""}
+            onClick={() => setView("food-markers")}
+          >
+            <ClipboardList size={15} /> Marcadores alimentares
+            <span>{foodMarkers.length}</span>
+          </button>
+        )}
         {view === "detail" && (
           <span className="health-detail-tab">Detalhe e histórico</span>
         )}
@@ -793,6 +928,16 @@ export default function HealthVisitsAttendanceModule({
               <span>Pendências de atendimento</span>
               <strong>{unresolvedCare.length}</strong>
               <small>faltas ou cancelamentos registrados</small>
+            </article>
+            <article className="health-activity-metric metric-blue">
+              <span>Produção assistencial realizada</span>
+              <strong>{completedProduction}</strong>
+              <small>atendimentos concluídos no recorte</small>
+            </article>
+            <article className="health-activity-metric metric-green">
+              <span>Participantes em atividades coletivas</span>
+              <strong>{collectiveActivities.reduce((sum, item) => sum + item.participantCount, 0)}</strong>
+              <small>registros da sessão</small>
             </article>
           </div>
 
@@ -1048,6 +1193,77 @@ export default function HealthVisitsAttendanceModule({
         </div>
       )}
 
+      {view === "collective" && canCreateApsRecords && (
+        <div className="health-activity-view">
+          <div className="health-activity-toolbar">
+            <div>
+              <span className="health-activity-eyebrow">APS · PRODUÇÃO COLETIVA</span>
+              <h3>Atividades coletivas</h3>
+              <p>Registro próprio da atividade, ligado à equipe e ao profissional, sem duplicar pessoas ou domicílios.</p>
+            </div>
+            <button className="health-action-primary" onClick={() => { setFormError(""); setView("new-collective"); }}><Plus size={16} /> Nova atividade</button>
+          </div>
+          <div className="health-record-list">
+            {collectiveActivities.map((activity) => (
+              <article className="health-record-card" key={activity.id}>
+                <div className="health-record-mark mark-care"><UsersRound size={17} /></div>
+                <div className="health-record-main">
+                  <div className="health-record-title-line"><strong>{activity.activityType}</strong><span className="health-record-id">{activity.id}</span></div>
+                  <p>{activity.theme} · {activity.targetAudience}</p>
+                  <small>{formatDate(activity.date)} · {activity.time} · {activity.participantCount} participantes · {unitName(healthTerritory, activity.unitId)}</small>
+                </div>
+                <span className="health-status-chip tone-positive">{activity.status}</span>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "new-collective" && canCreateApsRecords && (
+        <div className="health-activity-view">
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">NOVO EVENTO · APS</span><h3>Registrar atividade coletiva</h3><p>O registro gera produção coletiva e mantém referências nos cadastros existentes.</p></div><button className="health-back-button" onClick={() => setView("collective")}><ArrowLeft size={15} /> Voltar</button></div>
+          <form className="health-activity-form" onSubmit={saveCollectiveActivity}>
+            {formError && <p className="health-form-error" role="alert">{formError}</p>}
+            <label>Tipo de atividade<input name="activityType" placeholder="Ex.: Educação em saúde" required /></label>
+            <label>Responsável<select name="professionalId" defaultValue={healthTerritory.professionals.find((item) => item.active)?.id ?? ""} required>{healthTerritory.professionals.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.category}</option>)}</select></label>
+            <label>Data<input name="date" type="date" defaultValue={today} required /></label>
+            <label>Horário<input name="time" type="time" defaultValue="14:00" required /></label>
+            <label>Tema<input name="theme" maxLength={240} placeholder="Tema trabalhado" required /></label>
+            <label>Público-alvo<input name="targetAudience" maxLength={240} placeholder="Público participante" required /></label>
+            <label>Participantes<input name="participantCount" type="number" min="0" defaultValue="0" required /></label>
+            <div className="health-form-actions health-form-wide"><button type="button" className="health-back-button" onClick={() => setView("collective")}>Cancelar</button><button type="submit" className="health-action-primary"><Check size={16} /> Salvar atividade</button></div>
+          </form>
+        </div>
+      )}
+
+      {view === "food-markers" && canCreateApsRecords && (
+        <div className="health-activity-view">
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">APS · SISVAN</span><h3>Marcadores alimentares e medidas</h3><p>Cada aferição é um evento próprio relacionado à pessoa e, quando aplicável, ao atendimento.</p></div><button className="health-action-primary" onClick={() => { setFormError(""); setView("new-food-marker"); }}><Plus size={16} /> Nova aferição</button></div>
+          <div className="health-record-list">
+            {foodMarkers.map((marker) => (
+              <article className="health-record-card" key={marker.id}><div className="health-record-mark mark-care"><ClipboardList size={17} /></div><div className="health-record-main"><div className="health-record-title-line"><strong>{getPersonName(peopleRegistry, marker.personId)}</strong><span className="health-record-id">{marker.id}</span></div><p>{marker.markerSummary}</p><small>{formatDate(marker.measuredAt)} · {marker.weightKg ?? "—"} kg · {marker.heightCm ?? "—"} cm · {unitName(healthTerritory, marker.unitId)}</small></div></article>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "new-food-marker" && canCreateApsRecords && (
+        <div className="health-activity-view">
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">NOVO EVENTO · SISVAN</span><h3>Registrar marcador alimentar</h3><p>Use a pessoa já cadastrada; não crie outro cadastro para a aferição.</p></div><button className="health-back-button" onClick={() => setView("food-markers")}><ArrowLeft size={15} /> Voltar</button></div>
+          <form className="health-activity-form" onSubmit={saveFoodMarker}>
+            {formError && <p className="health-form-error" role="alert">{formError}</p>}
+            <label>Pessoa<select name="personId" defaultValue="" required><option value="" disabled>Selecione uma pessoa</option>{peopleRegistry.people.filter((item) => item.status === "Ativa").map((item) => <option key={item.id} value={item.id}>{item.fullName} · {item.id}</option>)}</select></label>
+            <label>Responsável<select name="professionalId" defaultValue={healthTerritory.professionals.find((item) => item.active)?.id ?? ""} required>{healthTerritory.professionals.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.category}</option>)}</select></label>
+            <label>Data da aferição<input name="measuredAt" type="date" defaultValue={today} required /></label>
+            <label>Peso (kg)<input name="weightKg" type="number" min="0" step="0.1" /></label>
+            <label>Altura (cm)<input name="heightCm" type="number" min="0" step="0.1" /></label>
+            <label className="health-form-wide">Marcadores de consumo alimentar<textarea name="markerSummary" rows={3} maxLength={600} required placeholder="Registre os marcadores coletados." /></label>
+            <label className="health-form-wide">Avaliação nutricional administrativa<textarea name="nutritionalAssessment" rows={2} maxLength={400} placeholder="Acompanhamento ou pendência para a equipe." /></label>
+            <div className="health-form-actions health-form-wide"><button type="button" className="health-back-button" onClick={() => setView("food-markers")}>Cancelar</button><button type="submit" className="health-action-primary"><Check size={16} /> Salvar aferição</button></div>
+          </form>
+        </div>
+      )}
+
       {view === "new-visit" && canCreateVisits && (
         <div className="health-activity-view">
           <div className="health-activity-toolbar">
@@ -1217,6 +1433,12 @@ export default function HealthVisitsAttendanceModule({
               </select>
             </label>
             <label>
+              Modalidade
+              <select name="modality" defaultValue="Consulta programada" required>
+                {attendanceModalities.map((modality) => <option key={modality}>{modality}</option>)}
+              </select>
+            </label>
+            <label>
               Profissional responsável
               <select
                 name="professionalId"
@@ -1241,6 +1463,10 @@ export default function HealthVisitsAttendanceModule({
               <input name="time" type="time" defaultValue="10:00" required />
             </label>
             <label>
+              Competência
+              <input name="competence" type="month" defaultValue={today.slice(0, 7)} required />
+            </label>
+            <label>
               Situação
               <select name="status" defaultValue="Agendado" required>
                 {serviceStatuses.map((status) => <option key={status}>{status}</option>)}
@@ -1249,6 +1475,16 @@ export default function HealthVisitsAttendanceModule({
             <label className="health-form-wide">
               Motivo ou objetivo do atendimento
               <input name="reason" maxLength={240} placeholder="Ex.: consulta de rotina, retorno ou procedimento" required />
+            </label>
+            <label>
+              Condição ou acompanhamento
+              <input name="conditionOrFollowUp" maxLength={240} placeholder="Ex.: cuidado programado ou acompanhamento longitudinal" required />
+            </label>
+            <label>
+              Desfecho previsto/registrado
+              <select name="outcome" defaultValue="Acompanhamento mantido" required>
+                {attendanceOutcomes.map((outcome) => <option key={outcome}>{outcome}</option>)}
+              </select>
             </label>
             <label className="health-form-wide">
               Resumo da atividade/conduta (preencher ao concluir)

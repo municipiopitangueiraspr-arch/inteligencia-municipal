@@ -17,6 +17,55 @@ export type HealthServiceStatus =
   | "Não compareceu"
   | "Cancelado";
 
+export type HealthAttendanceModality =
+  | "Consulta programada"
+  | "Demanda espontânea"
+  | "Atendimento domiciliar"
+  | "Teleatendimento";
+
+export type HealthAttendanceOutcome =
+  | "Acompanhamento mantido"
+  | "Retorno programado"
+  | "Encaminhamento realizado"
+  | "Procedimento realizado"
+  | "Alta do acompanhamento"
+  | "Não concluído";
+
+export type CollectiveActivityStatus = "Planejada" | "Realizada" | "Cancelada";
+
+export type CollectiveActivityRecord = {
+  id: string;
+  unitId: string;
+  teamId: string;
+  professionalId: string;
+  date: string;
+  time: string;
+  competence: string;
+  activityType: string;
+  theme: string;
+  targetAudience: string;
+  participantCount: number;
+  outcome: string;
+  status: CollectiveActivityStatus;
+  history: HealthActivityHistoryEvent[];
+};
+
+export type FoodMarkerRecord = {
+  id: string;
+  personId: string;
+  attendanceId?: string;
+  unitId: string;
+  teamId: string;
+  professionalId: string;
+  measuredAt: string;
+  competence: string;
+  weightKg?: number;
+  heightCm?: number;
+  markerSummary: string;
+  nutritionalAssessment: string;
+  history: HealthActivityHistoryEvent[];
+};
+
 export type HomeVisitRecord = {
   id: string;
   kind: HomeVisitKind;
@@ -46,9 +95,13 @@ export type HealthServiceRecord = {
   unitId: string;
   date: string;
   time: string;
+  competence: string;
+  modality: HealthAttendanceModality;
   serviceType: string;
   status: HealthServiceStatus;
   reason: string;
+  conditionOrFollowUp: string;
+  outcome: HealthAttendanceOutcome;
   careSummary: string;
   referral: string;
   followUpDate?: string;
@@ -58,6 +111,8 @@ export type HealthServiceRecord = {
 export type HealthActivitiesDataset = {
   homeVisits: HomeVisitRecord[];
   serviceRecords: HealthServiceRecord[];
+  collectiveActivities: CollectiveActivityRecord[];
+  foodMarkers: FoodMarkerRecord[];
 };
 
 const visitHistory = (
@@ -174,10 +229,14 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       teamId: "SIM-EQ-001",
       unitId: "SIM-UBS-001",
       date: "2026-11-20",
+      competence: "2026-11",
+      modality: "Consulta programada",
       time: "08:15",
       serviceType: "Consulta médica",
       status: "Realizado",
       reason: "Acompanhamento de condição crônica",
+      conditionOrFollowUp: "Acompanhamento longitudinal",
+      outcome: "Retorno programado",
       careSummary:
         "Atendimento concluído; avaliação e orientação de rotina registradas no cenário demonstrativo.",
       referral: "",
@@ -195,10 +254,14 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       teamId: "SIM-EQ-002",
       unitId: "SIM-UBS-002",
       date: "2026-11-20",
+      competence: "2026-11",
+      modality: "Consulta programada",
       time: "14:00",
       serviceType: "Consulta médica",
       status: "Agendado",
       reason: "Acompanhamento na unidade",
+      conditionOrFollowUp: "Acompanhamento de rotina",
+      outcome: "Acompanhamento mantido",
       careSummary: "",
       referral: "",
       followUpDate: "",
@@ -215,10 +278,14 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       teamId: "SIM-EQ-004",
       unitId: "SIM-UBS-001",
       date: "2026-11-19",
+      competence: "2026-11",
+      modality: "Consulta programada",
       time: "13:30",
       serviceType: "Atendimento odontológico",
       status: "Não compareceu",
       reason: "Consulta odontológica programada",
+      conditionOrFollowUp: "Cuidado odontológico",
+      outcome: "Não concluído",
       careSummary: "",
       referral: "Contato para reorganizar o agendamento.",
       followUpDate: "2026-11-26",
@@ -235,10 +302,14 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       teamId: "SIM-EQ-004",
       unitId: "SIM-UBS-001",
       date: "2026-11-21",
+      competence: "2026-11",
+      modality: "Consulta programada",
       time: "10:30",
       serviceType: "Fisioterapia",
       status: "Agendado",
       reason: "Sessão de acompanhamento",
+      conditionOrFollowUp: "Sessão de acompanhamento",
+      outcome: "Acompanhamento mantido",
       careSummary: "",
       referral: "Encaminhamento interno fictício da equipe multiprofissional.",
       followUpDate: "",
@@ -255,10 +326,14 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       teamId: "SIM-EQ-001",
       unitId: "SIM-UBS-001",
       date: "2026-11-20",
+      competence: "2026-11",
+      modality: "Consulta programada",
       time: "11:00",
       serviceType: "Consulta de enfermagem",
       status: "Agendado",
       reason: "Acompanhamento de rotina",
+      conditionOrFollowUp: "Cuidado programado",
+      outcome: "Acompanhamento mantido",
       careSummary: "",
       referral: "",
       followUpDate: "",
@@ -266,6 +341,49 @@ export const initialHealthActivities: HealthActivitiesDataset = {
         "2026-11-19T15:45:00",
         "Atendimento agendado",
         "Horário reservado com a equipe de enfermagem.",
+      ),
+    },
+  ],
+  collectiveActivities: [
+    {
+      id: "SIM-APS-COL-001",
+      unitId: "SIM-UBS-001",
+      teamId: "SIM-EQ-004",
+      professionalId: "SIM-PRO-008",
+      date: "2026-11-21",
+      time: "14:00",
+      competence: "2026-11",
+      activityType: "Educação em saúde",
+      theme: "Alimentação adequada e autocuidado",
+      targetAudience: "Pessoas adultas acompanhadas pela unidade",
+      participantCount: 12,
+      outcome: "Atividade realizada; próximos encontros em organização.",
+      status: "Realizada",
+      history: visitHistory(
+        "2026-11-21T15:00:00",
+        "Atividade coletiva registrada",
+        "Registro demonstrativo vinculado à equipe multiprofissional.",
+      ),
+    },
+  ],
+  foodMarkers: [
+    {
+      id: "SIM-APS-ALI-001",
+      personId: "SIM-PES-001",
+      attendanceId: "SIM-ATD-001",
+      unitId: "SIM-UBS-001",
+      teamId: "SIM-EQ-001",
+      professionalId: "SIM-PRO-002",
+      measuredAt: "2026-11-20",
+      competence: "2026-11",
+      weightKg: 72,
+      heightCm: 168,
+      markerSummary: "Marcadores de consumo alimentar preenchidos na rotina demonstrativa.",
+      nutritionalAssessment: "Acompanhamento nutricional a revisar pela equipe.",
+      history: visitHistory(
+        "2026-11-20T11:30:00",
+        "Marcadores alimentares registrados",
+        "Registro demonstrativo vinculado ao atendimento SIM-ATD-001.",
       ),
     },
   ],
