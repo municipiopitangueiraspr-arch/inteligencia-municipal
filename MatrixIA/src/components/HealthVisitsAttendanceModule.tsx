@@ -418,9 +418,28 @@ export default function HealthVisitsAttendanceModule({
     )
     .slice(0, 5);
   const competenceRecords = dataset.serviceRecords.filter((record) => record.competence === competenceFilter);
+  const competenceIssues = (record: HealthServiceRecord) => [
+    !record.personId && "pessoa",
+    !record.unitId && "unidade",
+    !record.teamId && "equipe",
+    !record.professionalId && "profissional",
+    !record.date && "data",
+    !record.serviceType && "tipo",
+    !record.reason && "motivo",
+    !record.conditionOrFollowUp && "acompanhamento",
+    record.status === "Realizado" && !record.careSummary && "resumo",
+    record.outcome === "Retorno programado" && !record.followUpDate && "data de retorno",
+    record.outcome === "Encaminhamento realizado" && !record.referral && "encaminhamento",
+    record.outcome === "Procedimento realizado" && !(record.procedures?.length) && "procedimento",
+  ].filter(Boolean) as string[];
   const competencePending = competenceRecords.filter((record) => {
-    const missing = !record.personId || !record.unitId || !record.teamId || !record.professionalId || !record.date || !record.serviceType || !record.reason || !record.conditionOrFollowUp;
-    return missing || (record.status === "Realizado" && !record.careSummary) || !record.competenceStatus || record.competenceStatus === "Rascunho" || record.competenceStatus === "Reaberto";
+    const recordStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
+    return competenceIssues(record).length > 0 || recordStatus === "Rascunho" || recordStatus === "Reaberto" || recordStatus === "Aguardando revisão";
+  });
+  const competenceCanValidate = competenceRecords.length > 0 && competenceRecords.every((record) => competenceIssues(record).length === 0);
+  const competenceCanClose = competenceCanValidate && competenceRecords.every((record) => {
+    const recordStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
+    return recordStatus === "Validado" || recordStatus === "Fechado";
   });
 
   const selectedVisit =
@@ -604,7 +623,12 @@ export default function HealthVisitsAttendanceModule({
     const referral = String(values.get("referral") ?? "").trim();
     const followUpDate = String(values.get("followUpDate") ?? "");
     const conditions = String(values.get("conditions") ?? "").split(",").map((item) => item.trim()).filter(Boolean);
-    const procedures: HealthProcedure[] = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="procedure"]:checked')).map((input, index) => ({ id: `SIM-PROC-${Date.now()}-${index}`, name: input.value, quantity: 1 }));
+    const procedures: HealthProcedure[] = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="procedure"]:checked')).map((input, index) => {
+      const container = input.closest(".health-checkbox");
+      const quantity = Number(container?.querySelector<HTMLInputElement>('input[name="procedureQuantity"]')?.value ?? 1);
+      const result = container?.querySelector<HTMLInputElement>('input[name="procedureResult"]')?.value.trim();
+      return { id: `SIM-PROC-${Date.now()}-${index}`, name: input.value, quantity: quantity > 0 ? quantity : 1, result: result || undefined };
+    });
     const dentalDetails: HealthDentalDetails | undefined = serviceType === "Atendimento odontológico"
       ? { reason: String(values.get("dentalReason") ?? "").trim(), procedure: String(values.get("dentalProcedure") ?? "").trim(), toothOrRegion: String(values.get("toothOrRegion") ?? "").trim(), urgency: String(values.get("dentalUrgency") ?? "Não") as "Não" | "Sim", guidance: String(values.get("dentalGuidance") ?? "").trim() }
       : undefined;
@@ -629,12 +653,28 @@ export default function HealthVisitsAttendanceModule({
       );
       return;
     }
+    if (competence !== date.slice(0, 7)) {
+      setFormError("A competência deve corresponder ao mês da data do atendimento.");
+      return;
+    }
     if (status === "Realizado" && !careSummary) {
       setFormError("Informe um resumo da atividade para marcar como realizado.");
       return;
     }
     if (serviceType === "Atendimento odontológico" && (!dentalDetails?.reason || !dentalDetails.procedure)) {
       setFormError("Para atendimento odontológico, informe o motivo e o procedimento odontológico.");
+      return;
+    }
+    if (outcome === "Retorno programado" && !followUpDate) {
+      setFormError("Informe a data do retorno quando o desfecho for 'Retorno programado'.");
+      return;
+    }
+    if (outcome === "Encaminhamento realizado" && !referral) {
+      setFormError("Descreva o encaminhamento ou próximo passo realizado.");
+      return;
+    }
+    if (outcome === "Procedimento realizado" && !procedures.length) {
+      setFormError("Selecione pelo menos um procedimento quando o desfecho for 'Procedimento realizado'.");
       return;
     }
 
@@ -768,6 +808,10 @@ export default function HealthVisitsAttendanceModule({
 
   const updateSelectedStatus = () => {
     if (!selectedRecord) return;
+    if (selectedRecord.kind === "attendance" && selectedAttendance?.competenceStatus === "Fechado") {
+      setFormError("Este atendimento pertence a uma competência fechada. Reabra a competência antes de alterar o registro.");
+      return;
+    }
     if (
       selectedRecord.kind === "visit" &&
       statusDraft !== "Programada" &&
@@ -828,6 +872,7 @@ export default function HealthVisitsAttendanceModule({
             ? {
                 ...record,
                 status: statusDraft as HealthServiceStatus,
+                competenceStatus: statusDraft === "Realizado" && record.competenceStatus !== "Fechado" ? "Aguardando revisão" : record.competenceStatus,
                 careSummary: statusOutcomeDraft.trim() || record.careSummary,
                 followUpDate: statusFollowUpDate || record.followUpDate,
                 history: [
@@ -843,6 +888,46 @@ export default function HealthVisitsAttendanceModule({
         ),
       };
     });
+    setFormError("");
+  };
+
+  const updateCompetenceBatch = (nextStatus: HealthCompetenceStatus) => {
+    if (!competenceRecords.length) return;
+    if (nextStatus === "Validado" && !competenceCanValidate) {
+      setFormError("Corrija todas as pendências antes de validar a competência.");
+      return;
+    }
+    if (nextStatus === "Fechado" && !competenceCanClose) {
+      setFormError("Valide todos os atendimentos sem pendências antes de fechar a competência.");
+      return;
+    }
+    const timestamp = new Date().toISOString();
+    onChange((current) => ({
+      ...current,
+      serviceRecords: current.serviceRecords.map((record) => {
+        if (record.competence !== competenceFilter) return record;
+        const currentStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
+        if (nextStatus === "Validado" && competenceIssues(record).length > 0) return record;
+        if (nextStatus === "Fechado" && currentStatus !== "Validado" && currentStatus !== "Fechado") return record;
+        return {
+          ...record,
+          competenceStatus: nextStatus,
+          history: [...record.history, { date: timestamp, action: `Competência ${nextStatus.toLocaleLowerCase("pt-BR")}`, detail: `Estado alterado em lote para ${nextStatus}.` }],
+        };
+      }),
+    }));
+    setFormError("");
+  };
+
+  const reopenCompetenceRecord = (recordId: string) => {
+    onChange((current) => ({
+      ...current,
+      serviceRecords: current.serviceRecords.map((record) => record.id === recordId ? {
+        ...record,
+        competenceStatus: "Reaberto",
+        history: [...record.history, { date: new Date().toISOString(), action: "Competência reaberta", detail: "Registro reaberto para retificação demonstrativa." }],
+      } : record),
+    }));
     setFormError("");
   };
 
@@ -1084,11 +1169,16 @@ export default function HealthVisitsAttendanceModule({
             <article className="health-activity-metric metric-green"><span>Validados</span><strong>{competenceRecords.filter((record) => record.competenceStatus === "Validado" || record.competenceStatus === "Fechado").length}</strong><small>prontos para fechamento</small></article>
             <article className="health-activity-metric metric-red"><span>Realizados sem resumo</span><strong>{competenceRecords.filter((record) => record.status === "Realizado" && !record.careSummary).length}</strong><small>pendência obrigatória</small></article>
           </div>
+          {formError && <p className="health-form-error health-competence-error" role="alert">{formError}</p>}
+          <div className="health-competence-actions">
+            <button className="health-action-secondary" onClick={() => updateCompetenceBatch("Validado")} disabled={!competenceRecords.length || !competenceCanValidate}>Validar atendimentos pendentes</button>
+            <button className="health-action-primary" onClick={() => updateCompetenceBatch("Fechado")} disabled={!competenceCanClose}>Fechar competência</button>
+          </div>
           <div className="health-competence-list">
             {competenceRecords.map((record) => {
               const recordStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
-              const missing = [!record.personId && "pessoa", !record.unitId && "unidade", !record.professionalId && "profissional", !record.serviceType && "tipo", !record.reason && "motivo", record.status === "Realizado" && !record.careSummary && "resumo"].filter(Boolean) as string[];
-              return <article className="health-competence-row" key={record.id}><div><strong>{record.id} · {record.serviceType}</strong><small>{getPersonName(peopleRegistry, record.personId)} · {formatDate(record.date)} · {unitName(healthTerritory, record.unitId)}</small>{missing.length > 0 && <span className="health-competence-warning">Pendências: {missing.join(", ")}</span>}</div><span className={`health-status-chip tone-${recordStatus === "Validado" || recordStatus === "Fechado" ? "positive" : recordStatus === "Rascunho" ? "negative" : "warning"}`}>{recordStatus}</span><select value={recordStatus} onChange={(event) => { const next = event.target.value as HealthCompetenceStatus; onChange((current) => ({ ...current, serviceRecords: current.serviceRecords.map((item) => item.id === record.id ? { ...item, competenceStatus: next, history: [...item.history, { date: new Date().toISOString(), action: "Competência atualizada", detail: `Estado alterado para ${next}.` }] } : item) })); }} aria-label={`Estado da competência de ${record.id}`}>{competenceStatuses.map((status) => <option key={status}>{status}</option>)}</select><button className="health-action-secondary" onClick={() => openAttendance(record)}>Abrir atendimento</button></article>;
+              const missing = competenceIssues(record);
+              return <article className={`health-competence-row ${recordStatus === "Fechado" ? "is-closed" : ""}`} key={record.id}><div><strong>{record.id} · {record.serviceType}</strong><small>{getPersonName(peopleRegistry, record.personId)} · {formatDate(record.date)} · {unitName(healthTerritory, record.unitId)}</small>{missing.length > 0 && <span className="health-competence-warning">Pendências: {missing.join(", ")}</span>}</div><span className={`health-status-chip tone-${recordStatus === "Validado" || recordStatus === "Fechado" ? "positive" : recordStatus === "Rascunho" ? "negative" : "warning"}`}>{recordStatus}</span>{recordStatus === "Fechado" ? <button className="health-action-secondary" onClick={() => reopenCompetenceRecord(record.id)}>Reabrir</button> : <select value={recordStatus} onChange={(event) => { const next = event.target.value as HealthCompetenceStatus; if (next === "Validado" && missing.length > 0) { setFormError(`Corrija as pendências de ${record.id} antes de validar.`); return; } onChange((current) => ({ ...current, serviceRecords: current.serviceRecords.map((item) => item.id === record.id ? { ...item, competenceStatus: next, history: [...item.history, { date: new Date().toISOString(), action: "Competência atualizada", detail: `Estado alterado para ${next}.` }] } : item) })); }} aria-label={`Estado da competência de ${record.id}`}>{competenceStatuses.filter((status) => status !== "Fechado").map((status) => <option key={status}>{status}</option>)}</select>}<button className="health-action-secondary" onClick={() => openAttendance(record)}>Abrir atendimento</button></article>;
             })}
             {!competenceRecords.length && <div className="health-activity-empty"><ClipboardList size={20} /><strong>Nenhum atendimento nesta competência</strong><span>Escolha outro mês ou registre um novo atendimento.</span></div>}
           </div>
@@ -1591,8 +1681,8 @@ export default function HealthVisitsAttendanceModule({
             <fieldset className="health-form-fieldset health-form-wide">
               <legend>Procedimentos realizados</legend>
               <p className="health-field-hint">Selecione os procedimentos vinculados a este atendimento. Eles serão contabilizados separadamente.</p>
-              <div className="health-checkbox-grid">
-                {procedureCatalog.map((procedure) => <label key={procedure} className="health-checkbox"><input type="checkbox" name="procedure" value={procedure} /> <span>{procedure}</span></label>)}
+              <div className="health-procedure-grid">
+                {procedureCatalog.map((procedure) => <label key={procedure} className="health-checkbox"><span className="health-procedure-title"><input type="checkbox" name="procedure" value={procedure} /> <span>{procedure}</span></span><span className="health-procedure-fields"><input name="procedureQuantity" type="number" min="1" defaultValue="1" aria-label={`Quantidade de ${procedure}`} /><input name="procedureResult" maxLength={120} placeholder="Resultado / observação" aria-label={`Resultado de ${procedure}`} /></span></label>)}
               </div>
             </fieldset>
             {attendanceServiceType === "Atendimento odontológico" && <fieldset className="health-form-fieldset health-form-wide">
@@ -1665,7 +1755,7 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field"><span>Caráter / modalidade</span><strong>{selectedAttendance.character ?? "Programado"} · {selectedAttendance.modality}</strong></div>
                 <div className="health-detail-field health-detail-wide"><span>Motivo / objetivo</span><p>{selectedAttendance.reason}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Condições acompanhadas</span><p>{selectedAttendance.conditions?.join(", ") || selectedAttendance.conditionOrFollowUp}</p></div>
-                <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.length ? selectedAttendance.procedures.map((procedure) => `${procedure.name} (${procedure.quantity})`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
+                <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.length ? selectedAttendance.procedures.map((procedure) => `${procedure.name} (${procedure.quantity})${procedure.result ? ` · ${procedure.result}` : ""}`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
                 {selectedAttendance.dentalDetails && <div className="health-detail-field health-detail-wide"><span>Detalhamento odontológico</span><p>{selectedAttendance.dentalDetails.reason} · {selectedAttendance.dentalDetails.procedure}{selectedAttendance.dentalDetails.toothOrRegion ? ` · ${selectedAttendance.dentalDetails.toothOrRegion}` : ""}</p></div>}
                 <div className="health-detail-field health-detail-wide"><span>Resumo do atendimento</span><p>{selectedAttendance.careSummary || "Sem resumo clínico demonstrativo registrado."}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Encaminhamento ou próximo passo</span><p>{selectedAttendance.referral || "Nenhum encaminhamento registrado."}</p></div>
@@ -1718,10 +1808,12 @@ export default function HealthVisitsAttendanceModule({
               <span className="health-activity-eyebrow">ACOMPANHAMENTO</span>
               <h4>Atualizar situação</h4>
             </div>
+            {selectedAttendance?.competenceStatus === "Fechado" && <p className="health-locked-note">Competência fechada: alterações bloqueadas. Reabra o registro na revisão da competência para registrar uma retificação.</p>}
             <label>
               Nova situação
               <select
                 value={statusDraft}
+                disabled={selectedAttendance?.competenceStatus === "Fechado"}
                 onChange={(event) => setStatusDraft(event.target.value as ActivityStatus)}
               >
                 {(selectedVisit ? visitStatuses : serviceStatuses).map((status) => <option key={status}>{status}</option>)}
@@ -1763,7 +1855,7 @@ export default function HealthVisitsAttendanceModule({
                 />
               </label>
             )}
-            <button className="health-action-primary" onClick={updateSelectedStatus}>
+            <button className="health-action-primary" onClick={updateSelectedStatus} disabled={selectedAttendance?.competenceStatus === "Fechado"}>
               <RotateCcw size={15} /> Salvar atualização
             </button>
           </div>

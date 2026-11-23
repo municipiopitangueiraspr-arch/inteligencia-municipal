@@ -780,7 +780,11 @@
 .health-form-fieldset > .health-field-hint { margin: -2px 0 12px; }
 .health-form-subgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .health-checkbox-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.health-checkbox { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 8px 9px; border: 1px solid #dce7ef; border-radius: 7px; background: #fff; color: #36566e; font-size: 10px; }
+.health-procedure-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.health-checkbox { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-height: 34px; padding: 9px; border: 1px solid #dce7ef; border-radius: 7px; background: #fff; color: #36566e; font-size: 10px; }
+.health-procedure-title { display: flex; align-items: center; gap: 7px; font-weight: 700; }
+.health-procedure-fields { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 6px; }
+.health-procedure-fields input { min-height: 30px; padding: 5px 7px; border: 1px solid #dce7ef; border-radius: 5px; color: #294653; font-size: 10px; }
 .health-checkbox input { accent-color: #1768a8; }
 .health-competence-picker { display: grid; gap: 6px; color: #5f788a; font-size: 10px; font-weight: 700; }
 .health-competence-picker input { min-height: 36px; padding: 0 9px; border: 1px solid #d6e3ec; border-radius: 7px; background: #fff; color: #164c78; }
@@ -791,5 +795,10 @@
 .health-competence-row small { overflow: hidden; color: #708696; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .health-competence-row select { min-height: 32px; padding: 0 7px; border: 1px solid #d4e1eb; border-radius: 6px; color: #285574; font-size: 10px; }
 .health-competence-warning { color: #a46617; font-size: 9px; font-weight: 700; }
-@media (max-width: 800px) { .health-checkbox-grid, .health-form-subgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .health-competence-row { grid-template-columns: 1fr auto; } .health-competence-row select, .health-competence-row button { width: 100%; } }
-@media (max-width: 520px) { .health-checkbox-grid, .health-form-subgrid { grid-template-columns: 1fr; } .health-competence-row { grid-template-columns: 1fr; } }
+.health-competence-actions { display: flex; justify-content: flex-end; gap: 9px; margin: 15px 0 0; flex-wrap: wrap; }
+.health-competence-actions button:disabled, .health-status-update button:disabled { cursor: not-allowed; opacity: 0.48; }
+.health-competence-error { margin: 15px 0 0; }
+.health-competence-row.is-closed { border-left-color: #2c7652; background: #f7fcf9; }
+.health-locked-note { flex: 1 0 100%; margin: 0; padding: 8px 10px; border-radius: 6px; background: #fff3dc; color: #8c5711; font-size: 10px; font-weight: 700; }
+@media (max-width: 800px) { .health-checkbox-grid, .health-form-subgrid, .health-procedure-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .health-competence-row { grid-template-columns: 1fr auto; } .health-competence-row select, .health-competence-row button { width: 100%; } }
+@media (max-width: 520px) { .health-checkbox-grid, .health-form-subgrid, .health-procedure-grid { grid-template-columns: 1fr; } .health-competence-row { grid-template-columns: 1fr; } }
