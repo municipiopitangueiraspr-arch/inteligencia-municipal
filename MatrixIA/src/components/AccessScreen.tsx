@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   UsersRound,
 } from "lucide-react";
-import { loadMunicipalUser, supabase, type MatrixUser } from "../lib/supabase";
+import type { MatrixUser } from "../lib/supabase";
 
 type Experience = "mayor" | "secretary" | "operator";
 
@@ -74,7 +74,7 @@ export default function AccessScreen({ onAuthenticated }: AccessScreenProps) {
     setMessage("");
   };
 
-  const enterDemo = async (event: FormEvent<HTMLFormElement>) => {
+  const enterDemo = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.trim() || !password.trim()) {
       setMessage(
@@ -83,17 +83,15 @@ export default function AccessScreen({ onAuthenticated }: AccessScreenProps) {
       return;
     }
     setMessage("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error || !data.user) {
-      setMessage(error?.message ?? "Não foi possível autenticar este usuário.");
-      return;
-    }
-    try {
-      onAuthenticated(await loadMunicipalUser(data.user.id, data.user.email));
-    } catch {
-      setMessage("Usuário autenticado, mas sem perfil municipal cadastrado.");
-      await supabase.auth.signOut();
-    }
+    const profile = experience === "mayor" ? "ADMIN" : experience === "secretary" ? "SECRETARIO" : "OPERADOR";
+    const demoUser: MatrixUser = {
+      id: `demo-${experience}`,
+      email: email.trim(),
+      name: selectedRole.title,
+      profile,
+      experience,
+    };
+    onAuthenticated(demoUser);
   };
 
   const selectedRole = roleOptions.find((role) => role.id === experience)!;
@@ -245,7 +243,7 @@ export default function AccessScreen({ onAuthenticated }: AccessScreenProps) {
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
-            <p className="access-demo-note">Acesso protegido pelo Supabase. O papel é carregado do perfil municipal vinculado ao login.</p>
+            <p className="access-demo-note">Acesso local de demonstração. Nenhuma senha ou informação é enviada para um banco de dados.</p>
             {message && (
               <p className="access-message" role="status">
                 {message}
@@ -262,7 +260,7 @@ export default function AccessScreen({ onAuthenticated }: AccessScreenProps) {
             <button
               type="button"
               onClick={() =>
-                setMessage("Use um usuário autorizado do ambiente de homologação e a senha cadastrada no Supabase.")
+                setMessage("Escolha um perfil, informe qualquer senha fictícia e entre para explorar o protótipo.")
               }
             >
               Ver orientação

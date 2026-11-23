@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -97,7 +97,7 @@ import {
   initialHealthChild,
   type HealthChildDataset,
 } from "./data/healthChild";
-import { supabase, loadMunicipalUser, type MatrixUser } from "./lib/supabase";
+import type { MatrixUser } from "./lib/supabase";
 
 type View = "overview" | "departments" | "requests" | "general-registry";
 type NoticeMode = "executive" | "help" | "notifications";
@@ -146,34 +146,6 @@ function App() {
   );
   const [healthChild, setHealthChild] =
     useState<HealthChildDataset>(initialHealthChild);
-  useEffect(() => {
-    let mounted = true;
-    const hydrate = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (mounted && data.session) {
-        const profile = await loadMunicipalUser(data.session.user.id, data.session.user.email);
-        setMunicipalUser(profile);
-        setExperience(profile.experience);
-      }
-    };
-    void hydrate();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setMunicipalUser(null);
-        setExperience(null);
-        return;
-      }
-      void loadMunicipalUser(session.user.id, session.user.email).then((profile) => {
-        if (!mounted) return;
-        setMunicipalUser(profile);
-        setExperience(profile.experience);
-      });
-    });
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
   const [peopleRegistry, setPeopleRegistry] = useState<PeopleRegistryDataset>(
     initialPeopleRegistry,
   );
@@ -512,7 +484,7 @@ function App() {
         onUpdateRequest={(id, update) =>
           updateMunicipalRequest(id, update, "Secretaria responsável")
         }
-        onSwitchExperience={() => { void supabase.auth.signOut(); setExperience(null); setMunicipalUser(null); }}
+        onSwitchExperience={() => { setExperience(null); setMunicipalUser(null); }}
       />
     );
   }
