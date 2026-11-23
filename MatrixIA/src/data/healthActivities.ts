@@ -120,8 +120,19 @@ export type FoodMarkerRecord = {
   competence: string;
   weightKg?: number;
   heightCm?: number;
+  waistCm?: number;
+  headCircumferenceCm?: number;
+  bmi?: number;
   markerSummary: string;
+  breastfeedingStatus?: "Exclusivo" | "Predominante" | "Misto" | "Não se aplica" | "Não informado";
+  foodConsumptionSummary?: string;
+  ultraProcessedFrequency?: "Nunca" | "Ocasional" | "Frequente" | "Diária" | "Não informado";
+  foodInsecurityStatus?: "Não identificada" | "Suspeita" | "Identificada" | "Não investigada";
   nutritionalAssessment: string;
+  nutritionalClassification?: "Adequado" | "Atenção" | "Risco nutricional" | "Insegurança alimentar" | "Não classificado";
+  carePlan?: string;
+  followUpDate?: string;
+  monitoringStatus?: "Em acompanhamento" | "Encaminhado" | "Concluído" | "Sem pendência";
   history: HealthActivityHistoryEvent[];
 };
 

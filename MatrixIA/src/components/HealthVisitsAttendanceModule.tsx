@@ -51,6 +51,7 @@ type ModuleView =
   | "collective"
   | "collective-detail"
   | "food-markers"
+  | "food-marker-detail"
   | "new-visit"
   | "new-attendance"
   | "new-collective"
@@ -270,6 +271,7 @@ export default function HealthVisitsAttendanceModule({
   const [careProfessionalId, setCareProfessionalId] = useState("");
   const [attendanceServiceType, setAttendanceServiceType] = useState("");
   const [selectedCollectiveId, setSelectedCollectiveId] = useState<string | null>(null);
+  const [selectedFoodMarkerId, setSelectedFoodMarkerId] = useState<string | null>(null);
 
   const today = localDate();
   const isSecretary = mode === "secretary";
@@ -940,11 +942,18 @@ export default function HealthVisitsAttendanceModule({
     const personId = String(values.get("personId") ?? "");
     const measuredAt = String(values.get("measuredAt") ?? "");
     const markerSummary = String(values.get("markerSummary") ?? "").trim();
+    const weightKg = Number(values.get("weightKg") || 0) || undefined;
+    const heightCm = Number(values.get("heightCm") || 0) || undefined;
+    const waistCm = Number(values.get("waistCm") || 0) || undefined;
+    const headCircumferenceCm = Number(values.get("headCircumferenceCm") || 0) || undefined;
+    const bmi = weightKg && heightCm ? Number((weightKg / ((heightCm / 100) ** 2)).toFixed(2)) : undefined;
+    const nutritionalAssessment = String(values.get("nutritionalAssessment") ?? "").trim();
+    const carePlan = String(values.get("carePlan") ?? "").trim();
     const professional = healthTerritory.professionals.find(
       (item) => item.id === String(values.get("professionalId") ?? "") && item.active,
     );
-    if (!personId || !professional || !measuredAt || !markerSummary) {
-      setFormError("Selecione pessoa, responsável, data e registre os marcadores alimentares.");
+    if (!personId || !professional || !measuredAt || !markerSummary || !nutritionalAssessment) {
+      setFormError("Selecione pessoa, responsável, data e preencha marcadores e avaliação nutricional.");
       return;
     }
     const id = `SIM-APS-ALI-${String(foodMarkers.length + 1).padStart(3, "0")}`;
@@ -959,11 +968,18 @@ export default function HealthVisitsAttendanceModule({
           professionalId: professional.id,
           measuredAt,
           competence: measuredAt.slice(0, 7),
-          weightKg: Number(values.get("weightKg") || 0) || undefined,
-          heightCm: Number(values.get("heightCm") || 0) || undefined,
+          weightKg, heightCm, waistCm, headCircumferenceCm, bmi,
           markerSummary,
-          nutritionalAssessment: String(values.get("nutritionalAssessment") ?? "").trim(),
-          history: [{ date: `${measuredAt}T09:00:00`, action: "Marcadores alimentares registrados", detail: "Registro assistencial demonstrativo." }],
+          breastfeedingStatus: String(values.get("breastfeedingStatus") ?? "Não informado") as never,
+          foodConsumptionSummary: String(values.get("foodConsumptionSummary") ?? "").trim() || undefined,
+          ultraProcessedFrequency: String(values.get("ultraProcessedFrequency") ?? "Não informado") as never,
+          foodInsecurityStatus: String(values.get("foodInsecurityStatus") ?? "Não investigada") as never,
+          nutritionalAssessment,
+          nutritionalClassification: String(values.get("nutritionalClassification") ?? "Não classificado") as never,
+          carePlan: carePlan || undefined,
+          followUpDate: String(values.get("followUpDate") ?? "") || undefined,
+          monitoringStatus: String(values.get("monitoringStatus") ?? "Em acompanhamento") as never,
+          history: [{ date: `${measuredAt}T09:00:00`, action: "Avaliação nutricional registrada", detail: `${markerSummary} · classificação: ${values.get("nutritionalClassification") ?? "Não classificado"}.` }],
         },
         ...current.foodMarkers,
       ],
@@ -971,6 +987,43 @@ export default function HealthVisitsAttendanceModule({
     setFormError("");
     setView("food-markers");
     event.currentTarget.reset();
+  };
+
+  const updateFoodMarker = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedFoodMarkerId) return;
+    const marker = foodMarkers.find((item) => item.id === selectedFoodMarkerId);
+    if (!marker) return;
+    const values = new FormData(event.currentTarget);
+    const measuredAt = String(values.get("measuredAt") ?? "");
+    const markerSummary = String(values.get("markerSummary") ?? "").trim();
+    const nutritionalAssessment = String(values.get("nutritionalAssessment") ?? "").trim();
+    const followUpDate = String(values.get("followUpDate") ?? "");
+    if (!measuredAt || !markerSummary || !nutritionalAssessment) {
+      setFormError("Data, marcadores e avaliação nutricional são obrigatórios.");
+      return;
+    }
+    if (followUpDate && followUpDate < measuredAt) {
+      setFormError("A data de retorno não pode ser anterior à aferição.");
+      return;
+    }
+    const weightKg = Number(values.get("weightKg") || 0) || undefined;
+    const heightCm = Number(values.get("heightCm") || 0) || undefined;
+    const bmi = weightKg && heightCm ? Number((weightKg / ((heightCm / 100) ** 2)).toFixed(2)) : undefined;
+    onChange((current) => ({ ...current, foodMarkers: current.foodMarkers.map((item) => item.id !== marker.id ? item : ({
+      ...item, measuredAt, weightKg, heightCm, waistCm: Number(values.get("waistCm") || 0) || undefined,
+      headCircumferenceCm: Number(values.get("headCircumferenceCm") || 0) || undefined, bmi, markerSummary,
+      breastfeedingStatus: String(values.get("breastfeedingStatus") ?? "Não informado") as never,
+      foodConsumptionSummary: String(values.get("foodConsumptionSummary") ?? "").trim() || undefined,
+      ultraProcessedFrequency: String(values.get("ultraProcessedFrequency") ?? "Não informado") as never,
+      foodInsecurityStatus: String(values.get("foodInsecurityStatus") ?? "Não investigada") as never,
+      nutritionalAssessment, nutritionalClassification: String(values.get("nutritionalClassification") ?? "Não classificado") as never,
+      carePlan: String(values.get("carePlan") ?? "").trim() || undefined, followUpDate: followUpDate || undefined,
+      monitoringStatus: String(values.get("monitoringStatus") ?? "Em acompanhamento") as never,
+      history: [{ date: `${measuredAt}T09:00:00`, action: "Acompanhamento nutricional atualizado", detail: `Classificação: ${values.get("nutritionalClassification") ?? "Não classificado"} · situação: ${values.get("monitoringStatus") ?? "Em acompanhamento"}.` }, ...item.history],
+    }))}));
+    setFormError("");
+    setView("food-marker-detail");
   };
 
   const updateSelectedStatus = () => {
@@ -1610,14 +1663,31 @@ export default function HealthVisitsAttendanceModule({
 
       {view === "food-markers" && canCreateApsRecords && (
         <div className="health-activity-view">
-          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">APS · SISVAN</span><h3>Marcadores alimentares e medidas</h3><p>Cada aferição é um evento próprio relacionado à pessoa e, quando aplicável, ao atendimento.</p></div><button className="health-action-primary" onClick={() => { setFormError(""); setView("new-food-marker"); }}><Plus size={16} /> Nova aferição</button></div>
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">APS · SISVAN</span><h3>Nutrição, medidas e marcadores</h3><p>Registre a aferição, os marcadores alimentares, a avaliação administrativa e o plano de acompanhamento em um único evento rastreável.</p></div><button className="health-action-primary" onClick={() => { setFormError(""); setView("new-food-marker"); }}><Plus size={16} /> Nova avaliação</button></div>
           <div className="health-record-list">
             {foodMarkers.map((marker) => (
-              <article className="health-record-card" key={marker.id}><div className="health-record-mark mark-care"><ClipboardList size={17} /></div><div className="health-record-main"><div className="health-record-title-line"><strong>{getPersonName(peopleRegistry, marker.personId)}</strong><span className="health-record-id">{marker.id}</span></div><p>{marker.markerSummary}</p><small>{formatDate(marker.measuredAt)} · {marker.weightKg ?? "—"} kg · {marker.heightCm ?? "—"} cm · {unitName(healthTerritory, marker.unitId)}</small></div></article>
+              <article className="health-record-card" key={marker.id}><div className="health-record-mark mark-care"><ClipboardList size={17} /></div><div className="health-record-main"><div className="health-record-title-line"><strong>{getPersonName(peopleRegistry, marker.personId)}</strong><span className="health-record-id">{marker.id}</span></div><p>{marker.nutritionalClassification ?? "Não classificado"} · {marker.monitoringStatus ?? "Sem status"}</p><small>{formatDate(marker.measuredAt)} · {marker.weightKg ?? "—"} kg · {marker.heightCm ?? "—"} cm · IMC {marker.bmi ?? "—"} · {unitName(healthTerritory, marker.unitId)}</small></div><span className={`health-status-chip tone-${marker.monitoringStatus === "Concluído" || marker.monitoringStatus === "Sem pendência" ? "positive" : marker.monitoringStatus === "Encaminhado" ? "warning" : "info"}`}>{marker.monitoringStatus ?? "Em acompanhamento"}</span><button className="health-record-open" onClick={() => { setSelectedFoodMarkerId(marker.id); setFormError(""); setView("food-marker-detail"); }}>Abrir <ArrowRight size={14} /></button></article>
             ))}
           </div>
         </div>
       )}
+
+      {view === "food-marker-detail" && selectedFoodMarkerId && canCreateApsRecords && (() => {
+        const marker = foodMarkers.find((item) => item.id === selectedFoodMarkerId);
+        if (!marker) return null;
+        return <div className="health-activity-view">
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">AVALIAÇÃO NUTRICIONAL · {marker.id}</span><h3>{getPersonName(peopleRegistry, marker.personId)}</h3><p>Atualize medidas, marcadores, avaliação e plano sem apagar o histórico anterior.</p></div><button className="health-back-button" onClick={() => setView("food-markers")}><ArrowLeft size={15} /> Voltar</button></div>
+          <div className="health-detail-grid"><div className="health-detail-field"><span>Aferição</span><strong>{formatDate(marker.measuredAt)} · competência {marker.competence}</strong></div><div className="health-detail-field"><span>Unidade / profissional</span><strong>{unitName(healthTerritory, marker.unitId)} · {professionalName(healthTerritory, marker.professionalId)}</strong></div><div className="health-detail-field"><span>Medidas</span><strong>{marker.weightKg ?? "—"} kg · {marker.heightCm ?? "—"} cm · IMC {marker.bmi ?? "—"}</strong></div><div className="health-detail-field"><span>Classificação</span><strong>{marker.nutritionalClassification ?? "Não classificado"} · {marker.monitoringStatus ?? "Em acompanhamento"}</strong></div><div className="health-detail-field health-detail-wide"><span>Marcadores registrados</span><p>{marker.markerSummary}</p></div><div className="health-detail-field health-detail-wide"><span>Avaliação</span><p>{marker.nutritionalAssessment}</p></div></div>
+          <form className="health-activity-form" onSubmit={updateFoodMarker}>
+            {formError && <p className="health-form-error health-form-wide" role="alert">{formError}</p>}
+            <label>Data da aferição<input name="measuredAt" type="date" defaultValue={marker.measuredAt} required /></label><label>Peso (kg)<input name="weightKg" type="number" min="0" step="0.1" defaultValue={marker.weightKg ?? ""} /></label><label>Altura (cm)<input name="heightCm" type="number" min="0" step="0.1" defaultValue={marker.heightCm ?? ""} /></label><label>Cintura (cm)<input name="waistCm" type="number" min="0" step="0.1" defaultValue={marker.waistCm ?? ""} /></label><label>Perímetro cefálico (cm)<input name="headCircumferenceCm" type="number" min="0" step="0.1" defaultValue={marker.headCircumferenceCm ?? ""} /></label>
+            <label>Amamentação<select name="breastfeedingStatus" defaultValue={marker.breastfeedingStatus ?? "Não informado"}><option>Exclusivo</option><option>Predominante</option><option>Misto</option><option>Não se aplica</option><option>Não informado</option></select></label><label>Frequência de ultraprocessados<select name="ultraProcessedFrequency" defaultValue={marker.ultraProcessedFrequency ?? "Não informado"}><option>Nunca</option><option>Ocasional</option><option>Frequente</option><option>Diária</option><option>Não informado</option></select></label><label>Insegurança alimentar<select name="foodInsecurityStatus" defaultValue={marker.foodInsecurityStatus ?? "Não investigada"}><option>Não identificada</option><option>Suspeita</option><option>Identificada</option><option>Não investigada</option></select></label><label>Classificação<select name="nutritionalClassification" defaultValue={marker.nutritionalClassification ?? "Não classificado"}><option>Adequado</option><option>Atenção</option><option>Risco nutricional</option><option>Insegurança alimentar</option><option>Não classificado</option></select></label><label>Situação do acompanhamento<select name="monitoringStatus" defaultValue={marker.monitoringStatus ?? "Em acompanhamento"}><option>Em acompanhamento</option><option>Encaminhado</option><option>Concluído</option><option>Sem pendência</option></select></label><label>Data de retorno<input name="followUpDate" type="date" defaultValue={marker.followUpDate ?? ""} /></label>
+            <label className="health-form-wide">Marcadores de consumo alimentar<textarea name="markerSummary" rows={3} defaultValue={marker.markerSummary} maxLength={600} required /></label><label className="health-form-wide">Resumo do consumo / contexto<textarea name="foodConsumptionSummary" rows={2} defaultValue={marker.foodConsumptionSummary ?? ""} maxLength={500} /></label><label className="health-form-wide">Avaliação nutricional administrativa<textarea name="nutritionalAssessment" rows={3} defaultValue={marker.nutritionalAssessment} maxLength={500} required /></label><label className="health-form-wide">Plano de acompanhamento<textarea name="carePlan" rows={3} defaultValue={marker.carePlan ?? ""} maxLength={600} placeholder="Registre ações administrativas, orientação, busca ativa, retorno ou encaminhamento. Não substitui conduta clínica." /></label>
+            <div className="health-form-actions health-form-wide"><button type="submit" className="health-action-primary"><Check size={16} /> Salvar acompanhamento</button></div>
+          </form>
+          <div className="health-integrated-timeline"><div className="health-timeline-heading"><div><span className="health-activity-eyebrow">RASTREABILIDADE</span><h4>Histórico da avaliação</h4></div></div><div className="health-timeline-list">{marker.history.map((item, index) => <div className="health-timeline-item" key={`${item.date}-${index}`}><span className="health-timeline-dot" /><div><div className="health-timeline-meta"><strong>{item.action}</strong><time>{formatHistoryDate(item.date)}</time></div><p>{item.detail}</p></div></div>)}</div></div>
+        </div>;
+      })()}
 
       {view === "new-food-marker" && canCreateApsRecords && (
         <div className="health-activity-view">
@@ -1627,10 +1697,10 @@ export default function HealthVisitsAttendanceModule({
             <label>Pessoa<select name="personId" defaultValue="" required><option value="" disabled>Selecione uma pessoa</option>{peopleRegistry.people.filter((item) => item.status === "Ativa").map((item) => <option key={item.id} value={item.id}>{item.fullName} · {item.id}</option>)}</select></label>
             <label>Responsável<select name="professionalId" defaultValue={healthTerritory.professionals.find((item) => item.active)?.id ?? ""} required>{healthTerritory.professionals.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.category}</option>)}</select></label>
             <label>Data da aferição<input name="measuredAt" type="date" defaultValue={today} required /></label>
-            <label>Peso (kg)<input name="weightKg" type="number" min="0" step="0.1" /></label>
-            <label>Altura (cm)<input name="heightCm" type="number" min="0" step="0.1" /></label>
-            <label className="health-form-wide">Marcadores de consumo alimentar<textarea name="markerSummary" rows={3} maxLength={600} required placeholder="Registre os marcadores coletados." /></label>
-            <label className="health-form-wide">Avaliação nutricional administrativa<textarea name="nutritionalAssessment" rows={2} maxLength={400} placeholder="Acompanhamento ou pendência para a equipe." /></label>
+            <label>Peso (kg)<input name="weightKg" type="number" min="0" step="0.1" /></label><label>Altura (cm)<input name="heightCm" type="number" min="0" step="0.1" /></label><label>Cintura (cm)<input name="waistCm" type="number" min="0" step="0.1" /></label><label>Perímetro cefálico (cm)<input name="headCircumferenceCm" type="number" min="0" step="0.1" /></label>
+            <label>Amamentação<select name="breastfeedingStatus" defaultValue="Não informado"><option>Exclusivo</option><option>Predominante</option><option>Misto</option><option>Não se aplica</option><option>Não informado</option></select></label><label>Frequência de ultraprocessados<select name="ultraProcessedFrequency" defaultValue="Não informado"><option>Nunca</option><option>Ocasional</option><option>Frequente</option><option>Diária</option><option>Não informado</option></select></label><label>Insegurança alimentar<select name="foodInsecurityStatus" defaultValue="Não investigada"><option>Não identificada</option><option>Suspeita</option><option>Identificada</option><option>Não investigada</option></select></label><label>Classificação<select name="nutritionalClassification" defaultValue="Não classificado"><option>Adequado</option><option>Atenção</option><option>Risco nutricional</option><option>Insegurança alimentar</option><option>Não classificado</option></select></label><label>Situação do acompanhamento<select name="monitoringStatus" defaultValue="Em acompanhamento"><option>Em acompanhamento</option><option>Encaminhado</option><option>Concluído</option><option>Sem pendência</option></select></label><label>Data de retorno<input name="followUpDate" type="date" /></label>
+            <label className="health-form-wide">Marcadores de consumo alimentar<textarea name="markerSummary" rows={3} maxLength={600} required placeholder="Registre os marcadores coletados." /></label><label className="health-form-wide">Resumo do consumo / contexto<textarea name="foodConsumptionSummary" rows={2} maxLength={500} placeholder="Ex.: refeições, alimentos in natura, dificuldades de acesso e rotina." /></label>
+            <label className="health-form-wide">Avaliação nutricional administrativa<textarea name="nutritionalAssessment" rows={3} maxLength={500} required placeholder="Registre avaliação, pendência ou necessidade de acompanhamento. Não substitui conduta clínica." /></label><label className="health-form-wide">Plano de acompanhamento<textarea name="carePlan" rows={3} maxLength={600} placeholder="Registre ações administrativas, orientação, busca ativa, retorno ou encaminhamento." /></label>
             <div className="health-form-actions health-form-wide"><button type="button" className="health-back-button" onClick={() => setView("food-markers")}>Cancelar</button><button type="submit" className="health-action-primary"><Check size={16} /> Salvar aferição</button></div>
           </form>
         </div>
