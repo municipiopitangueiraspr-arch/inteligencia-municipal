@@ -1639,101 +1639,44 @@ export default function HealthVisitsAttendanceModule({
           </div>
           <form className="health-activity-form" onSubmit={saveCareRecord}>
             {formError && <p className="health-form-error" role="alert">{formError}</p>}
-            <label>
-              Pessoa atendida
-              <select name="personId" required defaultValue="">
-                <option value="" disabled>Selecione uma pessoa</option>
-                {peopleRegistry.people.filter((person) => person.status === "Ativa").map((person) => (
-                  <option key={person.id} value={person.id}>{person.fullName} · {person.id}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Tipo de atendimento
-              <select name="serviceType" required value={attendanceServiceType} onChange={(event) => setAttendanceServiceType(event.target.value)}>
-                <option value="" disabled>Selecione o serviço</option>
-                {serviceTypes.map((service) => <option key={service}>{service}</option>)}
-              </select>
-            </label>
-            <label>
-              Modalidade
-              <select name="modality" defaultValue="Consulta programada" required>
-                {attendanceModalities.map((modality) => <option key={modality}>{modality}</option>)}
-              </select>
-            </label>
-            <label>
-              Caráter do atendimento
-              <select name="character" defaultValue="Programado" required>
-                {attendanceCharacters.map((character) => <option key={character}>{character}</option>)}
-              </select>
-            </label>
-            <label>
-              Profissional responsável
-              <select
-                name="professionalId"
-                value={selectedCareProfessional?.id ?? ""}
-                onChange={(event) => setCareProfessionalId(event.target.value)}
-                required
-              >
-                {availableCareProfessionals.map((professional) => (
-                  <option key={professional.id} value={professional.id}>{professional.name} · {professional.category}</option>
-                ))}
-              </select>
-              {selectedCareTeam && selectedCareUnit && (
-                <small className="health-field-hint">{selectedCareTeam.name} · {selectedCareUnit.name}</small>
-              )}
-            </label>
-            <label>
-              Data
-              <input name="date" type="date" defaultValue={today} required />
-            </label>
-            <label>
-              Horário
-              <input name="time" type="time" defaultValue="10:00" required />
-            </label>
-            <label>
-              Competência
-              <input name="competence" type="month" defaultValue={today.slice(0, 7)} required />
-            </label>
-            <label>
-              Situação
-              <select name="status" defaultValue="Agendado" required>
-                {serviceStatuses.map((status) => <option key={status}>{status}</option>)}
-              </select>
-            </label>
-            <label className="health-form-wide">
-              Motivo ou objetivo do atendimento
-              <input name="reason" maxLength={240} placeholder="Ex.: consulta de rotina, retorno ou procedimento" required />
-            </label>
-            <label>
-              Condição ou acompanhamento
-              <input name="conditionOrFollowUp" maxLength={240} placeholder="Ex.: cuidado programado ou acompanhamento longitudinal" required />
-            </label>
-            <label>
-              Problemas ou condições acompanhados
-              <input name="conditions" maxLength={300} placeholder="Separe por vírgula, se houver mais de um" />
-            </label>
-            <label>
-              Desfecho previsto/registrado
-              <select name="outcome" defaultValue="Acompanhamento mantido" required>
-                {attendanceOutcomes.map((outcome) => <option key={outcome}>{outcome}</option>)}
-              </select>
-            </label>
-            <label className="health-form-wide">
-              Resumo da atividade/conduta (preencher ao concluir)
-              <textarea name="careSummary" rows={3} maxLength={800} placeholder="Resumo fictício, sem substituir a documentação clínica oficial." />
-            </label>
-            <label className="health-form-wide">
-              Plano de continuidade / próximo passo
-              <textarea name="carePlan" rows={2} maxLength={500} placeholder="Ex.: manter acompanhamento, revisar resultado no retorno ou orientar procura da unidade." />
-              <small className="health-field-hint">Obrigatório para atendimentos realizados. Não substitui protocolo ou registro clínico oficial.</small>
-            </label>
-            <label className="health-form-wide">
-              Motivo de falta ou cancelamento (quando aplicável)
-              <input name="statusReason" maxLength={240} placeholder="Ex.: ausência sem aviso, indisponibilidade do profissional ou solicitação da pessoa" />
-            </label>
+            <fieldset className="health-form-fieldset health-form-section health-form-wide">
+              <legend><span className="health-section-number">01</span>Identificação e vínculo assistencial</legend>
+              <div className="health-form-subgrid">
+                <label>Pessoa atendida<select name="personId" required defaultValue=""><option value="" disabled>Selecione uma pessoa</option>{peopleRegistry.people.filter((person) => person.status === "Ativa").map((person) => <option key={person.id} value={person.id}>{person.fullName} · {person.id}</option>)}</select></label>
+                <label>Tipo de atendimento<select name="serviceType" required value={attendanceServiceType} onChange={(event) => setAttendanceServiceType(event.target.value)}><option value="" disabled>Selecione o serviço</option>{serviceTypes.map((service) => <option key={service}>{service}</option>)}</select></label>
+                <label>Modalidade<select name="modality" defaultValue="Consulta programada" required>{attendanceModalities.map((modality) => <option key={modality}>{modality}</option>)}</select></label>
+                <label>Caráter do atendimento<select name="character" defaultValue="Programado" required>{attendanceCharacters.map((character) => <option key={character}>{character}</option>)}</select></label>
+                <label>Profissional responsável<select name="professionalId" value={selectedCareProfessional?.id ?? ""} onChange={(event) => setCareProfessionalId(event.target.value)} required>{availableCareProfessionals.map((professional) => <option key={professional.id} value={professional.id}>{professional.name} · {professional.category}</option>)}</select>{selectedCareTeam && selectedCareUnit && <small className="health-field-hint">{selectedCareTeam.name} · {selectedCareUnit.name}</small>}</label>
+              </div>
+            </fieldset>
+            <fieldset className="health-form-fieldset health-form-section health-form-wide">
+              <legend><span className="health-section-number">02</span>Agenda e competência</legend>
+              <div className="health-form-subgrid">
+                <label>Data<input name="date" type="date" defaultValue={today} required /></label>
+                <label>Horário<input name="time" type="time" defaultValue="10:00" required /></label>
+                <label>Competência<input name="competence" type="month" defaultValue={today.slice(0, 7)} required /><small className="health-field-hint">Derivada do mês da data do atendimento.</small></label>
+                <label>Situação<select name="status" defaultValue="Agendado" required>{serviceStatuses.map((status) => <option key={status}>{status}</option>)}</select></label>
+              </div>
+            </fieldset>
+            <fieldset className="health-form-fieldset health-form-section health-form-wide">
+              <legend><span className="health-section-number">03</span>Motivo, acompanhamento e desfecho</legend>
+              <div className="health-form-subgrid">
+                <label className="health-form-wide">Motivo ou objetivo do atendimento<input name="reason" maxLength={240} placeholder="Ex.: consulta de rotina, retorno ou procedimento" required /></label>
+                <label>Condição ou acompanhamento<input name="conditionOrFollowUp" maxLength={240} placeholder="Ex.: cuidado programado ou acompanhamento longitudinal" required /></label>
+                <label>Problemas ou condições acompanhados<input name="conditions" maxLength={300} placeholder="Separe por vírgula, se houver mais de um" /></label>
+                <label>Desfecho previsto/registrado<select name="outcome" defaultValue="Acompanhamento mantido" required>{attendanceOutcomes.map((outcome) => <option key={outcome}>{outcome}</option>)}</select></label>
+              </div>
+            </fieldset>
+            <fieldset className="health-form-fieldset health-form-section health-form-wide">
+              <legend><span className="health-section-number">04</span>Registro e continuidade do cuidado</legend>
+              <div className="health-form-subgrid">
+                <label className="health-form-wide">Resumo da atividade/conduta (preencher ao concluir)<textarea name="careSummary" rows={3} maxLength={800} placeholder="Resumo fictício, sem substituir a documentação clínica oficial." /></label>
+                <label className="health-form-wide">Plano de continuidade / próximo passo<textarea name="carePlan" rows={2} maxLength={500} placeholder="Ex.: manter acompanhamento, revisar resultado no retorno ou orientar procura da unidade." /><small className="health-field-hint">Obrigatório para atendimentos realizados. Não substitui protocolo ou registro clínico oficial.</small></label>
+                <label className="health-form-wide">Motivo de falta ou cancelamento (quando aplicável)<input name="statusReason" maxLength={240} placeholder="Ex.: ausência sem aviso, indisponibilidade do profissional ou solicitação da pessoa" /></label>
+              </div>
+            </fieldset>
             <fieldset className="health-form-fieldset health-form-wide">
-              <legend>Medidas e sinais registrados (opcional)</legend>
+              <legend><span className="health-section-number">05</span>Medidas e sinais registrados <em>(opcional)</em></legend>
               <p className="health-field-hint">Use somente quando fizer parte do atendimento. Os campos são demonstrativos e não substituem protocolos clínicos.</p>
               <div className="health-vitals-grid">
                 <label>Pressão arterial<input name="bloodPressure" placeholder="Ex.: 120/80" /></label>
@@ -1748,14 +1691,14 @@ export default function HealthVisitsAttendanceModule({
               </div>
             </fieldset>
             <fieldset className="health-form-fieldset health-form-wide">
-              <legend>Procedimentos realizados</legend>
+              <legend><span className="health-section-number">06</span>Procedimentos realizados</legend>
               <p className="health-field-hint">Selecione os procedimentos vinculados a este atendimento. Eles serão contabilizados separadamente.</p>
               <div className="health-procedure-grid">
                 {procedureCatalog.map((procedure) => <label key={procedure} className="health-checkbox"><span className="health-procedure-title"><input type="checkbox" name="procedure" value={procedure} /> <span>{procedure}</span></span><span className="health-procedure-fields"><input name="procedureQuantity" type="number" min="1" defaultValue="1" aria-label={`Quantidade de ${procedure}`} /><input name="procedureResult" maxLength={120} placeholder="Resultado / observação" aria-label={`Resultado de ${procedure}`} /></span></label>)}
               </div>
             </fieldset>
             {attendanceServiceType === "Atendimento odontológico" && <fieldset className="health-form-fieldset health-form-wide">
-              <legend>Detalhamento odontológico, quando aplicável</legend>
+              <legend><span className="health-section-number">07</span>Detalhamento odontológico <em>(quando aplicável)</em></legend>
               <p className="health-field-hint">Ative o tipo “Atendimento odontológico” para preencher esta seção.</p>
               <div className="health-form-subgrid">
                 <label>Motivo odontológico<input name="dentalReason" maxLength={180} placeholder="Ex.: avaliação, dor ou retorno" /></label>
@@ -1765,14 +1708,13 @@ export default function HealthVisitsAttendanceModule({
               </div>
               <label>Orientação ou próximo passo<input name="dentalGuidance" maxLength={240} placeholder="Opcional" /></label>
             </fieldset>}
-            <label>
-              Encaminhamento ou próximo passo (opcional)
-              <input name="referral" maxLength={300} placeholder="Ex.: retorno ou avaliação por outra equipe" />
-            </label>
-            <label>
-              Data de acompanhamento (opcional)
-              <input name="followUpDate" type="date" />
-            </label>
+            <fieldset className="health-form-fieldset health-form-section health-form-wide">
+              <legend><span className="health-section-number">08</span>Encaminhamento e retorno</legend>
+              <div className="health-form-subgrid">
+                <label>Encaminhamento ou próximo passo (opcional)<input name="referral" maxLength={300} placeholder="Ex.: retorno ou avaliação por outra equipe" /></label>
+                <label>Data de acompanhamento (opcional)<input name="followUpDate" type="date" /></label>
+              </div>
+            </fieldset>
             <div className="health-form-actions health-form-wide">
               <button type="button" className="health-back-button" onClick={showAttendance}>Cancelar</button>
               <button type="submit" className="health-action-primary"><Check size={16} /> Salvar atendimento nesta sessão</button>
