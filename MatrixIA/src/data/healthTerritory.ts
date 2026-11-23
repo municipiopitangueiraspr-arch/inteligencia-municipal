@@ -1,5 +1,9 @@
 export type MapRegion = "centro" | "norte" | "leste" | "rural";
 
+export type TerritoryHistoryEvent = { date: string; action: string; detail: string };
+export type TeamCompositionEvent = { id: string; professionalId: string; role: string; validFrom: string; validTo?: string; action: "Inclusão" | "Alteração" | "Saída"; notes?: string };
+export type HealthCatalog = { id: string; domain: "Tipo de unidade" | "Modelo de equipe" | "Categoria profissional" | "Tipo de área"; code: string; label: string; description?: string; version: number; validFrom: string; validTo?: string; active: boolean; history: TerritoryHistoryEvent[] };
+
 export type HealthUnit = {
   id: string;
   name: string;
@@ -9,6 +13,9 @@ export type HealthUnit = {
   phone: string;
   region: MapRegion;
   active: boolean;
+  validFrom?: string;
+  validTo?: string;
+  history?: TerritoryHistoryEvent[];
 };
 
 export type HealthTeam = {
@@ -19,6 +26,10 @@ export type HealthTeam = {
   unitId: string;
   areaId: string;
   active: boolean;
+  validFrom?: string;
+  validTo?: string;
+  compositionHistory?: TeamCompositionEvent[];
+  history?: TerritoryHistoryEvent[];
 };
 
 export type HealthProfessional = {
@@ -30,6 +41,9 @@ export type HealthProfessional = {
   teamId: string;
   phone: string;
   active: boolean;
+  validFrom?: string;
+  validTo?: string;
+  history?: TerritoryHistoryEvent[];
 };
 
 export type ServiceArea = {
@@ -41,6 +55,9 @@ export type ServiceArea = {
   region: MapRegion;
   color: string;
   active: boolean;
+  validFrom?: string;
+  validTo?: string;
+  history?: TerritoryHistoryEvent[];
 };
 
 export type HealthTerritoryDataset = {
@@ -48,6 +65,7 @@ export type HealthTerritoryDataset = {
   teams: HealthTeam[];
   professionals: HealthProfessional[];
   areas: ServiceArea[];
+  catalogs: HealthCatalog[];
 };
 
 export const mapRegionCenters: Record<MapRegion, { x: number; y: number }> = {
@@ -76,7 +94,7 @@ export const mapRegionPolygons: Record<MapRegion, string> = {
     "320,420 390,395 470,415 525,455 555,520 525,580 455,605 380,585 325,545 295,485",
 };
 
-export const initialHealthTerritory: HealthTerritoryDataset = {
+const rawHealthTerritory = {
   units: [
     {
       id: "SIM-UBS-001",
@@ -301,4 +319,20 @@ export const initialHealthTerritory: HealthTerritoryDataset = {
       active: true,
     },
   ],
+  catalogs: [
+    { id: "SIM-CAT-001", domain: "Tipo de unidade", code: "UBS", label: "Unidade Básica de Saúde", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+    { id: "SIM-CAT-002", domain: "Tipo de unidade", code: "USF", label: "Unidade de Saúde da Família", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+    { id: "SIM-CAT-003", domain: "Modelo de equipe", code: "ESF", label: "Saúde da Família", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+    { id: "SIM-CAT-004", domain: "Modelo de equipe", code: "EMULTI", label: "Equipe Multiprofissional", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+    { id: "SIM-CAT-005", domain: "Categoria profissional", code: "ACS", label: "Agente Comunitário de Saúde", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+    { id: "SIM-CAT-006", domain: "Categoria profissional", code: "ENF", label: "Enfermeiro(a)", version: 1, validFrom: "2025-01-01", active: true, history: [{ date: "2025-01-01", action: "Catálogo publicado", detail: "Versão inicial do item." }] },
+  ],
+} satisfies HealthTerritoryDataset;
+
+export const initialHealthTerritory: HealthTerritoryDataset = {
+  ...rawHealthTerritory,
+  units: rawHealthTerritory.units.map((item) => ({ ...item, validFrom: (item as HealthUnit).validFrom ?? "2025-01-01", history: (item as HealthUnit).history ?? [{ date: "2025-01-01", action: "Cadastro inicial", detail: "Unidade incorporada ao cenário territorial." }] })),
+  teams: rawHealthTerritory.teams.map((item) => ({ ...item, validFrom: (item as HealthTeam).validFrom ?? "2025-01-01", compositionHistory: (item as HealthTeam).compositionHistory ?? [], history: (item as HealthTeam).history ?? [{ date: "2025-01-01", action: "Cadastro inicial", detail: "Equipe incorporada ao cenário territorial." }] })),
+  professionals: rawHealthTerritory.professionals.map((item) => ({ ...item, validFrom: (item as HealthProfessional).validFrom ?? "2025-01-01", history: (item as HealthProfessional).history ?? [{ date: "2025-01-01", action: "Cadastro inicial", detail: "Profissional incorporado ao cenário territorial." }] })),
+  areas: rawHealthTerritory.areas.map((item) => ({ ...item, validFrom: (item as ServiceArea).validFrom ?? "2025-01-01", history: (item as ServiceArea).history ?? [{ date: "2025-01-01", action: "Cadastro inicial", detail: "Área incorporada ao cenário territorial." }] })),
 };

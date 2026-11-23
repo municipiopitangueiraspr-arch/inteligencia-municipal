@@ -40,6 +40,20 @@
 .health-territory-module button {
   color: inherit;
 }
+.health-inline-history {
+  margin-top: 5px;
+  color: var(--health-blue-800);
+  font-size: 11px;
+}
+.health-inline-history summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.health-inline-history span {
+  display: block;
+  margin-top: 3px;
+  color: var(--health-muted);
+}
 .health-territory-module button:focus-visible,
 .health-territory-module a:focus-visible,
 .health-territory-module input:focus-visible,

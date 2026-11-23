@@ -1,6 +1,8 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
+  Archive,
+  BookOpen,
   Building2,
   Check,
   ChevronDown,
@@ -22,6 +24,7 @@ import {
   mapRegionLabels,
   mapRegionPolygons,
   type HealthProfessional,
+  type HealthCatalog,
   type HealthTeam,
   type HealthTerritoryDataset,
   type HealthUnit,
@@ -30,7 +33,7 @@ import {
 } from "../data/healthTerritory";
 import "./HealthTerritoryModule.css";
 
-type EntityKind = "unit" | "team" | "professional" | "area";
+type EntityKind = "unit" | "team" | "professional" | "area" | "catalog";
 type ModuleTab = "map" | EntityKind;
 type MapLayer = "areas" | "units" | "teams";
 type FeatureSelection = { kind: "area" | "unit" | "team"; id: string };
@@ -56,12 +59,14 @@ const createId = (kind: EntityKind, data: HealthTerritoryDataset) => {
     team: "SIM-EQ",
     professional: "SIM-PRO",
     area: "SIM-AREA",
+    catalog: "SIM-CAT",
   }[kind];
   const collection = {
     unit: data.units,
     team: data.teams,
     professional: data.professionals,
     area: data.areas,
+    catalog: data.catalogs,
   }[kind];
   return `${prefix}-${String(collection.length + 1).padStart(3, "0")}`;
 };
@@ -71,6 +76,7 @@ const entityPlural: Record<EntityKind, string> = {
   team: "Equipes",
   professional: "Profissionais",
   area: "Áreas de atuação",
+  catalog: "Catálogos",
 };
 
 const entitySingular: Record<EntityKind, string> = {
@@ -78,6 +84,7 @@ const entitySingular: Record<EntityKind, string> = {
   team: "Equipe de saúde",
   professional: "Profissional",
   area: "Área de atuação",
+  catalog: "Item de catálogo",
 };
 
 function HealthTerritoryModule({ dataset, onChange }: Props) {
@@ -176,6 +183,7 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
       team: current.teams,
       professional: current.professionals,
       area: current.areas,
+      catalog: current.catalogs,
     }[currentModal.kind];
     const record = collection.find((item) => item.id === currentModal.id);
     return (
@@ -213,6 +221,12 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
           ),
         };
       }
+      if (kind === "catalog") {
+        return {
+          ...current,
+          catalogs: current.catalogs.map((item) => item.id === id ? { ...item, active: !item.active, history: [...item.history, { date: new Date().toISOString().slice(0, 10), action: item.active ? "Catálogo inativado" : "Catálogo reativado", detail: `Item ${item.code} alterado sem exclusão do histórico.` }] } : item),
+        };
+      }
       return {
         ...current,
         areas: current.areas.map((item) =>
@@ -234,11 +248,20 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
       team: ["name", "code", "model", "unitId", "areaId"],
       professional: ["name", "category", "registration", "teamId"],
       area: ["name", "code", "teamId", "estimatedResidents", "region", "color"],
+      catalog: ["domain", "code", "label", "validFrom"],
     }[modal.kind];
     if (requiredFields.some((field) => !value(field))) {
       setFormError(
         "Preencha todos os campos obrigatórios. Espaços em branco não são aceitos.",
       );
+      return;
+    }
+    if (value("validTo") && value("validTo") < value("validFrom")) {
+      setFormError("O fim da vigência não pode ser anterior ao início da vigência.");
+      return;
+    }
+    if (modal.kind === "catalog" && dataset.catalogs.some((item) => item.id !== modal.id && item.domain === value("domain") && item.code.toUpperCase() === value("code").toUpperCase() && item.active)) {
+      setFormError("Já existe um item ativo com este código dentro do domínio selecionado.");
       return;
     }
 
@@ -249,6 +272,7 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
       const id = savedId;
       const active = formData.get("active") === "on";
       if (modal.kind === "unit") {
+        const previous = current.units.find((item) => item.id === id);
         const record: HealthUnit = {
           id,
           name: value("name"),
@@ -258,6 +282,9 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
           phone: value("phone"),
           region: value("region") as MapRegion,
           active: isEditing ? active : true,
+          validFrom: value("validFrom") || previous?.validFrom || new Date().toISOString().slice(0, 10),
+          validTo: value("validTo") || undefined,
+          history: [{ date: value("validFrom") || new Date().toISOString().slice(0, 10), action: isEditing ? "Vigência da unidade atualizada" : "Unidade cadastrada", detail: `Situação: ${active ? "ativa" : "inativa"}.` }, ...(previous?.history ?? [])],
         };
         return {
           ...current,
@@ -267,6 +294,7 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
         };
       }
       if (modal.kind === "team") {
+        const previous = current.teams.find((item) => item.id === id);
         const record: HealthTeam = {
           id,
           name: value("name"),
@@ -275,6 +303,10 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
           unitId: value("unitId"),
           areaId: value("areaId"),
           active: isEditing ? active : true,
+          validFrom: value("validFrom") || previous?.validFrom || new Date().toISOString().slice(0, 10),
+          validTo: value("validTo") || undefined,
+          compositionHistory: previous?.compositionHistory ?? [],
+          history: [{ date: value("validFrom") || new Date().toISOString().slice(0, 10), action: isEditing ? "Vigência da equipe atualizada" : "Equipe cadastrada", detail: `${value("code")} · ${value("model")}.` }, ...(previous?.history ?? [])],
         };
         return {
           ...current,
@@ -284,6 +316,7 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
         };
       }
       if (modal.kind === "professional") {
+        const previous = current.professionals.find((item) => item.id === id);
         const team = current.teams.find((item) => item.id === value("teamId"));
         const record: HealthProfessional = {
           id,
@@ -294,9 +327,19 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
           teamId: value("teamId"),
           phone: value("phone"),
           active: isEditing ? active : true,
+          validFrom: value("validFrom") || previous?.validFrom || new Date().toISOString().slice(0, 10),
+          validTo: value("validTo") || undefined,
+          history: [{ date: value("validFrom") || new Date().toISOString().slice(0, 10), action: isEditing ? "Vínculo profissional atualizado" : "Profissional vinculado", detail: `Equipe: ${team?.code ?? "não informada"}.` }, ...(previous?.history ?? [])],
         };
+        const nextTeams = current.teams.map((item) => {
+          const oldTeamId = previous?.teamId;
+          if (item.id !== oldTeamId && item.id !== value("teamId")) return item;
+          const event = { id: `${id}-${Date.now()}`, professionalId: id, role: value("category"), validFrom: value("validFrom") || new Date().toISOString().slice(0, 10), action: item.id === value("teamId") ? "Inclusão" as const : "Saída" as const, notes: "Movimentação de vínculo no cadastro territorial." };
+          return { ...item, compositionHistory: [...(item.compositionHistory ?? []), event], history: [{ date: event.validFrom, action: "Composição da equipe atualizada", detail: `${value("name")} · ${event.action}.` }, ...(item.history ?? [])] };
+        });
         return {
           ...current,
+          teams: nextTeams,
           professionals: isEditing
             ? current.professionals.map((item) =>
                 item.id === id ? record : item,
@@ -304,6 +347,12 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
             : [record, ...current.professionals],
         };
       }
+      if (modal.kind === "catalog") {
+        const previous = current.catalogs.find((item) => item.id === id);
+        const record: HealthCatalog = { id, domain: value("domain") as HealthCatalog["domain"], code: value("code").toUpperCase(), label: value("label"), description: value("description") || undefined, version: previous ? previous.version + 1 : 1, validFrom: value("validFrom"), validTo: value("validTo") || undefined, active: isEditing ? active : true, history: [{ date: value("validFrom"), action: previous ? "Catálogo versionado" : "Catálogo publicado", detail: previous ? `Versão ${previous.version + 1} substitui a versão anterior sem apagar o histórico.` : "Item cadastrado no catálogo municipal." }, ...(previous?.history ?? [])] };
+        return { ...current, catalogs: isEditing ? current.catalogs.map((item) => item.id === id ? record : item) : [record, ...current.catalogs] };
+      }
+      const previous = current.areas.find((item) => item.id === id);
       const record: ServiceArea = {
         id,
         name: value("name"),
@@ -313,6 +362,9 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
         region: value("region") as MapRegion,
         color: value("color"),
         active: isEditing ? active : true,
+        validFrom: value("validFrom") || previous?.validFrom || new Date().toISOString().slice(0, 10),
+        validTo: value("validTo") || undefined,
+        history: [{ date: value("validFrom") || new Date().toISOString().slice(0, 10), action: isEditing ? "Vigência da área atualizada" : "Área cadastrada", detail: `${value("code")} · equipe responsável atualizada.` }, ...(previous?.history ?? [])],
       };
       return {
         ...current,
@@ -443,6 +495,13 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
           icon={<MapPin size={15} />}
         >
           Áreas de atuação <b>{dataset.areas.length}</b>
+        </TabButton>
+        <TabButton
+          active={activeTab === "catalog"}
+          onClick={() => setActiveTab("catalog")}
+          icon={<BookOpen size={15} />}
+        >
+          Catálogos <b>{dataset.catalogs.length}</b>
         </TabButton>
       </div>
 
@@ -1350,6 +1409,18 @@ function HealthTerritoryModule({ dataset, onChange }: Props) {
                   </p>
                 </>
               )}
+              {modal.kind === "catalog" && (
+                <>
+                  <label>Domínio do catálogo *<select name="domain" defaultValue={editingValue("domain", "Tipo de unidade")} required><option>Tipo de unidade</option><option>Modelo de equipe</option><option>Categoria profissional</option><option>Tipo de área</option></select></label>
+                  <div className="health-form-grid"><label>Código *<input name="code" defaultValue={editingValue("code")} placeholder="Ex.: UBS" required /></label><label>Nome/descrição curta *<input name="label" defaultValue={editingValue("label")} required /></label></div>
+                  <label>Descrição operacional<textarea name="description" defaultValue={editingValue("description")} rows={3} maxLength={400} placeholder="Explique quando o item deve ser usado, sem apagar versões anteriores." /></label>
+                  <div className="health-form-grid"><label>Início da vigência *<input name="validFrom" type="date" defaultValue={editingValue("validFrom", new Date().toISOString().slice(0, 10))} required /></label><label>Fim da vigência<input name="validTo" type="date" defaultValue={editingValue("validTo")} /></label></div>
+                  <p className="health-form-note"><Archive size={13} /> Editar um item cria uma nova versão e mantém o histórico anterior. Exclusão não é permitida.</p>
+                </>
+              )}
+              {modal.kind !== "catalog" && (
+                <div className="health-form-grid"><label>Início da vigência<input name="validFrom" type="date" defaultValue={editingValue("validFrom", new Date().toISOString().slice(0, 10))} /></label><label>Fim da vigência<input name="validTo" type="date" defaultValue={editingValue("validTo")} /></label></div>
+              )}
               {modal.id && (
                 <label className="health-active-check">
                   <input
@@ -1488,7 +1559,9 @@ function EntityList({
         ? dataset.teams
         : kind === "professional"
           ? dataset.professionals
-          : dataset.areas;
+          : kind === "area"
+            ? dataset.areas
+            : dataset.catalogs;
   const query = search.trim().toLocaleLowerCase("pt-BR");
   const filtered = data.filter((item) => {
     if (!includeInactive && !item.active) return false;
@@ -1563,6 +1636,8 @@ function EntityList({
                     <th>Situação</th>
                     <th>Ações</th>
                   </>
+                ) : kind === "catalog" ? (
+                  <><th>Catálogo</th><th>Domínio</th><th>Vigência/versão</th><th>Histórico</th><th>Situação</th><th>Ações</th></>
                 ) : (
                   <>
                     <th>Área de atuação</th>
@@ -1585,6 +1660,7 @@ function EntityList({
                         <small>
                           {(item as HealthUnit).kind} · {item.id}
                         </small>
+                        <small>Vigência: {(item as HealthUnit).validFrom ?? "não informada"}{item.validTo ? ` até ${item.validTo}` : " em aberto"}</small>
                       </td>
                       <td>
                         {(item as HealthUnit).address}
@@ -1621,6 +1697,8 @@ function EntityList({
                           {(item as HealthTeam).code} ·{" "}
                           {(item as HealthTeam).model}
                         </small>
+                        <small>Vigência: {(item as HealthTeam).validFrom ?? "não informada"} · composição histórica: {(item as HealthTeam).compositionHistory?.length ?? 0} evento(s)</small>
+                        {(item as HealthTeam).compositionHistory?.length ? <details className="health-inline-history"><summary>Ver composição</summary>{(item as HealthTeam).compositionHistory?.map((event) => <span key={event.id}>{event.validFrom} · {event.action} · {event.role}</span>)}</details> : null}
                       </td>
                       <td>
                         {getUnit((item as HealthTeam).unitId)?.name ??
@@ -1666,6 +1744,7 @@ function EntityList({
                         <small>
                           {(item as HealthProfessional).registration}
                         </small>
+                        <small>Vigência: {(item as HealthProfessional).validFrom ?? "não informada"} · histórico: {(item as HealthProfessional).history?.length ?? 0} evento(s)</small>
                       </td>
                       <td>
                         {getTeam((item as HealthProfessional).teamId)?.code ??
@@ -1693,6 +1772,16 @@ function EntityList({
                       </td>
                     </>
                   )}
+                  {kind === "catalog" && (
+                    <>
+                      <td><strong>{(item as HealthCatalog).label}</strong><small>{(item as HealthCatalog).code} · {(item as HealthCatalog).id}</small></td>
+                      <td>{(item as HealthCatalog).domain}<small>{(item as HealthCatalog).description ?? "Sem descrição"}</small></td>
+                      <td>{(item as HealthCatalog).validFrom} {item.validTo ? `até ${item.validTo}` : "em aberto"}<small>versão {(item as HealthCatalog).version}</small></td>
+                      <td><strong>{(item as HealthCatalog).history.length}</strong><small>eventos auditáveis</small></td>
+                      <td><StatusChip active={item.active} /></td>
+                      <td><RowActions onMap={() => undefined} onEdit={() => onEdit(item.id)} onToggle={() => onToggle(kind, item.id)} active={item.active} /></td>
+                    </>
+                  )}
                   {kind === "area" && (
                     <>
                       <td>
@@ -1700,6 +1789,7 @@ function EntityList({
                         <small>
                           {(item as ServiceArea).code} · {item.id}
                         </small>
+                        <small>Vigência: {(item as ServiceArea).validFrom ?? "não informada"} · histórico: {(item as ServiceArea).history?.length ?? 0} evento(s)</small>
                       </td>
                       <td>
                         {getTeam((item as ServiceArea).teamId)?.name ??
