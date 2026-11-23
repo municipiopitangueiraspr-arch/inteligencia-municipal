@@ -17,6 +17,30 @@ export type HealthServiceStatus =
   | "Não compareceu"
   | "Cancelado";
 
+export type HealthCompetenceStatus =
+  | "Rascunho"
+  | "Aguardando revisão"
+  | "Validado"
+  | "Fechado"
+  | "Reaberto";
+
+export type HealthAttendanceCharacter = "Programado" | "Demanda espontânea" | "Urgência";
+
+export type HealthProcedure = {
+  id: string;
+  name: string;
+  quantity: number;
+  result?: string;
+};
+
+export type HealthDentalDetails = {
+  reason: string;
+  procedure: string;
+  toothOrRegion?: string;
+  urgency: "Não" | "Sim";
+  guidance?: string;
+};
+
 export type HealthAttendanceModality =
   | "Consulta programada"
   | "Demanda espontânea"
@@ -96,11 +120,16 @@ export type HealthServiceRecord = {
   date: string;
   time: string;
   competence: string;
+  competenceStatus?: HealthCompetenceStatus;
   modality: HealthAttendanceModality;
+  character?: HealthAttendanceCharacter;
   serviceType: string;
   status: HealthServiceStatus;
   reason: string;
   conditionOrFollowUp: string;
+  conditions?: string[];
+  procedures?: HealthProcedure[];
+  dentalDetails?: HealthDentalDetails;
   outcome: HealthAttendanceOutcome;
   careSummary: string;
   referral: string;

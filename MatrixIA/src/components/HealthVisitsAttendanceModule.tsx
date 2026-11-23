@@ -20,6 +20,10 @@ import type {
   HealthActivitiesDataset,
   HealthAttendanceModality,
   HealthAttendanceOutcome,
+  HealthAttendanceCharacter,
+  HealthCompetenceStatus,
+  HealthProcedure,
+  HealthDentalDetails,
   HealthServiceRecord,
   HealthServiceStatus,
   HomeVisitKind,
@@ -37,6 +41,7 @@ type ModuleView =
   | "overview"
   | "visits"
   | "attendance"
+  | "competence"
   | "collective"
   | "food-markers"
   | "new-visit"
@@ -117,11 +122,16 @@ const attendanceOutcomes: HealthAttendanceOutcome[] = [
   "Alta do acompanhamento",
   "Não concluído",
 ];
+const attendanceCharacters: HealthAttendanceCharacter[] = ["Programado", "Demanda espontânea", "Urgência"];
+const competenceStatuses: HealthCompetenceStatus[] = ["Rascunho", "Aguardando revisão", "Validado", "Fechado", "Reaberto"];
+const procedureCatalog = ["Aferição de pressão arterial", "Aferição de glicemia capilar", "Curativo", "Administração de medicamento", "Coleta de material", "Avaliação antropométrica"];
 
 const localDate = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
+
+const todayMonth = () => localDate().slice(0, 7);
 
 const formatDate = (value?: string) => {
   if (!value) return "—";
@@ -226,6 +236,7 @@ export default function HealthVisitsAttendanceModule({
   const [search, setSearch] = useState("");
   const [visitStatusFilter, setVisitStatusFilter] = useState("Todas as situações");
   const [careStatusFilter, setCareStatusFilter] = useState("Todas as situações");
+  const [competenceFilter, setCompetenceFilter] = useState(() => todayMonth());
   const [formError, setFormError] = useState("");
   const [statusDraft, setStatusDraft] = useState<ActivityStatus>("Programada");
   const [statusFollowUpDate, setStatusFollowUpDate] = useState("");
@@ -241,6 +252,7 @@ export default function HealthVisitsAttendanceModule({
   const [visitPersonId, setVisitPersonId] = useState("");
   const [visitProfessionalId, setVisitProfessionalId] = useState("");
   const [careProfessionalId, setCareProfessionalId] = useState("");
+  const [attendanceServiceType, setAttendanceServiceType] = useState("");
 
   const today = localDate();
   const isSecretary = mode === "secretary";
@@ -405,6 +417,11 @@ export default function HealthVisitsAttendanceModule({
       ),
     )
     .slice(0, 5);
+  const competenceRecords = dataset.serviceRecords.filter((record) => record.competence === competenceFilter);
+  const competencePending = competenceRecords.filter((record) => {
+    const missing = !record.personId || !record.unitId || !record.teamId || !record.professionalId || !record.date || !record.serviceType || !record.reason || !record.conditionOrFollowUp;
+    return missing || (record.status === "Realizado" && !record.careSummary) || !record.competenceStatus || record.competenceStatus === "Rascunho" || record.competenceStatus === "Reaberto";
+  });
 
   const selectedVisit =
     selectedRecord?.kind === "visit"
@@ -426,6 +443,7 @@ export default function HealthVisitsAttendanceModule({
 
   const startNewAttendance = () => {
     setFormError("");
+    setAttendanceServiceType("");
     setView("new-attendance");
   };
 
@@ -574,6 +592,7 @@ export default function HealthVisitsAttendanceModule({
     );
     const serviceType = String(values.get("serviceType") ?? "").trim();
     const competence = String(values.get("competence") ?? "").trim();
+    const character = String(values.get("character") ?? "Programado") as HealthAttendanceCharacter;
     const modality = String(values.get("modality") ?? "Consulta programada") as HealthAttendanceModality;
     const date = String(values.get("date") ?? "");
     const time = String(values.get("time") ?? "");
@@ -584,6 +603,12 @@ export default function HealthVisitsAttendanceModule({
     const careSummary = String(values.get("careSummary") ?? "").trim();
     const referral = String(values.get("referral") ?? "").trim();
     const followUpDate = String(values.get("followUpDate") ?? "");
+    const conditions = String(values.get("conditions") ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+    const procedures: HealthProcedure[] = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="procedure"]:checked')).map((input, index) => ({ id: `SIM-PROC-${Date.now()}-${index}`, name: input.value, quantity: 1 }));
+    const dentalDetails: HealthDentalDetails | undefined = serviceType === "Atendimento odontológico"
+      ? { reason: String(values.get("dentalReason") ?? "").trim(), procedure: String(values.get("dentalProcedure") ?? "").trim(), toothOrRegion: String(values.get("toothOrRegion") ?? "").trim(), urgency: String(values.get("dentalUrgency") ?? "Não") as "Não" | "Sim", guidance: String(values.get("dentalGuidance") ?? "").trim() }
+      : undefined;
+    const competenceStatus: HealthCompetenceStatus = status === "Realizado" ? "Aguardando revisão" : "Rascunho";
 
     if (
       !peopleRegistry.people.some(
@@ -608,6 +633,10 @@ export default function HealthVisitsAttendanceModule({
       setFormError("Informe um resumo da atividade para marcar como realizado.");
       return;
     }
+    if (serviceType === "Atendimento odontológico" && (!dentalDetails?.reason || !dentalDetails.procedure)) {
+      setFormError("Para atendimento odontológico, informe o motivo e o procedimento odontológico.");
+      return;
+    }
 
     const nextNumber = dataset.serviceRecords.length + 1;
     const id = `SIM-ATD-${String(nextNumber).padStart(3, "0")}`;
@@ -620,11 +649,16 @@ export default function HealthVisitsAttendanceModule({
       date,
       time,
       competence,
+      competenceStatus,
       modality,
+      character,
       serviceType,
       status,
       reason,
       conditionOrFollowUp,
+      conditions,
+      procedures,
+      dentalDetails,
       outcome,
       careSummary,
       referral,
@@ -903,6 +937,12 @@ export default function HealthVisitsAttendanceModule({
             <span>{visibleCareRecords.length}</span>
           </button>
         )}
+        {isSecretary && focus !== "visits" && (
+          <button className={view === "competence" ? "active" : ""} onClick={() => setView("competence")}>
+            <ClipboardList size={15} /> Revisão e fechamento
+            <span>{competencePending.length}</span>
+          </button>
+        )}
         {canShowCollective && (
           <button
             className={view === "collective" || view === "new-collective" ? "active" : ""}
@@ -1025,6 +1065,34 @@ export default function HealthVisitsAttendanceModule({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {view === "competence" && (
+        <div className="health-activity-view">
+          <div className="health-activity-toolbar">
+            <div>
+              <span className="health-activity-eyebrow">CONTROLE DA PRODUÇÃO</span>
+              <h3>Revisão e fechamento da competência</h3>
+              <p>Confira os atendimentos do mês, corrija pendências e avance o estado sem apagar o histórico do evento.</p>
+            </div>
+            <label className="health-competence-picker">Competência<input type="month" value={competenceFilter} onChange={(event) => setCompetenceFilter(event.target.value)} /></label>
+          </div>
+          <div className="health-activity-metric-grid">
+            <article className="health-activity-metric metric-blue"><span>Eventos na competência</span><strong>{competenceRecords.length}</strong><small>atendimentos individuais</small></article>
+            <article className="health-activity-metric metric-amber"><span>Aguardando revisão</span><strong>{competencePending.length}</strong><small>campos ou estado pendente</small></article>
+            <article className="health-activity-metric metric-green"><span>Validados</span><strong>{competenceRecords.filter((record) => record.competenceStatus === "Validado" || record.competenceStatus === "Fechado").length}</strong><small>prontos para fechamento</small></article>
+            <article className="health-activity-metric metric-red"><span>Realizados sem resumo</span><strong>{competenceRecords.filter((record) => record.status === "Realizado" && !record.careSummary).length}</strong><small>pendência obrigatória</small></article>
+          </div>
+          <div className="health-competence-list">
+            {competenceRecords.map((record) => {
+              const recordStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
+              const missing = [!record.personId && "pessoa", !record.unitId && "unidade", !record.professionalId && "profissional", !record.serviceType && "tipo", !record.reason && "motivo", record.status === "Realizado" && !record.careSummary && "resumo"].filter(Boolean) as string[];
+              return <article className="health-competence-row" key={record.id}><div><strong>{record.id} · {record.serviceType}</strong><small>{getPersonName(peopleRegistry, record.personId)} · {formatDate(record.date)} · {unitName(healthTerritory, record.unitId)}</small>{missing.length > 0 && <span className="health-competence-warning">Pendências: {missing.join(", ")}</span>}</div><span className={`health-status-chip tone-${recordStatus === "Validado" || recordStatus === "Fechado" ? "positive" : recordStatus === "Rascunho" ? "negative" : "warning"}`}>{recordStatus}</span><select value={recordStatus} onChange={(event) => { const next = event.target.value as HealthCompetenceStatus; onChange((current) => ({ ...current, serviceRecords: current.serviceRecords.map((item) => item.id === record.id ? { ...item, competenceStatus: next, history: [...item.history, { date: new Date().toISOString(), action: "Competência atualizada", detail: `Estado alterado para ${next}.` }] } : item) })); }} aria-label={`Estado da competência de ${record.id}`}>{competenceStatuses.map((status) => <option key={status}>{status}</option>)}</select><button className="health-action-secondary" onClick={() => openAttendance(record)}>Abrir atendimento</button></article>;
+            })}
+            {!competenceRecords.length && <div className="health-activity-empty"><ClipboardList size={20} /><strong>Nenhum atendimento nesta competência</strong><span>Escolha outro mês ou registre um novo atendimento.</span></div>}
+          </div>
+          <div className="health-demo-note" role="note"><AlertCircle size={17} /><p><strong>Regra demonstrativa.</strong> Fechar uma competência não exclui eventos; alterações posteriores devem ser registradas como reabertura ou retificação com histórico.</p></div>
         </div>
       )}
 
@@ -1447,7 +1515,7 @@ export default function HealthVisitsAttendanceModule({
             </label>
             <label>
               Tipo de atendimento
-              <select name="serviceType" required defaultValue="">
+              <select name="serviceType" required value={attendanceServiceType} onChange={(event) => setAttendanceServiceType(event.target.value)}>
                 <option value="" disabled>Selecione o serviço</option>
                 {serviceTypes.map((service) => <option key={service}>{service}</option>)}
               </select>
@@ -1456,6 +1524,12 @@ export default function HealthVisitsAttendanceModule({
               Modalidade
               <select name="modality" defaultValue="Consulta programada" required>
                 {attendanceModalities.map((modality) => <option key={modality}>{modality}</option>)}
+              </select>
+            </label>
+            <label>
+              Caráter do atendimento
+              <select name="character" defaultValue="Programado" required>
+                {attendanceCharacters.map((character) => <option key={character}>{character}</option>)}
               </select>
             </label>
             <label>
@@ -1501,6 +1575,10 @@ export default function HealthVisitsAttendanceModule({
               <input name="conditionOrFollowUp" maxLength={240} placeholder="Ex.: cuidado programado ou acompanhamento longitudinal" required />
             </label>
             <label>
+              Problemas ou condições acompanhados
+              <input name="conditions" maxLength={300} placeholder="Separe por vírgula, se houver mais de um" />
+            </label>
+            <label>
               Desfecho previsto/registrado
               <select name="outcome" defaultValue="Acompanhamento mantido" required>
                 {attendanceOutcomes.map((outcome) => <option key={outcome}>{outcome}</option>)}
@@ -1510,6 +1588,24 @@ export default function HealthVisitsAttendanceModule({
               Resumo da atividade/conduta (preencher ao concluir)
               <textarea name="careSummary" rows={3} maxLength={800} placeholder="Resumo fictício, sem substituir a documentação clínica oficial." />
             </label>
+            <fieldset className="health-form-fieldset health-form-wide">
+              <legend>Procedimentos realizados</legend>
+              <p className="health-field-hint">Selecione os procedimentos vinculados a este atendimento. Eles serão contabilizados separadamente.</p>
+              <div className="health-checkbox-grid">
+                {procedureCatalog.map((procedure) => <label key={procedure} className="health-checkbox"><input type="checkbox" name="procedure" value={procedure} /> <span>{procedure}</span></label>)}
+              </div>
+            </fieldset>
+            {attendanceServiceType === "Atendimento odontológico" && <fieldset className="health-form-fieldset health-form-wide">
+              <legend>Detalhamento odontológico, quando aplicável</legend>
+              <p className="health-field-hint">Ative o tipo “Atendimento odontológico” para preencher esta seção.</p>
+              <div className="health-form-subgrid">
+                <label>Motivo odontológico<input name="dentalReason" maxLength={180} placeholder="Ex.: avaliação, dor ou retorno" /></label>
+                <label>Procedimento odontológico<input name="dentalProcedure" maxLength={180} placeholder="Ex.: avaliação, restauração ou limpeza" /></label>
+                <label>Dente ou região<input name="toothOrRegion" maxLength={100} placeholder="Opcional" /></label>
+                <label>Urgência<select name="dentalUrgency" defaultValue="Não"><option>Não</option><option>Sim</option></select></label>
+              </div>
+              <label>Orientação ou próximo passo<input name="dentalGuidance" maxLength={240} placeholder="Opcional" /></label>
+            </fieldset>}
             <label>
               Encaminhamento ou próximo passo (opcional)
               <input name="referral" maxLength={300} placeholder="Ex.: retorno ou avaliação por outra equipe" />
@@ -1565,7 +1661,12 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field"><span>Profissional</span><strong>{professionalName(healthTerritory, selectedAttendance.professionalId)}</strong></div>
                 <div className="health-detail-field"><span>Equipe</span><strong>{teamName(healthTerritory, selectedAttendance.teamId)}</strong></div>
                 <div className="health-detail-field"><span>Unidade</span><strong>{unitName(healthTerritory, selectedAttendance.unitId)}</strong></div>
+                <div className="health-detail-field"><span>Competência / revisão</span><strong>{selectedAttendance.competence} · {selectedAttendance.competenceStatus ?? (selectedAttendance.status === "Realizado" ? "Aguardando revisão" : "Rascunho")}</strong></div>
+                <div className="health-detail-field"><span>Caráter / modalidade</span><strong>{selectedAttendance.character ?? "Programado"} · {selectedAttendance.modality}</strong></div>
                 <div className="health-detail-field health-detail-wide"><span>Motivo / objetivo</span><p>{selectedAttendance.reason}</p></div>
+                <div className="health-detail-field health-detail-wide"><span>Condições acompanhadas</span><p>{selectedAttendance.conditions?.join(", ") || selectedAttendance.conditionOrFollowUp}</p></div>
+                <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.length ? selectedAttendance.procedures.map((procedure) => `${procedure.name} (${procedure.quantity})`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
+                {selectedAttendance.dentalDetails && <div className="health-detail-field health-detail-wide"><span>Detalhamento odontológico</span><p>{selectedAttendance.dentalDetails.reason} · {selectedAttendance.dentalDetails.procedure}{selectedAttendance.dentalDetails.toothOrRegion ? ` · ${selectedAttendance.dentalDetails.toothOrRegion}` : ""}</p></div>}
                 <div className="health-detail-field health-detail-wide"><span>Resumo do atendimento</span><p>{selectedAttendance.careSummary || "Sem resumo clínico demonstrativo registrado."}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Encaminhamento ou próximo passo</span><p>{selectedAttendance.referral || "Nenhum encaminhamento registrado."}</p></div>
                 <div className="health-detail-field"><span>Acompanhamento previsto</span><strong>{formatDate(selectedAttendance.followUpDate)}</strong></div>
