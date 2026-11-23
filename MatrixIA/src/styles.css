@@ -4877,3 +4877,153 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* Hall de secretarias: navegação principal sem menu lateral. */
+.workspace-shell {
+  display: block;
+  min-height: 100vh;
+  background: #f3f7fb;
+}
+.workspace-sidebar { display: none; }
+.workspace-main { min-height: 100vh; }
+.workspace-topbar {
+  position: sticky;
+  height: 76px;
+  padding: 0 clamp(18px, 4vw, 64px);
+  gap: 24px;
+  box-shadow: 0 2px 14px rgb(24 67 105 / 7%);
+}
+.workspace-brand { padding: 0; flex: none; }
+.workspace-brand .brand-mark { transform: scale(.9); transform-origin: left center; }
+.workspace-header-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-right: auto;
+  color: #8092a3;
+  font-size: 11px;
+}
+.workspace-header-context strong { color: #1d4e7d; font-weight: 800; }
+.header-persona-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #687f92;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.header-persona-picker select {
+  height: 31px;
+  padding: 0 26px 0 8px;
+  border: 1px solid #d4e0eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #1b4c79;
+  font-size: 10px;
+}
+.workspace-content { max-width: 1440px; padding-top: 42px; }
+.secretariat-hall { padding-bottom: 42px; }
+.secretariat-hall-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+.secretariat-hall-heading h1 {
+  margin: 8px 0 6px;
+  color: #173f68;
+  font: 800 clamp(25px, 3vw, 34px)/1.1 Manrope, sans-serif;
+  letter-spacing: -1px;
+}
+.secretariat-hall-heading p { margin: 0; color: #647d90; font-size: 12px; }
+.secretariat-hall-count {
+  padding: 9px 12px;
+  border: 1px solid #cfdfec;
+  border-radius: 999px;
+  background: #fff;
+  color: #2c6799;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.secretariat-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+.secretariat-card {
+  position: relative;
+  display: flex;
+  min-height: 218px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 25px 16px 18px;
+  overflow: hidden;
+  border: 1px solid #d9e5ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 7px 18px rgb(35 79 117 / 7%);
+  color: #1d456c;
+  text-align: center;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.secretariat-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 6px;
+  background: var(--secretariat-accent);
+  content: "";
+}
+.secretariat-card:hover { transform: translateY(-5px); border-color: var(--secretariat-accent); box-shadow: 0 15px 26px rgb(35 79 117 / 14%); }
+.secretariat-card:focus-visible { outline: 3px solid #79b9e7; outline-offset: 3px; }
+.secretariat-card-icon {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  margin: 8px 0 17px;
+  border-radius: 24px;
+  background: var(--secretariat-soft);
+  color: var(--secretariat-accent);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%), 0 8px 14px rgb(40 79 112 / 10%);
+}
+.secretariat-card-icon svg { width: 42px; height: 42px; stroke-width: 1.8; }
+.secretariat-card-name { max-width: 180px; color: #21496f; font-size: 13px; font-weight: 800; line-height: 1.25; }
+.secretariat-card-description { margin-top: 5px; color: #8093a4; font-size: 10px; }
+.secretariat-card-status { display: inline-flex; align-items: center; gap: 5px; margin-top: auto; color: #6b8292; font-size: 9px; font-weight: 700; }
+.secretariat-card-status i { width: 7px; height: 7px; border-radius: 50%; background: #58b47e; }
+.secretariat-card-status.status-attention i { background: #eca839; }
+.secretariat-card-status.status-critical i { background: #db6268; }
+.secretariat-card-arrow { position: absolute; right: 14px; bottom: 16px; color: var(--secretariat-accent); opacity: .7; }
+.secretariat-card-blue { --secretariat-accent: #2372bd; --secretariat-soft: #e8f2fc; }
+.secretariat-card-green { --secretariat-accent: #278d68; --secretariat-soft: #e7f7ef; }
+.secretariat-card-rose { --secretariat-accent: #c14f75; --secretariat-soft: #fceaf1; }
+.secretariat-card-purple { --secretariat-accent: #7b54ba; --secretariat-soft: #f0ebfb; }
+.secretariat-card-orange { --secretariat-accent: #d77b29; --secretariat-soft: #fff0df; }
+.secretariat-card-indigo { --secretariat-accent: #5367c7; --secretariat-soft: #ebedff; }
+.secretariat-card-lime { --secretariat-accent: #719d35; --secretariat-soft: #eef7df; }
+.secretariat-card-slate { --secretariat-accent: #60798e; --secretariat-soft: #edf2f6; }
+.secretariat-card-cyan { --secretariat-accent: #2b9caf; --secretariat-soft: #e6f7fa; }
+.secretariat-card-red { --secretariat-accent: #d45155; --secretariat-soft: #ffebeb; }
+@media (max-width: 1100px) {
+  .secretariat-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .workspace-topbar { height: auto; min-height: 72px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+  .workspace-header-context { order: 3; flex-basis: 100%; }
+  .workspace-top-actions { margin-left: auto; }
+  .secretariat-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .workspace-topbar { gap: 10px; }
+  .workspace-brand .brand-text small { font-size: 7px; }
+  .workspace-sim-chip { display: none; }
+  .secretariat-hall-heading { display: block; }
+  .secretariat-hall-count { display: inline-block; margin-top: 16px; }
+  .secretariat-card-grid { grid-template-columns: 1fr; }
+  .secretariat-card { min-height: 190px; }
+}

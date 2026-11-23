@@ -17,11 +17,19 @@ import {
   ClipboardPlus,
   Clock3,
   ClipboardList,
+  BriefcaseBusiness,
+  Dumbbell,
   FilePlus2,
+  GraduationCap,
+  HeartPulse,
+  Landmark,
   LogOut,
   MapPinned,
   MapPin,
+  Palette,
   ShieldCheck,
+  Sprout,
+  Wrench,
   UsersRound,
 } from "lucide-react";
 import {
@@ -606,6 +614,54 @@ function HealthCatalogCard({ kind, title, description, onOpen, action = "Abrir" 
   );
 }
 
+const departmentVisuals: Record<string, { color: string; icon: ReactNode }> = {
+  "Administração e Finanças": { color: "blue", icon: <Landmark /> },
+  "Agricultura e Meio Ambiente": { color: "green", icon: <Sprout /> },
+  "Assistência Social": { color: "rose", icon: <UsersRound /> },
+  "Cultura e Turismo": { color: "purple", icon: <Palette /> },
+  "Desenvolvimento Econômico": { color: "orange", icon: <BriefcaseBusiness /> },
+  Educação: { color: "indigo", icon: <GraduationCap /> },
+  "Esporte e Lazer": { color: "lime", icon: <Dumbbell /> },
+  Obras: { color: "slate", icon: <Wrench /> },
+  "Planejamento e Urbanismo": { color: "cyan", icon: <MapPinned /> },
+  "Saúde e Vigilância Sanitária": { color: "red", icon: <HeartPulse /> },
+};
+
+function SecretariatHall({
+  departmentsWithRequestCounts,
+  onOpen,
+}: {
+  departmentsWithRequestCounts: Department[];
+  onOpen: (department: Department) => void;
+}) {
+  return (
+    <section className="secretariat-hall">
+      <div className="secretariat-hall-heading">
+        <div>
+          <span className="workspace-page-kicker"><Building2 size={14} /> PAINEL DE ACESSO</span>
+          <h1>Secretarias municipais</h1>
+          <p>Escolha uma secretaria para acessar seus módulos, fluxos e registros demonstrativos.</p>
+        </div>
+        <span className="secretariat-hall-count">{departmentsWithRequestCounts.length} áreas conectadas</span>
+      </div>
+      <div className="secretariat-card-grid">
+        {departmentsWithRequestCounts.map((department) => {
+          const visual = departmentVisuals[department.name] ?? { color: "blue", icon: <Building2 /> };
+          return (
+            <button type="button" className={`secretariat-card secretariat-card-${visual.color}`} key={department.name} onClick={() => onOpen(department)}>
+              <span className="secretariat-card-icon">{visual.icon}</span>
+              <span className="secretariat-card-name">{department.shortName}</span>
+              <span className="secretariat-card-description">{department.area}</span>
+              <span className={`secretariat-card-status status-${department.status === "Em dia" ? "ok" : department.status === "Atenção" ? "attention" : "critical"}`}><i /> {department.status}</span>
+              <ArrowRight className="secretariat-card-arrow" size={18} />
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function OperationalWorkspace({
   experience,
   requests,
@@ -643,6 +699,7 @@ export default function OperationalWorkspace({
     operatorPersonas.find((persona) => persona.id === "school")!,
   );
   const [generalRegistryOpen, setGeneralRegistryOpen] = useState(false);
+  const [secretariatHallOpen, setSecretariatHallOpen] = useState(true);
   const [activeSecretaryTab, setActiveSecretaryTab] = useState<
     | "overview"
     | "services"
@@ -1044,140 +1101,37 @@ export default function OperationalWorkspace({
 
   return (
     <main className="workspace-shell">
-      <aside className="workspace-sidebar">
-        <div className="access-brand-lockup workspace-brand">
-          <div className="brand-mark" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="brand-text">
-            <strong>
-              Matrix<span>IA</span>
-            </strong>
-            <small>INTELIGÊNCIA MUNICIPAL</small>
-          </div>
-        </div>
-        <div className="workspace-municipality">
-          <Building2 size={16} />
-          <span>
-            <strong>Pitangueiras</strong>
-            <small>Paraná · cenário simulado</small>
-          </span>
-        </div>
-        {isSecretary ? (
-          <>
-            <div className="workspace-side-label">MINHA SECRETARIA</div>
-            <div className="workspace-department-list">
-              {departments.map((department) => (
-                <button
-                  key={department.name}
-                  className={
-                    selectedDepartment.name === department.name
-                      ? "selected"
-                      : ""
-                  }
-                  onClick={() => {
-                    setGeneralRegistryOpen(false);
-                    setSelectedDepartment(department);
-                    setActiveSecretaryTab(
-                      department.name === "Saúde e Vigilância Sanitária"
-                        ? "services"
-                        : "overview",
-                    );
-                  }}
-                >
-                  <span
-                    className={`workspace-dot workspace-dot-${department.status === "Em dia" ? "green" : department.status === "Atenção" ? "amber" : "red"}`}
-                  />
-                  {department.shortName}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="workspace-side-label">MEU ESPAÇO DE TRABALHO</div>
-            <div className="workspace-role-badge">
-              <Activity size={15} /> Operação municipal
-            </div>
-            <div className="workspace-module-list">
-              {selectedPersona.modules.map((module) => (
-                <span key={module}>{module}</span>
-              ))}
-            </div>
-            <label className="persona-picker-label" htmlFor="persona-picker">
-              Simular como
-            </label>
-            <select
-              id="persona-picker"
-              className="persona-picker"
-              value={selectedPersona.id}
-              onChange={(event) => {
-                setSelectedPersona(
-                  operatorPersonas.find(
-                    (persona) => persona.id === event.target.value,
-                  )!,
-                );
-                setHealthWorkflowOpen(false);
-                setHealthReferralOpen(false);
-                setHealthDiagnosticsOpen(false);
-                setHealthSanitaryOpen(false);
-                setHealthMaternalOpen(false);
-                setHealthChildOpen(false);
-                setMaternalInitialFollowUpId(undefined);
-                setChildInitialMaternalFollowUpId(undefined);
-                setChildInitialPendingId(undefined);
-                setReferralSourceServiceId(undefined);
-                setDiagnosticsSourceServiceId(undefined);
-                setDiagnosticsSourceReferralId(undefined);
-              }}
-            >
-              {operatorPersonas.map((persona) => (
-                <option value={persona.id} key={persona.id}>
-                  {persona.label}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <div className="workspace-sidebar-bottom">
-          <div className="workspace-demo-note">
-            <Check size={14} />
-            <span>
-              Dados e registros fictícios
-              <br />
-              alterações ficam nesta sessão
-            </span>
-          </div>
-          <button className="workspace-signout" onClick={onSwitchExperience}>
-            <LogOut size={15} /> Trocar experiência
-          </button>
-        </div>
-      </aside>
-
       <section className="workspace-main">
         <header className="workspace-topbar">
-          <div className="workspace-breadcrumb">
-            <span>Município</span>
-            <ArrowRight size={13} />
-            <strong>
-              {generalRegistryOpen
-                ? "Cadastro Geral"
-                : isSecretary
-                  ? selectedDepartment.shortName
-                  : "Meu trabalho"}
-            </strong>
+          <div className="access-brand-lockup workspace-brand">
+            <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
+            <div className="brand-text"><strong>Matrix<span>IA</span></strong><small>INTELIGÊNCIA MUNICIPAL</small></div>
+          </div>
+          <div className="workspace-header-context">
+            <span>Área de trabalho</span><ArrowRight size={13} />
+            <strong>{secretariatHallOpen && isSecretary ? "Secretarias" : generalRegistryOpen ? "Cadastro Geral" : isSecretary ? selectedDepartment.shortName : "Meu trabalho"}</strong>
           </div>
           <div className="workspace-top-actions">
             <span className="workspace-sim-chip">DEMONSTRAÇÃO FICTÍCIA</span>
-            <button onClick={onSwitchExperience}>
-              <LogOut size={15} /> Sair da visão
-            </button>
+            {!secretariatHallOpen && isSecretary && <button onClick={() => { setGeneralRegistryOpen(false); setSecretariatHallOpen(true); }}><Building2 size={15} /> Secretarias</button>}
+            {!isSecretary && <label className="header-persona-picker">Perfil <select value={selectedPersona.id} onChange={(event) => { setSelectedPersona(operatorPersonas.find((persona) => persona.id === event.target.value)!); setHealthWorkflowOpen(false); setHealthReferralOpen(false); setHealthDiagnosticsOpen(false); setHealthSanitaryOpen(false); setHealthMaternalOpen(false); setHealthChildOpen(false); }} >{operatorPersonas.map((persona) => <option value={persona.id} key={persona.id}>{persona.label}</option>)}</select></label>}
+            <button onClick={onSwitchExperience}><LogOut size={15} /> Sair</button>
           </div>
         </header>
 
-        {generalRegistryOpen ? (
+        {secretariatHallOpen && isSecretary ? (
+          <div className="workspace-content">
+            <SecretariatHall
+              departmentsWithRequestCounts={departments}
+              onOpen={(department) => {
+                setGeneralRegistryOpen(false);
+                setSelectedDepartment(department);
+                setSecretariatHallOpen(false);
+                setActiveSecretaryTab(department.name === "Saúde e Vigilância Sanitária" ? "services" : "overview");
+              }}
+            />
+          </div>
+        ) : generalRegistryOpen ? (
           <div className="workspace-content">
             <PeopleFamiliesDomicilesModule
               dataset={peopleRegistry}
