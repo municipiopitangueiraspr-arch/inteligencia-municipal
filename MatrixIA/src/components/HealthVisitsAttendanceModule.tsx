@@ -31,6 +31,7 @@ import type { PeopleRegistryDataset, RegistryHousehold } from "../data/peopleReg
 import "./HealthVisitsAttendanceModule.css";
 
 export type HealthOperatorPersona = "acs" | "ace" | "ubs";
+export type HealthActivityFocus = "all" | "visits" | "attendance";
 type ModuleMode = "secretary" | "operator";
 type ModuleView =
   | "overview"
@@ -48,8 +49,9 @@ type SelectedRecord =
   | { kind: "attendance"; id: string };
 type ActivityStatus = HomeVisitStatus | HealthServiceStatus;
 
-type HealthVisitsAttendanceModuleProps = {
+export type HealthVisitsAttendanceModuleProps = {
   mode: ModuleMode;
+  focus?: HealthActivityFocus;
   personaId?: HealthOperatorPersona;
   dataset: HealthActivitiesDataset;
   peopleRegistry: PeopleRegistryDataset;
@@ -197,6 +199,7 @@ const eventDateTime = (date: string, time: string) => `${date}T${time}:00`;
 
 export default function HealthVisitsAttendanceModule({
   mode,
+  focus = "all",
   personaId,
   dataset,
   peopleRegistry,
@@ -207,11 +210,15 @@ export default function HealthVisitsAttendanceModule({
   onBack,
 }: HealthVisitsAttendanceModuleProps) {
   const initialView: ModuleView =
-    mode === "secretary"
-      ? "overview"
-      : personaId === "ubs"
+    focus === "visits"
+      ? "visits"
+      : focus === "attendance"
         ? "attendance"
-        : "visits";
+        : mode === "secretary"
+          ? "overview"
+          : personaId === "ubs"
+            ? "attendance"
+            : "visits";
   const [view, setView] = useState<ModuleView>(initialView);
   const [selectedRecord, setSelectedRecord] = useState<SelectedRecord | null>(
     null,
@@ -237,8 +244,11 @@ export default function HealthVisitsAttendanceModule({
 
   const today = localDate();
   const isSecretary = mode === "secretary";
-  const canCreateVisits = isSecretary || personaId === "acs" || personaId === "ace";
-  const canCreateAttendance = isSecretary || personaId === "ubs";
+  const canCreateVisits =
+    focus !== "attendance" &&
+    (isSecretary || personaId === "acs" || personaId === "ace");
+  const canCreateAttendance =
+    focus !== "visits" && (isSecretary || personaId === "ubs");
   const kindForPersona: HomeVisitKind | undefined =
     personaId === "acs" ? "ACS" : personaId === "ace" ? "ACE" : undefined;
 
@@ -371,6 +381,7 @@ export default function HealthVisitsAttendanceModule({
       record.status === "Não compareceu" || record.status === "Cancelado",
   );
   const canCreateApsRecords = isSecretary || personaId === "ubs";
+  const canShowCollective = focus !== "visits" && canCreateApsRecords;
   const completedProduction = visibleCareRecords.filter(
     (record) => record.status === "Realizado",
   ).length;
@@ -831,10 +842,19 @@ export default function HealthVisitsAttendanceModule({
           <span className="health-activities-eyebrow">
             SAÚDE · ROTINA OPERACIONAL
           </span>
-          <h2>Visitas e atendimentos</h2>
+          <h2>
+            {focus === "visits"
+              ? "Visitas e ações no território"
+              : focus === "attendance"
+                ? "Atendimentos e produção assistencial"
+                : "Visitas e atendimentos"}
+          </h2>
           <p>
-            Registros ligados às pessoas, domicílios, equipes e unidades já
-            cadastrados no cenário fictício.
+            {focus === "visits"
+              ? "Rotinas de ACS e ACE relacionadas a pessoas, domicílios, famílias e microáreas."
+              : focus === "attendance"
+                ? "Atendimentos, procedimentos e acompanhamentos vinculados às equipes e unidades."
+                : "Registros ligados às pessoas, domicílios, equipes e unidades já cadastrados no cenário fictício."}
           </p>
         </div>
         {mode === "operator" && onBack && (
@@ -855,7 +875,7 @@ export default function HealthVisitsAttendanceModule({
       </div>
 
       <nav className="health-activity-tabs" aria-label="Fluxos da Saúde">
-        {isSecretary && (
+        {isSecretary && focus === "all" && (
           <button
             className={view === "overview" ? "active" : ""}
             onClick={() => setView("overview")}
@@ -883,7 +903,7 @@ export default function HealthVisitsAttendanceModule({
             <span>{visibleCareRecords.length}</span>
           </button>
         )}
-        {canCreateApsRecords && (
+        {canShowCollective && (
           <button
             className={view === "collective" || view === "new-collective" ? "active" : ""}
             onClick={() => setView("collective")}
@@ -892,7 +912,7 @@ export default function HealthVisitsAttendanceModule({
             <span>{collectiveActivities.length}</span>
           </button>
         )}
-        {canCreateApsRecords && (
+        {canShowCollective && (
           <button
             className={view === "food-markers" || view === "new-food-marker" ? "active" : ""}
             onClick={() => setView("food-markers")}

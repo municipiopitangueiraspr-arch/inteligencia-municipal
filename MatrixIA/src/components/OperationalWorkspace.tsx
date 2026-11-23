@@ -39,9 +39,9 @@ import {
   type MunicipalRequestDraft,
   type RequestStatus,
 } from "../data/requests";
-import HealthVisitsAttendanceModule, {
-  type HealthOperatorPersona,
-} from "./HealthVisitsAttendanceModule";
+import { type HealthOperatorPersona } from "./HealthVisitsAttendanceModule";
+import HealthVisitsModule from "./HealthVisitsModule";
+import HealthAssistentialProductionModule from "./HealthAssistentialProductionModule";
 import HealthTerritoryModule from "./HealthTerritoryModule";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
 import type { HealthActivitiesDataset } from "../data/healthActivities";
@@ -650,7 +650,8 @@ export default function OperationalWorkspace({
     | "requests"
     | "territory"
     | "people"
-    | "health-activities"
+    | "health-visits"
+    | "health-attendance"
     | "health-referrals"
     | "health-diagnostics"
     | "health-sanitary"
@@ -685,7 +686,7 @@ export default function OperationalWorkspace({
   const [diagnosticsSourceReferralId, setDiagnosticsSourceReferralId] =
     useState<string | undefined>();
   const [diagnosticsReturnTab, setDiagnosticsReturnTab] = useState<
-    "services" | "health-activities" | "health-referrals"
+    "services" | "health-attendance" | "health-referrals"
   >("services");
   const [referralSourceServiceId, setReferralSourceServiceId] = useState<
     string | undefined
@@ -788,8 +789,8 @@ export default function OperationalWorkspace({
       setDiagnosticsReturnTab(
         source?.referralId
           ? "health-referrals"
-          : source?.serviceRecordId
-            ? "health-activities"
+            : source?.serviceRecordId
+              ? "health-attendance"
             : "services",
       );
       setActiveSecretaryTab("health-diagnostics");
@@ -834,7 +835,7 @@ export default function OperationalWorkspace({
       typeof activeSecretaryTab
     > = {
       territory: "territory",
-      activities: "health-activities",
+      activities: "health-attendance",
       referrals: "health-referrals",
       diagnostics: "health-diagnostics",
       sanitary: "health-sanitary",
@@ -916,7 +917,8 @@ export default function OperationalWorkspace({
       icon: "activities",
       modules: [
         { kind: "people", title: "Pessoas, Famílias e Domicílios", description: "Cadastro compartilhado e relações territoriais.", onOpen: () => setActiveSecretaryTab("people") },
-        { kind: "activities", title: "Visitas e Atendimentos", description: "Rotinas de campo, UBS e histórico assistencial.", onOpen: () => setActiveSecretaryTab("health-activities") },
+        { kind: "territory", title: "Visitas e Ações no Território", description: "Roteiros, visitas ACS/ACE, domicílios e pendências de campo.", onOpen: () => setActiveSecretaryTab("health-visits") },
+        { kind: "activities", title: "Atendimentos e Produção Assistencial", description: "Atendimentos, procedimentos, atividades coletivas e produção da APS.", onOpen: () => setActiveSecretaryTab("health-attendance") },
         { kind: "referrals", title: "Encaminhamentos e Regulação", description: "Fila, ofertas, retornos e desfechos.", onOpen: () => { setReferralSourceServiceId(undefined); setActiveSecretaryTab("health-referrals"); } },
         { kind: "diagnostics", title: "Exames e Medicamentos", description: "Pedidos, procedimentos e resultados.", onOpen: () => { setDiagnosticsReturnTab("services"); setDiagnosticsSourceServiceId(undefined); setDiagnosticsSourceReferralId(undefined); setActiveSecretaryTab("health-diagnostics"); } },
         { kind: "pharmacy", title: "Assistência Farmacêutica", description: "Estoques, lotes e movimentações por unidade.", onOpen: () => setActiveSecretaryTab("health-pharmacy") },
@@ -1260,12 +1262,16 @@ export default function OperationalWorkspace({
                     <UsersRound size={14} /> Pessoas, Famílias e Domicílios
                   </button>
                   <button
-                    className={
-                      activeSecretaryTab === "health-activities" ? "active" : ""
-                    }
-                    onClick={() => setActiveSecretaryTab("health-activities")}
+                    className={activeSecretaryTab === "health-visits" ? "active" : ""}
+                    onClick={() => setActiveSecretaryTab("health-visits")}
                   >
-                    <Activity size={14} /> Visitas e Atendimentos
+                    <MapPin size={14} /> Visitas e ações no território
+                  </button>
+                  <button
+                    className={activeSecretaryTab === "health-attendance" ? "active" : ""}
+                    onClick={() => setActiveSecretaryTab("health-attendance")}
+                  >
+                    <Activity size={14} /> Atendimentos e produção
                   </button>
                   <button
                     className={
@@ -1520,13 +1526,27 @@ export default function OperationalWorkspace({
                   onChange={onPeopleRegistryChange}
                 />
               )}
-            {activeSecretaryTab === "health-activities" &&
+            {activeSecretaryTab === "health-visits" &&
               selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
-                <HealthVisitsAttendanceModule
+                <HealthVisitsModule
                   mode="secretary"
                   dataset={healthActivities}
                   peopleRegistry={peopleRegistry}
                   healthTerritory={healthTerritory}
+                  onChange={onHealthActivitiesChange}
+                  onOpenRegulation={openHealthRegulation}
+                  onOpenDiagnostics={(serviceRecordId) =>
+                    openHealthDiagnostics({ serviceRecordId })
+                  }
+                />
+              )}
+            {activeSecretaryTab === "health-attendance" &&
+              selectedDepartment.name === "Saúde e Vigilância Sanitária" && (
+                <HealthAssistentialProductionModule
+                  mode="secretary"
+                  peopleRegistry={peopleRegistry}
+                  healthTerritory={healthTerritory}
+                  dataset={healthActivities}
                   onChange={onHealthActivitiesChange}
                   onOpenRegulation={openHealthRegulation}
                   onOpenDiagnostics={(serviceRecordId) =>
@@ -1550,7 +1570,7 @@ export default function OperationalWorkspace({
                   }
                   onBack={() => {
                     setReferralSourceServiceId(undefined);
-                    setActiveSecretaryTab("health-activities");
+                    setActiveSecretaryTab("health-attendance");
                   }}
                 />
               )}
@@ -1800,8 +1820,10 @@ export default function OperationalWorkspace({
                 }}
               >
                 <FilePlus2 size={16} />
-                {healthOperatorPersona
-                  ? "Abrir módulo de Saúde"
+                {healthOperatorPersona === "acs" || healthOperatorPersona === "ace"
+                  ? "Abrir visitas e ações no território"
+                  : healthOperatorPersona === "ubs"
+                    ? "Abrir atendimentos e produção"
                   : sanitaryOperator
                     ? "Abrir módulo de Vigilância Sanitária"
                     : maternalOperator
@@ -1838,8 +1860,9 @@ export default function OperationalWorkspace({
                 </button>
               )}
             </div>
-            {healthWorkflowOpen && healthOperatorPersona && healthOperatorPersona !== "acs" && (
-              <HealthVisitsAttendanceModule
+            {healthWorkflowOpen && healthOperatorPersona && (
+              healthOperatorPersona === "acs" || healthOperatorPersona === "ace" ? (
+              <HealthVisitsModule
                 key={selectedPersona.id}
                 mode="operator"
                 personaId={healthOperatorPersona}
@@ -1853,6 +1876,22 @@ export default function OperationalWorkspace({
                 }
                 onBack={() => setHealthWorkflowOpen(false)}
               />
+              ) : (
+              <HealthAssistentialProductionModule
+                key={selectedPersona.id}
+                mode="operator"
+                personaId={healthOperatorPersona}
+                dataset={healthActivities}
+                peopleRegistry={peopleRegistry}
+                healthTerritory={healthTerritory}
+                onChange={onHealthActivitiesChange}
+                onOpenRegulation={openHealthRegulation}
+                onOpenDiagnostics={(serviceRecordId) =>
+                  openHealthDiagnostics({ serviceRecordId })
+                }
+                onBack={() => setHealthWorkflowOpen(false)}
+              />
+              )
             )}
             {healthReferralOpen && healthOperatorPersona === "ubs" && (
               <HealthReferralRegulationModule
