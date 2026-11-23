@@ -29,6 +29,7 @@ import {
   Palette,
   ShieldCheck,
   Sprout,
+  TrafficCone,
   Wrench,
   UsersRound,
 } from "lucide-react";
@@ -625,6 +626,7 @@ const departmentVisuals: Record<string, { color: string; icon: ReactNode }> = {
   Obras: { color: "slate", icon: <Wrench /> },
   "Planejamento e Urbanismo": { color: "cyan", icon: <MapPinned /> },
   "Saúde e Vigilância Sanitária": { color: "red", icon: <HeartPulse /> },
+  "Segurança Pública e Trânsito": { color: "blue", icon: <TrafficCone /> },
 };
 
 function SecretariatHall({

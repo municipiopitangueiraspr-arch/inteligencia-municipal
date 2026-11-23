@@ -5027,3 +5027,28 @@ button:disabled {
   .secretariat-card-grid { grid-template-columns: 1fr; }
   .secretariat-card { min-height: 190px; }
 }
+
+/* Refinamento visual do cabeçalho e dos ícones do hall. */
+.workspace-topbar .workspace-brand .brand-text strong {
+  color: #173f68;
+  font-size: 22px;
+  letter-spacing: -0.9px;
+}
+.workspace-topbar .workspace-brand .brand-text strong span { color: #168b98; }
+.workspace-topbar .workspace-brand .brand-text small {
+  color: #7890a1;
+  font-size: 8px;
+  letter-spacing: 1.05px;
+}
+.workspace-topbar .workspace-brand .brand-mark {
+  border-color: #c8e0e1;
+  background: linear-gradient(145deg, #f7ffff, #eaf6f6);
+  box-shadow: 0 4px 10px rgb(27 105 116 / 10%);
+}
+.workspace-topbar .workspace-brand .brand-mark span { background: #168b98; }
+.secretariat-card-icon {
+  background: linear-gradient(145deg, #fff, var(--secretariat-soft));
+  border: 1px solid color-mix(in srgb, var(--secretariat-accent) 12%, white);
+}
+.secretariat-card-icon svg { stroke-linecap: round; stroke-linejoin: round; }
+.secretariat-card-name { min-height: 32px; display: flex; align-items: center; justify-content: center; }
