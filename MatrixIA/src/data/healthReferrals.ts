@@ -42,6 +42,7 @@ export type HealthReferralRecord = {
   appointmentAt?: string;
   completedAt?: string;
   outcome?: string;
+  counterReferral?: string;
   history: HealthReferralHistoryEvent[];
 };
 

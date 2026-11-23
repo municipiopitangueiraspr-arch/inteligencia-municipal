@@ -65,6 +65,7 @@ type DraftRequest = {
   priority: HealthDiagnosticPriority;
   requestedAt: string;
   destination: string;
+  observation: string;
 };
 
 const transitions: Record<HealthDiagnosticStatus, HealthDiagnosticStatus[]> = {
@@ -171,6 +172,7 @@ function createInitialDraft(
     priority: "Rotina",
     requestedAt: localDate(),
     destination: healthDiagnosticDestinations[0],
+    observation: "",
   };
 }
 
@@ -335,6 +337,7 @@ export default function HealthExamsProceduresModule({
       priority: String(values.get("priority")) as HealthDiagnosticPriority,
       requestedAt,
       destination: String(values.get("destination")),
+      observation: String(values.get("observation") ?? "").trim() || undefined,
       status: "Solicitado",
       history: [{
         id: `${id}-H01`,
@@ -543,6 +546,10 @@ export default function HealthExamsProceduresModule({
             <label className="diagnostics-field diagnostics-field-wide">
               Justificativa ou objetivo clínico <span>*</span>
               <textarea name="justification" rows={3} value={draft.justification} onChange={(event) => setDraft((current) => ({ ...current, justification: event.target.value }))} placeholder="Descreva o motivo do pedido conforme o registro assistencial." maxLength={500} required />
+            </label>
+            <label className="diagnostics-field diagnostics-field-wide">
+              Observação da solicitação
+              <textarea name="observation" rows={2} value={draft.observation} onChange={(event) => setDraft((current) => ({ ...current, observation: event.target.value }))} placeholder="Contexto adicional para coleta, agendamento ou execução." maxLength={500} />
             </label>
             {createError && <p className="diagnostics-error" role="alert">{createError}</p>}
             <div className="diagnostics-form-actions">

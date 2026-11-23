@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   Stethoscope,
+  Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -251,6 +252,9 @@ export default function HealthVisitsAttendanceModule({
   const [statusOutcomeDraft, setStatusOutcomeDraft] = useState("");
   const [statusCarePlanDraft, setStatusCarePlanDraft] = useState("");
   const [statusReasonDraft, setStatusReasonDraft] = useState("");
+  const [procedureNameDraft, setProcedureNameDraft] = useState("");
+  const [procedureQuantityDraft, setProcedureQuantityDraft] = useState("1");
+  const [procedureResultDraft, setProcedureResultDraft] = useState("");
 
   const [visitKind, setVisitKind] = useState<HomeVisitKind>(
     personaId === "ace" ? "ACE" : "ACS",
@@ -441,7 +445,7 @@ export default function HealthVisitsAttendanceModule({
     record.status === "Realizado" && !record.carePlan && "plano de continuidade",
     record.outcome === "Retorno programado" && !record.followUpDate && "data de retorno",
     record.outcome === "Encaminhamento realizado" && !record.referral && "encaminhamento",
-    record.outcome === "Procedimento realizado" && !(record.procedures?.length) && "procedimento",
+    record.outcome === "Procedimento realizado" && !(record.procedures?.some((procedure) => procedure.active !== false)) && "procedimento",
     (record.status === "Não compareceu" || record.status === "Cancelado") && !record.statusReason && "motivo da situação",
   ].filter(Boolean) as string[];
   const competencePending = competenceRecords.filter((record) => {
@@ -778,6 +782,44 @@ export default function HealthVisitsAttendanceModule({
     setStatusReasonDraft(newRecord.statusReason ?? "");
     setView("detail");
     setFormError("");
+  };
+
+  const addStructuredProcedure = () => {
+    if (!selectedAttendance || selectedAttendance.competenceStatus === "Fechado") return;
+    const name = procedureNameDraft.trim();
+    const quantity = Number(procedureQuantityDraft);
+    if (!name || !Number.isInteger(quantity) || quantity < 1) {
+      setFormError("Informe o procedimento e uma quantidade inteira maior que zero.");
+      return;
+    }
+    const procedure: HealthProcedureRecord = {
+      id: `SIM-PROC-${Date.now()}`, name, quantity,
+      result: procedureResultDraft.trim() || undefined,
+      observation: procedureResultDraft.trim() || undefined,
+      attendanceId: selectedAttendance.id, personId: selectedAttendance.personId,
+      professionalId: selectedAttendance.professionalId, teamId: selectedAttendance.teamId,
+      unitId: selectedAttendance.unitId,
+      performedAt: eventDateTime(selectedAttendance.date, selectedAttendance.time),
+    };
+    onChange((current) => ({
+      ...current,
+      procedures: [...(current.procedures ?? []), procedure],
+      serviceRecords: current.serviceRecords.map((record) => record.id === selectedAttendance.id
+        ? { ...record, procedures: [...(record.procedures ?? []), procedure], history: [...record.history, { date: new Date().toISOString(), action: "Procedimento estruturado incluído", detail: `${name} · quantidade ${quantity}.` }] }
+        : record),
+    }));
+    setProcedureNameDraft(""); setProcedureQuantityDraft("1"); setProcedureResultDraft(""); setFormError("");
+  };
+
+  const removeStructuredProcedure = (procedureId: string) => {
+    if (!selectedAttendance || selectedAttendance.competenceStatus === "Fechado") return;
+    onChange((current) => ({
+      ...current,
+      procedures: (current.procedures ?? []).map((procedure) => procedure.id === procedureId ? { ...procedure, active: false, voidedAt: new Date().toISOString(), voidReason: "Cancelamento lógico no detalhe do atendimento." } : procedure),
+      serviceRecords: current.serviceRecords.map((record) => record.id === selectedAttendance.id
+        ? { ...record, procedures: (record.procedures ?? []).map((procedure) => procedure.id === procedureId ? { ...procedure, active: false, result: `${procedure.result ? `${procedure.result} · ` : ""}Cancelado logicamente.` } : procedure), history: [...record.history, { date: new Date().toISOString(), action: "Procedimento estruturado cancelado", detail: `Registro ${procedureId} cancelado logicamente; histórico preservado.` }] }
+        : record),
+    }));
   };
 
   const saveCollectiveActivity = (event: FormEvent<HTMLFormElement>) => {
@@ -1784,7 +1826,24 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field"><span>Caráter / modalidade</span><strong>{selectedAttendance.character ?? "Programado"} · {selectedAttendance.modality}</strong></div>
                 <div className="health-detail-field health-detail-wide"><span>Motivo / objetivo</span><p>{selectedAttendance.reason}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Condições acompanhadas</span><p>{selectedAttendance.conditions?.join(", ") || selectedAttendance.conditionOrFollowUp}</p></div>
-                <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.length ? selectedAttendance.procedures.map((procedure) => `${procedure.name} (${procedure.quantity})${procedure.result ? ` · ${procedure.result}` : ""}`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
+                <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.some((procedure) => procedure.active !== false) ? selectedAttendance.procedures.filter((procedure) => procedure.active !== false).map((procedure) => `${procedure.name} (${procedure.quantity})${procedure.result ? ` · ${procedure.result}` : ""}`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
+                <div className="health-detail-field health-detail-wide health-procedure-management">
+                  <span>Gestão dos procedimentos vinculados</span>
+                  {(dataset.procedures ?? []).filter((procedure) => procedure.attendanceId === selectedAttendance.id && procedure.active !== false).map((procedure) => (
+                    <div className="health-procedure-managed-row" key={procedure.id}>
+                      <strong>{procedure.name} · {procedure.quantity} unidade(s)</strong>
+                      <small>{procedure.result || "Sem observação"} · {formatHistoryDate(procedure.performedAt)}</small>
+                      <button type="button" className="health-danger-button" disabled={selectedAttendance.competenceStatus === "Fechado"} onClick={() => removeStructuredProcedure(procedure.id)}><Trash2 size={13} /> Remover logicamente</button>
+                    </div>
+                  ))}
+                  <div className="health-procedure-add-row">
+                    <input value={procedureNameDraft} onChange={(event) => setProcedureNameDraft(event.target.value)} placeholder="Novo procedimento" disabled={selectedAttendance.competenceStatus === "Fechado"} />
+                    <input value={procedureQuantityDraft} onChange={(event) => setProcedureQuantityDraft(event.target.value)} type="number" min="1" step="1" aria-label="Quantidade" disabled={selectedAttendance.competenceStatus === "Fechado"} />
+                    <input value={procedureResultDraft} onChange={(event) => setProcedureResultDraft(event.target.value)} placeholder="Resultado / observação" disabled={selectedAttendance.competenceStatus === "Fechado"} />
+                    <button type="button" className="health-action-secondary" onClick={addStructuredProcedure} disabled={selectedAttendance.competenceStatus === "Fechado"}><Plus size={14} /> Adicionar</button>
+                  </div>
+                  <small className="health-field-hint">Alterações são auditadas no histórico e ficam bloqueadas após o fechamento da competência.</small>
+                </div>
                 {selectedAttendance.dentalDetails && <div className="health-detail-field health-detail-wide"><span>Detalhamento odontológico</span><p>{selectedAttendance.dentalDetails.reason} · {selectedAttendance.dentalDetails.procedure}{selectedAttendance.dentalDetails.toothOrRegion ? ` · ${selectedAttendance.dentalDetails.toothOrRegion}` : ""}</p></div>}
                 <div className="health-detail-field health-detail-wide"><span>Resumo do atendimento</span><p>{selectedAttendance.careSummary || "Sem resumo clínico demonstrativo registrado."}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Plano de continuidade / próximo passo</span><p>{selectedAttendance.carePlan || "Nenhum plano de continuidade registrado."}</p></div>
@@ -1871,7 +1930,7 @@ export default function HealthVisitsAttendanceModule({
                     unitId: selectedAttendance.unitId,
                     performedAt: eventDateTime(selectedAttendance.date, selectedAttendance.time),
                   })) ?? [])
-                    .filter((procedure) => procedure.attendanceId === selectedAttendance.id)
+                    .filter((procedure) => procedure.attendanceId === selectedAttendance.id && (!("active" in procedure) || procedure.active !== false))
                     .map((procedure) => ({
                       date: procedure.performedAt,
                       kind: "Procedimento",
@@ -1885,7 +1944,7 @@ export default function HealthVisitsAttendanceModule({
                         date: `${request.requestedAt}T09:00:00`,
                         kind: "Exame solicitado",
                         title: `${request.serviceName} · ${request.status}`,
-                        detail: `${request.kind} · prioridade ${request.priority}`,
+                        detail: `${request.kind} · prioridade ${request.priority}${request.observation ? ` · ${request.observation}` : ""}`,
                       },
                       ...request.history.map((history) => ({
                         date: history.at,
@@ -1907,7 +1966,7 @@ export default function HealthVisitsAttendanceModule({
                         date: history.at,
                         kind: "Encaminhamento atualizado",
                         title: `${history.action} · ${referral.specialty}`,
-                        detail: history.note,
+                        detail: `${history.note}${referral.counterReferral ? ` · Contrarreferência: ${referral.counterReferral}` : ""}`,
                       })),
                     ]) ?? []),
                 ]

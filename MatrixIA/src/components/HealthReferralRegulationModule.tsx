@@ -409,6 +409,7 @@ export default function HealthReferralRegulationModule({
     const offeredAt = String(values.get("offeredAt") ?? "").trim();
     const appointmentAt = String(values.get("appointmentAt") ?? "").trim();
     const outcome = String(values.get("outcome") ?? "").trim();
+    const counterReferral = String(values.get("counterReferral") ?? "").trim();
     const note = String(values.get("note") ?? "").trim();
     if (status === "Vaga ofertada" && !offeredAt) {
       setUpdateError("Informe a data da oferta de vaga para continuar.");
@@ -420,6 +421,10 @@ export default function HealthReferralRegulationModule({
     }
     if (status === "Realizado" && !outcome) {
       setUpdateError("Descreva o desfecho recebido do serviço especializado.");
+      return;
+    }
+    if (status === "Realizado" && !counterReferral && !selectedReferral.counterReferral) {
+      setUpdateError("Registre a contrarreferência ou o próximo passo para devolver informação à unidade de origem.");
       return;
     }
     if (
@@ -475,6 +480,7 @@ export default function HealthReferralRegulationModule({
                   ? localDate()
                   : referral.completedAt,
               outcome: outcome || referral.outcome,
+              counterReferral: counterReferral || referral.counterReferral,
               history: [...referral.history, historyEvent],
             }
           : referral,
@@ -1046,6 +1052,12 @@ function ReferralDetail({
             <p>{referral.outcome}</p>
           </article>
         )}
+        {referral.counterReferral && (
+          <article className="health-referral-detail-wide">
+            <span>Contrarreferência para a origem</span>
+            <p>{referral.counterReferral}</p>
+          </article>
+        )}
       </div>
 
       <div className="health-referral-update-layout">
@@ -1078,6 +1090,10 @@ function ReferralDetail({
           <label className="health-referral-field">
             Desfecho do serviço especializado
             <textarea name="outcome" rows={2} maxLength={500} defaultValue={referral.outcome ?? ""} placeholder="Obrigatório ao marcar como realizado" />
+          </label>
+          <label className="health-referral-field">
+            Retorno / contrarreferência para a unidade de origem
+            <textarea name="counterReferral" rows={2} maxLength={500} defaultValue={referral.counterReferral ?? ""} placeholder="Informe o retorno recebido e o próximo passo compartilhado" />
           </label>
           <label className="health-referral-field">
             Nota ou justificativa da atualização

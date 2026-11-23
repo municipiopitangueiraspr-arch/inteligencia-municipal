@@ -46,6 +46,7 @@ export type HealthDiagnosticRecord = {
   priority: HealthDiagnosticPriority;
   requestedAt: string;
   destination: string;
+  observation?: string;
   status: HealthDiagnosticStatus;
   scheduledAt?: string;
   startedAt?: string;

@@ -31,6 +31,7 @@ export type HealthProcedure = {
   name: string;
   quantity: number;
   result?: string;
+  active?: boolean;
 };
 
 /** Registro normalizado para produção assistencial; HealthProcedure permanece
@@ -43,6 +44,8 @@ export type HealthProcedureRecord = HealthProcedure & {
   unitId: string;
   performedAt: string;
   observation?: string;
+  voidedAt?: string;
+  voidReason?: string;
 };
 
 export type HealthDentalDetails = {
