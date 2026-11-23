@@ -28,6 +28,7 @@ import type {
   HealthVitalSigns,
   HealthDentalDetails,
   HealthServiceRecord,
+  CollectiveActivityStatus,
   HealthServiceStatus,
   HomeVisitKind,
   HomeVisitRecord,
@@ -48,6 +49,7 @@ type ModuleView =
   | "attendance"
   | "competence"
   | "collective"
+  | "collective-detail"
   | "food-markers"
   | "new-visit"
   | "new-attendance"
@@ -267,6 +269,7 @@ export default function HealthVisitsAttendanceModule({
   const [visitProfessionalId, setVisitProfessionalId] = useState("");
   const [careProfessionalId, setCareProfessionalId] = useState("");
   const [attendanceServiceType, setAttendanceServiceType] = useState("");
+  const [selectedCollectiveId, setSelectedCollectiveId] = useState<string | null>(null);
 
   const today = localDate();
   const isSecretary = mode === "secretary";
@@ -504,6 +507,40 @@ export default function HealthVisitsAttendanceModule({
     setView("detail");
   };
 
+  const openCollective = (id: string) => {
+    setSelectedCollectiveId(id);
+    setFormError("");
+    setView("collective-detail");
+  };
+
+  const updateCollective = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const selectedCollective = dataset.collectiveActivities.find((activity) => activity.id === selectedCollectiveId);
+    if (!selectedCollective) return;
+    const values = new FormData(event.currentTarget);
+    const status = String(values.get("status") ?? selectedCollective.status) as CollectiveActivityStatus;
+    const presentCount = Number(values.get("presentCount") ?? selectedCollective.presentCount ?? 0);
+    const absentCount = Number(values.get("absentCount") ?? selectedCollective.absentCount ?? 0);
+    const executionSummary = String(values.get("executionSummary") ?? "").trim();
+    const followUpDate = String(values.get("followUpDate") ?? "");
+    const notes = String(values.get("notes") ?? "").trim();
+    if (presentCount < 0 || absentCount < 0 || presentCount + absentCount !== selectedCollective.participantCount) { setFormError("Presentes + ausentes deve ser igual ao público previsto."); return; }
+    if (status === "Realizada" && (!executionSummary && !selectedCollective.executionSummary)) { setFormError("Informe o resultado da execução para concluir a atividade."); return; }
+    if (status === "Realizada" && presentCount < 1) { setFormError("Informe ao menos uma presença para concluir a atividade."); return; }
+    if (status === "Cancelada" && !notes) { setFormError("Informe a justificativa do cancelamento."); return; }
+    const now = new Date().toISOString();
+    onChange((current) => ({ ...current, collectiveActivities: current.collectiveActivities.map((activity) => activity.id === selectedCollective.id ? {
+      ...activity, status, presentCount, absentCount,
+      executionSummary: executionSummary || activity.executionSummary,
+      outcome: executionSummary || activity.outcome,
+      followUpDate: followUpDate || activity.followUpDate,
+      notes: notes || activity.notes,
+      executedAt: status === "Realizada" ? now : activity.executedAt,
+      history: [...activity.history, { date: now, action: status === activity.status ? "Resultado da atividade atualizado" : `Atividade coletiva ${status.toLocaleLowerCase("pt-BR")}`, detail: `Presentes: ${presentCount}; ausentes: ${absentCount}.${executionSummary ? ` Resultado: ${executionSummary}` : ""}` }],
+    } : activity) }));
+    setFormError("");
+  };
+
   const saveHomeVisit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -538,6 +575,7 @@ export default function HealthVisitsAttendanceModule({
     const time = String(values.get("time") ?? "");
     const activityType = String(values.get("activityType") ?? "").trim();
     const status = String(values.get("status") ?? "Programada") as HomeVisitStatus;
+    const resultCategory = String(values.get("resultCategory") ?? "") as HomeVisitRecord["resultCategory"];
     const outcomeSummary = String(
       values.get("outcomeSummary") ?? "",
     ).trim();
@@ -591,6 +629,9 @@ export default function HealthVisitsAttendanceModule({
       activityType,
       status,
       outcomeSummary,
+      resultCategory: resultCategory || undefined,
+      plannedAt: eventDateTime(date, time),
+      executedAt: status === "Realizada" ? eventDateTime(date, time) : undefined,
       environmentalFinding: kind === "ACE" ? environmentalFinding : undefined,
       followUpDate,
       notes,
@@ -831,11 +872,30 @@ export default function HealthVisitsAttendanceModule({
     const theme = String(values.get("theme") ?? "").trim();
     const targetAudience = String(values.get("targetAudience") ?? "").trim();
     const participantCount = Number(values.get("participantCount") ?? 0);
+    const presentCount = Number(values.get("presentCount") ?? 0);
+    const absentCount = Number(values.get("absentCount") ?? 0);
+    const objective = String(values.get("objective") ?? "").trim();
+    const executionSummary = String(values.get("executionSummary") ?? "").trim();
+    const followUpDate = String(values.get("followUpDate") ?? "");
+    const notes = String(values.get("notes") ?? "").trim();
+    const status = String(values.get("status") ?? "Planejada") as CollectiveActivityStatus;
     const professional = healthTerritory.professionals.find(
       (item) => item.id === String(values.get("professionalId") ?? "") && item.active,
     );
-    if (!date || !time || !activityType || !theme || !targetAudience || !professional || participantCount < 0) {
-      setFormError("Preencha atividade, tema, público, data, horário e responsável.");
+    if (!date || !time || !activityType || !theme || !targetAudience || !objective || !professional || participantCount < 1 || presentCount < 0 || absentCount < 0 || presentCount + absentCount !== participantCount) {
+      setFormError("Preencha planejamento, equipe, público e presença. Presentes + ausentes deve corresponder ao público previsto.");
+      return;
+    }
+    if (status === "Realizada" && (!executionSummary || presentCount < 1)) {
+      setFormError("Para concluir a atividade, informe presença e resultado da execução.");
+      return;
+    }
+    if (status === "Cancelada" && !notes) {
+      setFormError("Informe a justificativa do cancelamento da atividade coletiva.");
+      return;
+    }
+    if (followUpDate && followUpDate < date) {
+      setFormError("A data do próximo passo não pode ser anterior à atividade.");
       return;
     }
     const id = `SIM-APS-COL-${String(collectiveActivities.length + 1).padStart(3, "0")}`;
@@ -854,9 +914,17 @@ export default function HealthVisitsAttendanceModule({
           theme,
           targetAudience,
           participantCount,
-          outcome: "Atividade registrada para acompanhamento da equipe.",
-          status: "Realizada",
-          history: [{ date: eventDateTime(date, time), action: "Atividade coletiva registrada", detail: "Registro assistencial demonstrativo." }],
+          presentCount,
+          absentCount,
+          objective,
+          executionSummary,
+          followUpDate: followUpDate || undefined,
+          notes: notes || undefined,
+          outcome: executionSummary || (status === "Planejada" ? "Execução ainda pendente." : notes),
+          status,
+          plannedAt: eventDateTime(date, time),
+          executedAt: status === "Realizada" ? eventDateTime(date, time) : undefined,
+          history: [{ date: eventDateTime(date, time), action: status === "Planejada" ? "Atividade coletiva planejada" : status === "Realizada" ? "Atividade coletiva concluída" : "Atividade coletiva cancelada", detail: `${activityType} · ${theme} · público previsto: ${participantCount} · presentes: ${presentCount}.` }],
         },
         ...current.collectiveActivities,
       ],
@@ -951,6 +1019,8 @@ export default function HealthVisitsAttendanceModule({
                   ...record,
                   status: statusDraft as HomeVisitStatus,
                   outcomeSummary: statusOutcomeDraft.trim() || record.outcomeSummary,
+                  executedAt: statusDraft === "Realizada" ? timestamp : record.executedAt,
+                  resultCategory: statusDraft === "Realizada" ? "Contato realizado" : statusDraft === "Retorno necessário" ? "Retorno necessário" : statusDraft === "Sem contato" ? "Sem contato" : statusDraft === "Recusa" ? "Recusa" : record.resultCategory,
                   followUpDate:
                     statusDraft === "Retorno necessário"
                       ? statusFollowUpDate
@@ -1495,12 +1565,24 @@ export default function HealthVisitsAttendanceModule({
                   <p>{activity.theme} · {activity.targetAudience}</p>
                   <small>{formatDate(activity.date)} · {activity.time} · {activity.participantCount} participantes · {unitName(healthTerritory, activity.unitId)}</small>
                 </div>
-                <span className="health-status-chip tone-positive">{activity.status}</span>
+                <span className={`health-status-chip tone-${activity.status === "Realizada" ? "positive" : activity.status === "Cancelada" ? "negative" : "info"}`}>{activity.status}</span>
+                <button className="health-record-open" onClick={() => openCollective(activity.id)}>Abrir <ArrowRight size={14} /></button>
               </article>
             ))}
           </div>
         </div>
       )}
+
+      {view === "collective-detail" && selectedCollectiveId && canCreateApsRecords && (() => {
+        const activity = collectiveActivities.find((item) => item.id === selectedCollectiveId);
+        if (!activity) return null;
+        return <div className="health-activity-view">
+          <div className="health-activity-toolbar"><div><span className="health-activity-eyebrow">ATIVIDADE COLETIVA · {activity.id}</span><h3>{activity.activityType}</h3><p>{activity.theme} · {activity.targetAudience} · {teamName(healthTerritory, activity.teamId)}</p></div><button className="health-back-button" onClick={() => setView("collective")}><ArrowLeft size={15} /> Voltar</button></div>
+          <div className="health-detail-grid"><div className="health-detail-field"><span>Planejamento</span><strong>{formatDate(activity.date)} · {activity.time}</strong></div><div className="health-detail-field"><span>Situação</span><strong>{activity.status}</strong></div><div className="health-detail-field"><span>Equipe / responsável</span><strong>{teamName(healthTerritory, activity.teamId)} · {professionalName(healthTerritory, activity.professionalId)}</strong></div><div className="health-detail-field"><span>Público previsto</span><strong>{activity.participantCount}</strong></div><div className="health-detail-field health-detail-wide"><span>Objetivo</span><p>{activity.objective}</p></div><div className="health-detail-field health-detail-wide"><span>Resultado registrado</span><p>{activity.executionSummary || activity.outcome}</p></div></div>
+          <form className="health-activity-form" onSubmit={updateCollective}>{formError && <p className="health-form-error health-form-wide" role="alert">{formError}</p>}<label>Situação<select name="status" defaultValue={activity.status}><option>Planejada</option><option>Realizada</option><option>Cancelada</option></select></label><label>Presentes<input name="presentCount" type="number" min="0" defaultValue={activity.presentCount ?? 0} required /></label><label>Ausentes<input name="absentCount" type="number" min="0" defaultValue={activity.absentCount ?? 0} required /></label><label>Próximo passo<input name="followUpDate" type="date" defaultValue={activity.followUpDate ?? ""} /></label><label className="health-form-wide">Resultado da execução<textarea name="executionSummary" rows={3} defaultValue={activity.executionSummary ?? ""} maxLength={800} placeholder="Descreva a execução, participação, avaliação e encaminhamentos." /></label><label className="health-form-wide">Observação / justificativa<textarea name="notes" rows={2} defaultValue={activity.notes ?? ""} maxLength={500} /></label><div className="health-form-actions health-form-wide"><button type="submit" className="health-action-primary"><Check size={16} /> Salvar execução e resultado</button></div></form>
+          <div className="health-integrated-timeline"><div className="health-timeline-heading"><div><span className="health-activity-eyebrow">RASTREABILIDADE</span><h4>Histórico da atividade coletiva</h4></div></div><div className="health-timeline-list">{activity.history.map((item, index) => <div className="health-timeline-item" key={`${item.date}-${index}`}><span className="health-timeline-dot" /><div><div className="health-timeline-meta"><strong>{item.action}</strong><time>{formatHistoryDate(item.date)}</time></div><p>{item.detail}</p></div></div>)}</div></div>
+        </div>;
+      })()}
 
       {view === "new-collective" && canCreateApsRecords && (
         <div className="health-activity-view">
@@ -1513,7 +1595,14 @@ export default function HealthVisitsAttendanceModule({
             <label>Horário<input name="time" type="time" defaultValue="14:00" required /></label>
             <label>Tema<input name="theme" maxLength={240} placeholder="Tema trabalhado" required /></label>
             <label>Público-alvo<input name="targetAudience" maxLength={240} placeholder="Público participante" required /></label>
-            <label>Participantes<input name="participantCount" type="number" min="0" defaultValue="0" required /></label>
+            <label>Objetivo da atividade<input name="objective" maxLength={300} placeholder="Objetivo do encontro" required /></label>
+            <label>Público previsto<input name="participantCount" type="number" min="1" defaultValue="1" required /></label>
+            <label>Presentes<input name="presentCount" type="number" min="0" defaultValue="0" required /></label>
+            <label>Ausentes<input name="absentCount" type="number" min="0" defaultValue="0" required /></label>
+            <label>Situação<select name="status" defaultValue="Planejada"><option>Planejada</option><option>Realizada</option><option>Cancelada</option></select></label>
+            <label>Próximo passo / retorno<input name="followUpDate" type="date" /></label>
+            <label className="health-form-wide">Resultado da execução<textarea name="executionSummary" rows={3} maxLength={800} placeholder="Obrigatório para concluir: descreva o que foi realizado, encaminhamentos e resultado." /></label>
+            <label className="health-form-wide">Observações ou justificativa<textarea name="notes" rows={2} maxLength={500} placeholder="Use para pendências, cancelamento ou observações operacionais." /></label>
             <div className="health-form-actions health-form-wide"><button type="button" className="health-back-button" onClick={() => setView("collective")}>Cancelar</button><button type="submit" className="health-action-primary"><Check size={16} /> Salvar atividade</button></div>
           </form>
         </div>
@@ -1659,6 +1748,12 @@ export default function HealthVisitsAttendanceModule({
                 {visitStatuses.map((status) => <option key={status}>{status}</option>)}
               </select>
             </label>
+            <label>
+              Resultado categorizado
+              <select name="resultCategory" defaultValue="">
+                <option value="">Selecione quando executar</option><option>Contato realizado</option><option>Sem contato</option><option>Recusa</option><option>Retorno necessário</option><option>Ação concluída</option>
+              </select>
+            </label>
             <label className="health-form-wide">
               Resultado ou observação da visita
               <textarea name="outcomeSummary" rows={3} maxLength={600} placeholder="Registre o contato e a providência, sem duplicar o cadastro da pessoa." />
@@ -1802,7 +1897,8 @@ export default function HealthVisitsAttendanceModule({
             {selectedVisit ? (
               <>
                 <div className="health-detail-field"><span>Tipo e situação</span><strong>{selectedVisit.kind} · {selectedVisit.status}</strong></div>
-                <div className="health-detail-field"><span>Data e horário</span><strong>{formatDate(selectedVisit.date)} · {selectedVisit.time}</strong></div>
+                <div className="health-detail-field"><span>Planejamento</span><strong>{formatDate(selectedVisit.date)} · {selectedVisit.time}</strong></div>
+                <div className="health-detail-field"><span>Execução</span><strong>{selectedVisit.executedAt ? formatHistoryDate(selectedVisit.executedAt) : "Ainda não executada"}</strong></div>
                 <div className="health-detail-field"><span>Pessoa relacionada</span><strong>{getPersonName(peopleRegistry, selectedVisit.personId)}</strong></div>
                 <div className="health-detail-field"><span>Família relacionada</span><strong>{getFamilyName(peopleRegistry, selectedVisit.familyId)}</strong></div>
                 <div className="health-detail-field"><span>Domicílio</span><strong>{peopleRegistry.households.find((item) => item.id === selectedVisit.householdId) ? getHouseholdLabel(peopleRegistry, peopleRegistry.households.find((item) => item.id === selectedVisit.householdId)!) : selectedVisit.householdId}</strong></div>
@@ -1811,6 +1907,7 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field"><span>Área de atuação</span><strong>{areaName(healthTerritory, selectedVisit.areaId)}</strong></div>
                 <div className="health-detail-field"><span>Retorno previsto</span><strong>{formatDate(selectedVisit.followUpDate)}</strong></div>
                 <div className="health-detail-field health-detail-wide"><span>Resultado</span><p>{selectedVisit.outcomeSummary || "Sem resultado registrado; visita programada."}</p></div>
+                <div className="health-detail-field"><span>Resultado categorizado</span><strong>{selectedVisit.resultCategory || "Não informado"}</strong></div>
                 {selectedVisit.environmentalFinding && <div className="health-detail-field health-detail-wide"><span>Observação ambiental (ACE)</span><p>{selectedVisit.environmentalFinding}</p></div>}
                 {selectedVisit.notes && <div className="health-detail-field health-detail-wide"><span>Nota operacional</span><p>{selectedVisit.notes}</p></div>}
               </>
