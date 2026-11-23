@@ -55,6 +55,18 @@ export type HealthAttendanceOutcome =
   | "Alta do acompanhamento"
   | "Não concluído";
 
+export type HealthVitalSigns = {
+  bloodPressure?: string;
+  heartRateBpm?: number;
+  respiratoryRate?: number;
+  temperatureC?: number;
+  oxygenSaturation?: number;
+  glucoseMgDl?: number;
+  weightKg?: number;
+  heightCm?: number;
+  painScale?: number;
+};
+
 export type CollectiveActivityStatus = "Planejada" | "Realizada" | "Cancelada";
 
 export type CollectiveActivityRecord = {
@@ -132,8 +144,11 @@ export type HealthServiceRecord = {
   dentalDetails?: HealthDentalDetails;
   outcome: HealthAttendanceOutcome;
   careSummary: string;
+  carePlan?: string;
   referral: string;
   followUpDate?: string;
+  statusReason?: string;
+  vitalSigns?: HealthVitalSigns;
   history: HealthActivityHistoryEvent[];
 };
 
@@ -268,6 +283,7 @@ export const initialHealthActivities: HealthActivitiesDataset = {
       outcome: "Retorno programado",
       careSummary:
         "Atendimento concluído; avaliação e orientação de rotina registradas no cenário demonstrativo.",
+      carePlan: "Manter acompanhamento longitudinal e retornar na data programada para revisão.",
       referral: "",
       followUpDate: "2026-12-18",
       history: visitHistory(

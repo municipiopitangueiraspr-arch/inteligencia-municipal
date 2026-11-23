@@ -23,6 +23,7 @@ import type {
   HealthAttendanceCharacter,
   HealthCompetenceStatus,
   HealthProcedure,
+  HealthVitalSigns,
   HealthDentalDetails,
   HealthServiceRecord,
   HealthServiceStatus,
@@ -241,6 +242,8 @@ export default function HealthVisitsAttendanceModule({
   const [statusDraft, setStatusDraft] = useState<ActivityStatus>("Programada");
   const [statusFollowUpDate, setStatusFollowUpDate] = useState("");
   const [statusOutcomeDraft, setStatusOutcomeDraft] = useState("");
+  const [statusCarePlanDraft, setStatusCarePlanDraft] = useState("");
+  const [statusReasonDraft, setStatusReasonDraft] = useState("");
 
   const [visitKind, setVisitKind] = useState<HomeVisitKind>(
     personaId === "ace" ? "ACE" : "ACS",
@@ -428,9 +431,11 @@ export default function HealthVisitsAttendanceModule({
     !record.reason && "motivo",
     !record.conditionOrFollowUp && "acompanhamento",
     record.status === "Realizado" && !record.careSummary && "resumo",
+    record.status === "Realizado" && !record.carePlan && "plano de continuidade",
     record.outcome === "Retorno programado" && !record.followUpDate && "data de retorno",
     record.outcome === "Encaminhamento realizado" && !record.referral && "encaminhamento",
     record.outcome === "Procedimento realizado" && !(record.procedures?.length) && "procedimento",
+    (record.status === "Não compareceu" || record.status === "Cancelado") && !record.statusReason && "motivo da situação",
   ].filter(Boolean) as string[];
   const competencePending = competenceRecords.filter((record) => {
     const recordStatus = record.competenceStatus ?? (record.status === "Realizado" ? "Aguardando revisão" : "Rascunho");
@@ -471,6 +476,8 @@ export default function HealthVisitsAttendanceModule({
     setStatusDraft(visit.status);
     setStatusFollowUpDate(visit.followUpDate ?? "");
     setStatusOutcomeDraft(visit.outcomeSummary);
+    setStatusCarePlanDraft("");
+    setStatusReasonDraft("");
     setFormError("");
     setView("detail");
   };
@@ -480,6 +487,8 @@ export default function HealthVisitsAttendanceModule({
     setStatusDraft(record.status);
     setStatusFollowUpDate(record.followUpDate ?? "");
     setStatusOutcomeDraft(record.careSummary);
+    setStatusCarePlanDraft(record.carePlan ?? "");
+    setStatusReasonDraft(record.statusReason ?? "");
     setFormError("");
     setView("detail");
   };
@@ -620,8 +629,25 @@ export default function HealthVisitsAttendanceModule({
     const conditionOrFollowUp = String(values.get("conditionOrFollowUp") ?? "").trim();
     const outcome = String(values.get("outcome") ?? "Acompanhamento mantido") as HealthAttendanceOutcome;
     const careSummary = String(values.get("careSummary") ?? "").trim();
+    const carePlan = String(values.get("carePlan") ?? "").trim();
     const referral = String(values.get("referral") ?? "").trim();
     const followUpDate = String(values.get("followUpDate") ?? "");
+    const statusReason = String(values.get("statusReason") ?? "").trim();
+    const numberField = (name: string) => {
+      const raw = String(values.get(name) ?? "").trim();
+      return raw ? Number(raw) : undefined;
+    };
+    const vitalSigns: HealthVitalSigns = {
+      bloodPressure: String(values.get("bloodPressure") ?? "").trim() || undefined,
+      heartRateBpm: numberField("heartRateBpm"),
+      respiratoryRate: numberField("respiratoryRate"),
+      temperatureC: numberField("temperatureC"),
+      oxygenSaturation: numberField("oxygenSaturation"),
+      glucoseMgDl: numberField("glucoseMgDl"),
+      weightKg: numberField("weightKg"),
+      heightCm: numberField("heightCm"),
+      painScale: numberField("painScale"),
+    };
     const conditions = String(values.get("conditions") ?? "").split(",").map((item) => item.trim()).filter(Boolean);
     const procedures: HealthProcedure[] = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="procedure"]:checked')).map((input, index) => {
       const container = input.closest(".health-checkbox");
@@ -659,6 +685,14 @@ export default function HealthVisitsAttendanceModule({
     }
     if (status === "Realizado" && !careSummary) {
       setFormError("Informe um resumo da atividade para marcar como realizado.");
+      return;
+    }
+    if (status === "Realizado" && !carePlan) {
+      setFormError("Informe o plano de continuidade ou próximo passo para concluir o atendimento.");
+      return;
+    }
+    if ((status === "Não compareceu" || status === "Cancelado") && !statusReason) {
+      setFormError("Informe o motivo da falta ou do cancelamento.");
       return;
     }
     if (serviceType === "Atendimento odontológico" && (!dentalDetails?.reason || !dentalDetails.procedure)) {
@@ -701,8 +735,11 @@ export default function HealthVisitsAttendanceModule({
       dentalDetails,
       outcome,
       careSummary,
+      carePlan,
       referral,
       followUpDate,
+      statusReason,
+      vitalSigns: Object.values(vitalSigns).some((value) => value !== undefined) ? vitalSigns : undefined,
       history: [
         {
           date: eventDateTime(date, time),
@@ -719,6 +756,8 @@ export default function HealthVisitsAttendanceModule({
     setStatusDraft(newRecord.status);
     setStatusFollowUpDate(newRecord.followUpDate ?? "");
     setStatusOutcomeDraft(newRecord.careSummary);
+    setStatusCarePlanDraft(newRecord.carePlan ?? "");
+    setStatusReasonDraft(newRecord.statusReason ?? "");
     setView("detail");
     setFormError("");
   };
@@ -831,9 +870,13 @@ export default function HealthVisitsAttendanceModule({
     if (
       selectedRecord.kind === "attendance" &&
       statusDraft === "Realizado" &&
-      !statusOutcomeDraft.trim()
+      (!statusOutcomeDraft.trim() || !statusCarePlanDraft.trim())
     ) {
-      setFormError("Informe o resumo do atendimento antes de marcá-lo como realizado.");
+      setFormError("Informe o resumo e o plano de continuidade antes de marcar o atendimento como realizado.");
+      return;
+    }
+    if (selectedRecord.kind === "attendance" && (statusDraft === "Não compareceu" || statusDraft === "Cancelado") && !statusReasonDraft.trim()) {
+      setFormError("Informe o motivo da falta ou do cancelamento.");
       return;
     }
     const now = new Date();
@@ -874,6 +917,8 @@ export default function HealthVisitsAttendanceModule({
                 status: statusDraft as HealthServiceStatus,
                 competenceStatus: statusDraft === "Realizado" && record.competenceStatus !== "Fechado" ? "Aguardando revisão" : record.competenceStatus,
                 careSummary: statusOutcomeDraft.trim() || record.careSummary,
+                carePlan: statusCarePlanDraft.trim() || record.carePlan,
+                statusReason: statusReasonDraft.trim() || record.statusReason,
                 followUpDate: statusFollowUpDate || record.followUpDate,
                 history: [
                   ...record.history,
@@ -1678,6 +1723,30 @@ export default function HealthVisitsAttendanceModule({
               Resumo da atividade/conduta (preencher ao concluir)
               <textarea name="careSummary" rows={3} maxLength={800} placeholder="Resumo fictício, sem substituir a documentação clínica oficial." />
             </label>
+            <label className="health-form-wide">
+              Plano de continuidade / próximo passo
+              <textarea name="carePlan" rows={2} maxLength={500} placeholder="Ex.: manter acompanhamento, revisar resultado no retorno ou orientar procura da unidade." />
+              <small className="health-field-hint">Obrigatório para atendimentos realizados. Não substitui protocolo ou registro clínico oficial.</small>
+            </label>
+            <label className="health-form-wide">
+              Motivo de falta ou cancelamento (quando aplicável)
+              <input name="statusReason" maxLength={240} placeholder="Ex.: ausência sem aviso, indisponibilidade do profissional ou solicitação da pessoa" />
+            </label>
+            <fieldset className="health-form-fieldset health-form-wide">
+              <legend>Medidas e sinais registrados (opcional)</legend>
+              <p className="health-field-hint">Use somente quando fizer parte do atendimento. Os campos são demonstrativos e não substituem protocolos clínicos.</p>
+              <div className="health-vitals-grid">
+                <label>Pressão arterial<input name="bloodPressure" placeholder="Ex.: 120/80" /></label>
+                <label>Frequência cardíaca (bpm)<input name="heartRateBpm" type="number" min="0" /></label>
+                <label>Frequência respiratória<input name="respiratoryRate" type="number" min="0" /></label>
+                <label>Temperatura (°C)<input name="temperatureC" type="number" min="0" step="0.1" /></label>
+                <label>Saturação O₂ (%)<input name="oxygenSaturation" type="number" min="0" max="100" /></label>
+                <label>Glicemia (mg/dL)<input name="glucoseMgDl" type="number" min="0" /></label>
+                <label>Peso (kg)<input name="weightKg" type="number" min="0" step="0.1" /></label>
+                <label>Altura (cm)<input name="heightCm" type="number" min="0" step="0.1" /></label>
+                <label>Dor (0 a 10)<input name="painScale" type="number" min="0" max="10" /></label>
+              </div>
+            </fieldset>
             <fieldset className="health-form-fieldset health-form-wide">
               <legend>Procedimentos realizados</legend>
               <p className="health-field-hint">Selecione os procedimentos vinculados a este atendimento. Eles serão contabilizados separadamente.</p>
@@ -1758,7 +1827,20 @@ export default function HealthVisitsAttendanceModule({
                 <div className="health-detail-field health-detail-wide"><span>Procedimentos realizados</span><p>{selectedAttendance.procedures?.length ? selectedAttendance.procedures.map((procedure) => `${procedure.name} (${procedure.quantity})${procedure.result ? ` · ${procedure.result}` : ""}`).join(" · ") : "Nenhum procedimento estruturado registrado."}</p></div>
                 {selectedAttendance.dentalDetails && <div className="health-detail-field health-detail-wide"><span>Detalhamento odontológico</span><p>{selectedAttendance.dentalDetails.reason} · {selectedAttendance.dentalDetails.procedure}{selectedAttendance.dentalDetails.toothOrRegion ? ` · ${selectedAttendance.dentalDetails.toothOrRegion}` : ""}</p></div>}
                 <div className="health-detail-field health-detail-wide"><span>Resumo do atendimento</span><p>{selectedAttendance.careSummary || "Sem resumo clínico demonstrativo registrado."}</p></div>
+                <div className="health-detail-field health-detail-wide"><span>Plano de continuidade / próximo passo</span><p>{selectedAttendance.carePlan || "Nenhum plano de continuidade registrado."}</p></div>
                 <div className="health-detail-field health-detail-wide"><span>Encaminhamento ou próximo passo</span><p>{selectedAttendance.referral || "Nenhum encaminhamento registrado."}</p></div>
+                {selectedAttendance.statusReason && <div className="health-detail-field health-detail-wide"><span>Motivo da situação</span><p>{selectedAttendance.statusReason}</p></div>}
+                {selectedAttendance.vitalSigns && <div className="health-detail-field health-detail-wide"><span>Medidas e sinais registrados</span><p>{[
+                  selectedAttendance.vitalSigns.bloodPressure && `PA ${selectedAttendance.vitalSigns.bloodPressure}`,
+                  selectedAttendance.vitalSigns.heartRateBpm && `FC ${selectedAttendance.vitalSigns.heartRateBpm} bpm`,
+                  selectedAttendance.vitalSigns.respiratoryRate && `FR ${selectedAttendance.vitalSigns.respiratoryRate}`,
+                  selectedAttendance.vitalSigns.temperatureC && `Temp. ${selectedAttendance.vitalSigns.temperatureC} °C`,
+                  selectedAttendance.vitalSigns.oxygenSaturation && `Sat. ${selectedAttendance.vitalSigns.oxygenSaturation}%`,
+                  selectedAttendance.vitalSigns.glucoseMgDl && `Glicemia ${selectedAttendance.vitalSigns.glucoseMgDl} mg/dL`,
+                  selectedAttendance.vitalSigns.weightKg && `Peso ${selectedAttendance.vitalSigns.weightKg} kg`,
+                  selectedAttendance.vitalSigns.heightCm && `Altura ${selectedAttendance.vitalSigns.heightCm} cm`,
+                  selectedAttendance.vitalSigns.painScale !== undefined && `Dor ${selectedAttendance.vitalSigns.painScale}/10`,
+                ].filter(Boolean).join(" · ") || "Sem medidas informadas."}</p></div>}
                 <div className="health-detail-field"><span>Acompanhamento previsto</span><strong>{formatDate(selectedAttendance.followUpDate)}</strong></div>
                 {onOpenRegulation && (
                   <div className="health-detail-field health-detail-wide">
@@ -1852,6 +1934,32 @@ export default function HealthVisitsAttendanceModule({
                   value={statusOutcomeDraft}
                   onChange={(event) => setStatusOutcomeDraft(event.target.value)}
                   placeholder="Resumo demonstrativo da atividade/conduta."
+                />
+              </label>
+            )}
+            {selectedAttendance && statusDraft === "Realizado" && (
+              <label className="health-status-outcome">
+                Plano de continuidade / próximo passo
+                <textarea
+                  rows={2}
+                  maxLength={500}
+                  value={statusCarePlanDraft}
+                  onChange={(event) => setStatusCarePlanDraft(event.target.value)}
+                  placeholder="Informe o que deve acontecer depois deste atendimento."
+                  disabled={selectedAttendance.competenceStatus === "Fechado"}
+                />
+              </label>
+            )}
+            {selectedAttendance && (statusDraft === "Não compareceu" || statusDraft === "Cancelado") && (
+              <label className="health-status-outcome">
+                Motivo da falta ou cancelamento
+                <textarea
+                  rows={2}
+                  maxLength={240}
+                  value={statusReasonDraft}
+                  onChange={(event) => setStatusReasonDraft(event.target.value)}
+                  placeholder="Registre a justificativa operacional."
+                  disabled={selectedAttendance.competenceStatus === "Fechado"}
                 />
               </label>
             )}
