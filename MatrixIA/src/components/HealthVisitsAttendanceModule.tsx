@@ -23,6 +23,7 @@ import type {
   HealthAttendanceCharacter,
   HealthCompetenceStatus,
   HealthProcedure,
+  HealthProcedureRecord,
   HealthVitalSigns,
   HealthDentalDetails,
   HealthServiceRecord,
@@ -31,6 +32,8 @@ import type {
   HomeVisitRecord,
   HomeVisitStatus,
 } from "../data/healthActivities";
+import type { HealthReferralsDataset } from "../data/healthReferrals";
+import type { HealthDiagnosticsDataset } from "../data/healthDiagnostics";
 import type { HealthTerritoryDataset } from "../data/healthTerritory";
 import type { PeopleRegistryDataset, RegistryHousehold } from "../data/peopleRegistry";
 import "./HealthVisitsAttendanceModule.css";
@@ -67,6 +70,8 @@ export type HealthVisitsAttendanceModuleProps = {
   ) => void;
   onOpenRegulation?: (serviceRecordId: string) => void;
   onOpenDiagnostics?: (serviceRecordId: string) => void;
+  healthReferrals?: HealthReferralsDataset;
+  healthDiagnostics?: HealthDiagnosticsDataset;
   onBack?: () => void;
 };
 
@@ -218,6 +223,8 @@ export default function HealthVisitsAttendanceModule({
   onChange,
   onOpenRegulation,
   onOpenDiagnostics,
+  healthReferrals,
+  healthDiagnostics,
   onBack,
 }: HealthVisitsAttendanceModuleProps) {
   const initialView: ModuleView =
@@ -748,9 +755,20 @@ export default function HealthVisitsAttendanceModule({
         },
       ],
     };
+    const structuredProcedures: HealthProcedureRecord[] = procedures.map((procedure) => ({
+      ...procedure,
+      attendanceId: id,
+      personId,
+      professionalId: professional.id,
+      teamId: team.id,
+      unitId: unit.id,
+      performedAt: eventDateTime(date, time),
+      observation: procedure.result,
+    }));
     onChange((current) => ({
       ...current,
       serviceRecords: [newRecord, ...current.serviceRecords],
+      procedures: [...(current.procedures ?? []), ...structuredProcedures],
     }));
     setSelectedRecord({ kind: "attendance", id });
     setStatusDraft(newRecord.status);
@@ -1827,6 +1845,87 @@ export default function HealthVisitsAttendanceModule({
               </>
             ) : null}
           </div>
+          {selectedAttendance && (
+            <section className="health-integrated-timeline" aria-labelledby="health-timeline-title">
+              <div className="health-timeline-heading">
+                <div>
+                  <span className="health-activity-eyebrow">CONTINUIDADE DO CUIDADO</span>
+                  <h4 id="health-timeline-title">Linha do tempo assistencial integrada</h4>
+                </div>
+                <small>Eventos demonstrativos vinculados a {selectedAttendance.id}</small>
+              </div>
+              <div className="health-timeline-list">
+                {[
+                  {
+                    date: eventDateTime(selectedAttendance.date, selectedAttendance.time),
+                    kind: "Atendimento",
+                    title: `${selectedAttendance.serviceType} · ${selectedAttendance.status}`,
+                    detail: selectedAttendance.careSummary || selectedAttendance.reason,
+                  },
+                  ...((dataset.procedures ?? selectedAttendance.procedures?.map((procedure) => ({
+                    ...procedure,
+                    attendanceId: selectedAttendance.id,
+                    personId: selectedAttendance.personId,
+                    professionalId: selectedAttendance.professionalId,
+                    teamId: selectedAttendance.teamId,
+                    unitId: selectedAttendance.unitId,
+                    performedAt: eventDateTime(selectedAttendance.date, selectedAttendance.time),
+                  })) ?? [])
+                    .filter((procedure) => procedure.attendanceId === selectedAttendance.id)
+                    .map((procedure) => ({
+                      date: procedure.performedAt,
+                      kind: "Procedimento",
+                      title: `${procedure.name} · quantidade ${procedure.quantity}`,
+                      detail: procedure.result || "Procedimento realizado durante o atendimento.",
+                    }))),
+                  ...(healthDiagnostics?.requests
+                    .filter((request) => request.serviceRecordId === selectedAttendance.id)
+                    .flatMap((request) => [
+                      {
+                        date: `${request.requestedAt}T09:00:00`,
+                        kind: "Exame solicitado",
+                        title: `${request.serviceName} · ${request.status}`,
+                        detail: `${request.kind} · prioridade ${request.priority}`,
+                      },
+                      ...request.history.map((history) => ({
+                        date: history.at,
+                        kind: "Exame atualizado",
+                        title: `${history.action} · ${request.serviceName}`,
+                        detail: history.note,
+                      })),
+                    ]) ?? []),
+                  ...(healthReferrals?.referrals
+                    .filter((referral) => referral.serviceRecordId === selectedAttendance.id)
+                    .flatMap((referral) => [
+                      {
+                        date: `${referral.referredAt}T09:00:00`,
+                        kind: "Encaminhamento criado",
+                        title: `${referral.specialty} · ${referral.status}`,
+                        detail: `${referral.destination} · prioridade ${referral.priority}`,
+                      },
+                      ...referral.history.map((history) => ({
+                        date: history.at,
+                        kind: "Encaminhamento atualizado",
+                        title: `${history.action} · ${referral.specialty}`,
+                        detail: history.note,
+                      })),
+                    ]) ?? []),
+                ]
+                  .sort((a, b) => a.date.localeCompare(b.date))
+                  .map((item, index) => (
+                    <div className="health-timeline-item" key={`${item.kind}-${item.date}-${index}`}>
+                      <span className="health-timeline-dot" />
+                      <div>
+                        <div className="health-timeline-meta"><strong>{item.kind}</strong><time>{formatHistoryDate(item.date)}</time></div>
+                        <strong>{item.title}</strong>
+                        <p>{item.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              <p className="health-field-hint">Demonstração de integração em memória; não substitui prontuário, protocolos clínicos ou sistemas oficiais.</p>
+            </section>
+          )}
           <div className="health-status-update">
             <div>
               <span className="health-activity-eyebrow">ACOMPANHAMENTO</span>

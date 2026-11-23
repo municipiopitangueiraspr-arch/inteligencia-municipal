@@ -1494,6 +1494,8 @@ export default function OperationalWorkspace({
                   onOpenDiagnostics={(serviceRecordId) =>
                     openHealthDiagnostics({ serviceRecordId })
                   }
+                  healthReferrals={healthReferrals}
+                  healthDiagnostics={healthDiagnostics}
                 />
               )}
             {activeSecretaryTab === "health-attendance" &&
@@ -1508,6 +1510,8 @@ export default function OperationalWorkspace({
                   onOpenDiagnostics={(serviceRecordId) =>
                     openHealthDiagnostics({ serviceRecordId })
                   }
+                  healthReferrals={healthReferrals}
+                  healthDiagnostics={healthDiagnostics}
                 />
               )}
             {activeSecretaryTab === "health-referrals" &&
@@ -1845,6 +1849,8 @@ export default function OperationalWorkspace({
                 onOpenDiagnostics={(serviceRecordId) =>
                   openHealthDiagnostics({ serviceRecordId })
                 }
+                healthReferrals={healthReferrals}
+                healthDiagnostics={healthDiagnostics}
                 onBack={() => setHealthWorkflowOpen(false)}
               />
               )

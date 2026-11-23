@@ -33,6 +33,18 @@ export type HealthProcedure = {
   result?: string;
 };
 
+/** Registro normalizado para produção assistencial; HealthProcedure permanece
+ * dentro do atendimento por compatibilidade com os dados já existentes. */
+export type HealthProcedureRecord = HealthProcedure & {
+  attendanceId: string;
+  personId: string;
+  professionalId: string;
+  teamId: string;
+  unitId: string;
+  performedAt: string;
+  observation?: string;
+};
+
 export type HealthDentalDetails = {
   reason: string;
   procedure: string;
@@ -155,6 +167,7 @@ export type HealthServiceRecord = {
 export type HealthActivitiesDataset = {
   homeVisits: HomeVisitRecord[];
   serviceRecords: HealthServiceRecord[];
+  procedures?: HealthProcedureRecord[];
   collectiveActivities: CollectiveActivityRecord[];
   foodMarkers: FoodMarkerRecord[];
 };
@@ -433,3 +446,17 @@ export const initialHealthActivities: HealthActivitiesDataset = {
     },
   ],
 };
+
+initialHealthActivities.procedures = initialHealthActivities.serviceRecords.flatMap(
+  (attendance) =>
+    (attendance.procedures ?? []).map((procedure) => ({
+      ...procedure,
+      attendanceId: attendance.id,
+      personId: attendance.personId,
+      professionalId: attendance.professionalId,
+      teamId: attendance.teamId,
+      unitId: attendance.unitId,
+      performedAt: `${attendance.date}T${attendance.time}:00`,
+      observation: procedure.result,
+    })),
+);
